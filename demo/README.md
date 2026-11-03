@@ -23,7 +23,7 @@ Two rooms, so the score shows the agent isn't tied to one domain:
 ## Files
 
 - `ledgerly/docs/`: the room's shared docs (product, pilot plan, roadmap, status, research). Sections are numbered so the agent can cite `product.md §2`.
-- `ledgerly/chat-history.yaml`: the channel history before Rowan returns. Switch and Slack can't backdate messages, so it's loaded as a **"Channel archive" room document** (design §6, point 7). Message ids such as `led-007` are what the agent cites.
+- `ledgerly/chat-history.yaml`: the channel history before Rowan returns. Switch and Slack can't backdate messages, so it's loaded as a **"Channel archive" room document**. Message ids such as `led-007` are what the agent cites.
 - `riverside/docs/event-plan.md` and `riverside/chat-history.yaml`: the same, for the event room.
 - The test cases are in `../testset/cases.yaml`. They are the messages sent *after* the seeded history.
 

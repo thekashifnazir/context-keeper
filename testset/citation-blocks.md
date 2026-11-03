@@ -1,6 +1,6 @@
 # P6: Citations block layout, mapped to every expected ref
 
-Data only, written 31 Oct (design-experiments §2 and §7, P6). No agent code and no model calls. The tables and block texts below were generated from `demo/` by a throwaway script, so the block text is exact. If a demo doc changes, regenerate this file before relying on it.
+Data only, written 31 Oct. No agent code and no model calls. The tables and block texts below were generated from `demo/` by a throwaway script, so the block text is exact. If a demo doc changes, regenerate this file before relying on it.
 
 **Verdict: feasible.** All **58 expected refs** in `cases.yaml` (24 cases) and `redteam/redteam.yaml` (12 cases) map to exactly one block, or to one contiguous run of blocks (T22). No ref needs two blocks from different places, and no decision-table quote crosses a row. **10 refs, all in 4 doc sections, are flagged** because a whole-section block mixes topics. Splitting those 4 sections into one block per bullet fixes it. There are also 4 layout rules (§2) without which the plan breaks quietly.
 
@@ -14,13 +14,13 @@ Each room becomes custom-content documents, and every block carries its id and d
 | A decision table (`pilot-plan.md §2`, `event-plan.md §2`) | row | `[pilot-plan.md §2 D1 · <section title> · led-011 · 2026-10-06] ` + the raw markdown row, verbatim. The date is the row's source message. |
 | Any other doc section | section (as briefed); **bullet** for the 4 flagged sections | `[product.md §2 · <section title> · doc 2026-10-20] ` + the section body, verbatim. A bullet block is `[product.md §1.4 · <section title> · doc …] ` + the bullet without its `- ` |
 
-Code keeps a table: block index → `{ref, block_id, at, author, header_len}`. A block id maps many-to-one onto the scored ref: `pilot-plan.md §2 D1` and `product.md §1.4` both score as their section (`pilot-plan.md §2`, `product.md §1`), which is what `expect.sources` holds. The mapping is deterministic, as design-experiments §2 hoped.
+Code keeps a table: block index → `{ref, block_id, at, author, header_len}`. A block id maps many-to-one onto the scored ref: `pilot-plan.md §2 D1` and `product.md §1.4` both score as their section (`pilot-plan.md §2`, `product.md §1`), which is what `expect.sources` holds. The mapping is deterministic.
 
 ## 2. Rules the layout needs (found while mapping)
 
 1. **Strip the header before the quote gate.** Custom-content citations return whole blocks, so `cited_text` includes the `[id · date]` header, which isn't in the source. The eval's quote check (`eval-harness.md` §5: a substring of the normalised section or message) would fail on every citation. Fix: the gate drops the first `header_len` characters, which code knows from the block table, then checks the rest. The reviewer still sees the whole block, because the header carries meaning (next rule).
 2. **When a section is split into bullets, copy the section title into every bullet's header.** The title often holds the status: `roadmap.md §1` "parked, not rejected" (T04, T22), `status.md §2` "shipped-untested, in-progress or planned" (T10, T24, RT-HAI-2), `product.md §7` "Deliberately not doing". Without it, `roadmap.md §1.1` reads like a plan, not a parked item.
-3. **Decision rows stay raw markdown; the column names go in the document's `context`.** If rows are rewritten with labels (`Why: …`, `Reopen if: …`, the example in design-experiments §2), the body is no longer a substring of the doc, and the gate fails. That matters because several quotes need two cells of one row: T05 and T12 (Decision + Why), RT-OPU-4 (Decision + Rejected "Mondays"), RT-OPU-3 and RT-SON-3 (Decision £19 or three + Rejected £12 or five), T13 (Downside + Reopen if, `#41`). Whole-row blocks keep every one of these inside a single block, so **no row quote spans blocks**. Context text: `Decision table columns: # | Status | Decision | Why | Rejected (and why) | Downside accepted | Reopen if | Source` (Riverside's has no Downside column).
+3. **Decision rows stay raw markdown; the column names go in the document's `context`.** If rows are rewritten with labels (`Why: …`, `Reopen if: …`), the body is no longer a substring of the doc, and the gate fails. That matters because several quotes need two cells of one row: T05 and T12 (Decision + Why), RT-OPU-4 (Decision + Rejected "Mondays"), RT-OPU-3 and RT-SON-3 (Decision £19 or three + Rejected £12 or five), T13 (Downside + Reopen if, `#41`). Whole-row blocks keep every one of these inside a single block, so **no row quote spans blocks**. Context text: `Decision table columns: # | Status | Decision | Why | Rejected (and why) | Downside accepted | Reopen if | Source` (Riverside's has no Downside column).
 4. **Three docs have no date, and one of them decides T23.** `pilot-plan.md`, `research.md` and `event-plan.md` have no "Last updated" line, so their blocks say `UNDATED` below. "Newest source wins" (T23, RT-OPU-1) compares `event-plan.md §1` against `riv-012` (2 Nov 13:25). The doc's §3 says "Confirmed 2 Nov", so even a guessed date ties at day level. **Proposed:** add `Last updated 2 Nov 2026, 12:40` to `event-plan.md` (after riv-009/riv-010, before riv-011/riv-012), `Last updated 30 Oct 2026` to `pilot-plan.md` (led-019) and `Last updated 26 Sep 2026` to `research.md` (led-010). Those are demo edits, so they're Kash's call; not made here.
 
 ## 3. Flagged refs and the proposed splits
@@ -36,7 +36,7 @@ A whole-section block is "too long to cite usefully" when it holds several unrel
 
 Not flagged, but optional splits (each section is short or single-topic enough today): `product.md §7` (mobile app + crypto; T07, RT-HAI-1), `product.md §3` (Stripe, GoCardless, partial payments; T02), `event-plan.md §4` (weekend vs students-only; T16, T18), `status.md §3` (#41 vs #44; T13, and RT-FAB-5's bait). Splitting all eight costs nothing in code: the rule is one block per bullet everywhere except decision tables. That's the recommendation; it also makes T22's parked list one block per item.
 
-Display length: whole-row blocks run to 427 characters (`pilot-plan.md §2 D1`). Trim the **displayed** quote in the post, not the citation (design-experiments §2).
+Display length: whole-row blocks run to 427 characters (`pilot-plan.md §2 D1`). Trim the **displayed** quote in the post, not the citation.
 
 ## 4. Other notes
 

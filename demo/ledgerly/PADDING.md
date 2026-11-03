@@ -1,6 +1,6 @@
 # Padding archive (experiment W5)
 
-`padding.yaml` is about 2,000 off-topic chat messages, about 100k tokens, used once to test whether the agent stays accurate when the room's record is large (design-experiments §1, P9 and W5). It's **generated, not committed** (it's in `.gitignore`, at about 400 KB).
+`padding.yaml` is about 2,000 off-topic chat messages, about 100k tokens, used once to test whether the agent stays accurate when the room's record is large. It's **generated, not committed** (it's in `.gitignore`, at about 400 KB).
 
 Make it:
 
