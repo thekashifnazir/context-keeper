@@ -123,8 +123,9 @@ describe('R1 quote gate', () => {
       { model: HAIKU, respond: (p: any) => {
         const sent = JSON.parse(p.messages[0].content);
         expect(Object.keys(sent)).toEqual(['checks']); // the reviewer sees only the claim + quotes
-        expect(sent.checks[0]).toEqual({ id: 'm1', claim: 'Covered: meeting reminders for partner calls are live.', quotes: [ctx.table[1][0].text] });
-        return reviewerMessage(HAIKU, [{ id: 'm1', supports: false, issue: 'payment reminders, not meetings' }]);
+        // Short ids (c1…) go to the reviewer and are mapped back to message ids.
+        expect(sent.checks[0]).toEqual({ id: 'c1', claim: 'Covered: meeting reminders for partner calls are live.', quotes: [ctx.table[1][0].text] });
+        return reviewerMessage(HAIKU, [{ id: 'c1', supports: false, issue: 'payment reminders, not meetings' }]);
       } },
     ]);
     const poster = new FakePoster();

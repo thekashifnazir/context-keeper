@@ -129,7 +129,7 @@ You get a list of checks. Each has an id, a claim, and the quoted source text (e
 - supports = true only if the quotes, read on their own, back the whole claim: the same thing, the same status (done, decided, decided no, parked, planned, untested), the same facts.
 - supports = false if the quote is about a different thing that shares words, backs only part of the claim, gives a different status, or the claim goes beyond it.
 - Judge support only. Whether a source is out of date is checked elsewhere.
-Give the issue in one short sentence ("" if none).`;
+Write the issue first, in one short sentence ("" if none), then supports.`;
 
 // ---- job C: the catch-up brief ------------------------------------------------------------------
 
