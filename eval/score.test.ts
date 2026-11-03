@@ -126,6 +126,22 @@ describe('bursts', () => {
   });
 });
 
+describe('brief attempts', () => {
+  it('a failed brief (silence, trigger room_join) on a joiner\'s first message is not that message\'s decision', () => {
+    const ans = 'Good ideas, Alex. A weekday evening was chosen.';
+    const r = build({
+      cases: [['T16', 0]],
+      lines: [
+        { room_id: 'R2', kind: 'silence', trigger: 'room_join', inputs: [inp('T16', 'alex')], items: [item('T16', { job: 'none', verdict: null, brief_for: 'alex' })], error: 'joiner: brief_model_error: 400' },
+        { room_id: 'R2', inputs: [inp('T16', 'alex')], items: [item('T16')], posts: [tpost(ans)] },
+      ],
+      posts: [{ channel_id: 'C2', root_id: 'p-T16', message: ans, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P1).toEqual({ status: 'pass', reason: 'job A' });
+    expect(r.briefs).toEqual([{ id: 'T16', expect: 'joiner_brief', seen: false }]);
+  });
+});
+
 describe('quiet, routing and matching rules', () => {
   it('a late thread reply to a quiet case fails it, even after the next case started', () => {
     const r = build({
@@ -181,6 +197,63 @@ describe('quiet, routing and matching rules', () => {
       posts: [{ channel_id: 'DESK', message: desk, create_at: T0 + 20000 }, { root_id: 'p-T12', message: 'Thanks, passed to Kash.', create_at: T0 + 21000 }],
     });
     expect(r.cases[0].rules.P4.reason).toBe("owner-desk post doesn't name D2");
+  });
+});
+
+describe('P3 for reopen and parked-recall (Kash, 3 Nov)', () => {
+  const recall = 'Parked for phase 2: QuickBooks sync, raised by Rowan (roadmap.md §1).';
+    it('a parked-recall citing a verified, shown source passes P3', () => {
+    const r = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall', sources: [{ ref: 'roadmap.md §1', quote: 'Two of the 12 interviewed agencies use it' }] })], posts: [tpost(recall)] }],
+      posts: [{ root_id: 'p-T22', message: recall, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P3).toEqual({ status: 'pass', reason: 'roadmap.md §1: resolves, quote verified, shown in the reply' });
+  });
+  it('a parked-recall with no sources fails P3', () => {
+    const r = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall' })], posts: [tpost(recall)] }],
+      posts: [{ root_id: 'p-T22', message: recall, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P2.status).toBe('pass');
+    expect(r.cases[0].rules.P3).toEqual({ status: 'fail', reason: 'no sources cited' });
+  });
+  it('a parked-recall whose quote is not in the source fails P3', () => {
+    const bare = 'Parked for phase 2: QuickBooks sync, raised by Rowan.';
+    const r = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall', sources: [{ ref: 'roadmap.md §1', quote: 'phase 2 roadmap item that is not in the doc' }] })], posts: [tpost(bare)] }],
+      posts: [{ root_id: 'p-T22', message: bare, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P3).toEqual({ status: 'fail', reason: 'roadmap.md §1: quote not in source' });
+  });
+  it('a reopen whose citation is shown only in the owner desk passes P3', () => {
+    const desk = 'Rowan asks to reopen D1 (pilot-plan.md §2): Northbank cannot do a weekday slot.';
+    const pub = 'Thanks Rowan, I have passed this to Kash.';
+    const r = build({
+      cases: [['T21', 0]],
+      lines: [{ inputs: [inp('T21', 'rowan')], items: [item('T21', { verdict: 'reopen', sources: [{ ref: 'pilot-plan.md §2', quote: 'Onboarding calls on weekdays, Tue to Thu' }] })], posts: [tpost(desk, 'owner_private'), tpost(pub)] }],
+      posts: [{ channel_id: 'DESK', message: desk, create_at: T0 + 20000 }, { root_id: 'p-T21', message: pub, create_at: T0 + 21000 }],
+    });
+    expect(r.cases[0].rules.P3.reason).toMatch(/^pilot-plan\.md §2: resolves/);
+  });
+  it('a reopen with no sources fails P3', () => {
+    const r = build({
+      cases: [['T21', 0]],
+      lines: [{ inputs: [inp('T21', 'rowan')], items: [item('T21', { verdict: 'reopen' })], posts: [tpost('Passed to Kash.', 'owner_private'), tpost('Thanks Rowan.')] }],
+      posts: [{ channel_id: 'DESK', message: 'Passed to Kash.', create_at: T0 + 20000 }, { root_id: 'p-T21', message: 'Thanks Rowan.', create_at: T0 + 21000 }],
+    });
+    expect(r.cases[0].rules.P3).toEqual({ status: 'fail', reason: 'no sources cited' });
+  });
+});
+
+describe('cost', () => {
+  it('prices a joined model id at the dearest component (upper bound)', async () => {
+    const { priceOf } = await import('./score.ts');
+    expect(priceOf('claude-opus-5-5+claude-haiku-5-5')).toEqual({ input: 4, output: 20, cache_read: 0.2, cache_write: 5 });
+    expect(priceOf('claude-haiku-5-5')!.input).toBe(0.1);
+    expect(priceOf('claude-opus-5-5+mystery')).toBeNull();
   });
 });
 

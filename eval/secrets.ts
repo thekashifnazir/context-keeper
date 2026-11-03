@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const KEY_NAMES = /^(SWITCH_AGENT_API_KEY|SWITCH_REGISTRATION_KEY|ANTHROPIC_API_KEY|ELEVENLABS_API_KEY|SLACK_BOT_TOKEN|DISCORD_BOT_TOKEN|SWITCH_TRUST_API_KEY)=(.+)$/;
+const KEY_NAMES = /^(SWITCH_AGENT_API_KEY|CK_EVAL_AGENT_API_KEY|SWITCH_REGISTRATION_KEY|ANTHROPIC_API_KEY|ELEVENLABS_API_KEY|SLACK_BOT_TOKEN|DISCORD_BOT_TOKEN|SWITCH_TRUST_API_KEY)=(.+)$/;
 
 /** Secret values known on this machine: keys from .env and .env.local, persona passwords. */
 export function knownSecrets(root: string): string[] {

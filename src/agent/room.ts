@@ -1,9 +1,9 @@
 // room: the room's record as data (docs + archive messages), and loading it from demo/<room>/.
 // The live agent fills the same shape from Switch (room documents + the "Channel archive"),
 // plus every live message as it arrives, so a proposal two minutes after a decision still matches.
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'yaml';
 
 export interface ArchiveMessage {
   id: string;
@@ -22,13 +22,10 @@ export interface RoomRecord {
   messages: ArchiveMessage[];
 }
 
-/** Parse YAML through python3 (PyYAML is already the test-set checker's dependency; the SDK
- *  repo has no YAML package yet — requested in state/requests/core.md). Data tooling only. */
+/** Parse a YAML data file (test set, demo content) with the `yaml` package, so a clean clone needs
+ *  no Python libraries. YAML 1.2 core schema: timestamps stay strings, exactly as written. */
 export function loadYaml(file: string): any {
-  const out = execFileSync('python3', ['-E', '-c',
-    'import sys,json,yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1], encoding="utf-8")), default=str))', file],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  return JSON.parse(out);
+  return parse(readFileSync(file, 'utf8'));
 }
 
 export const ROOM_DIRS: Record<string, string> = { 'ledgerly-pilot': 'ledgerly', 'riverside-build-night': 'riverside' };

@@ -10,12 +10,13 @@ export class Mattermost {
   constructor(readonly url: string, private token: string | null = null) {}
 
   private async req<T>(method: string, path: string, body?: unknown, okStatuses = [200, 201]): Promise<{ status: number; data: T; headers: Headers }> {
+    // 60 s: the amd64 image under qemu on an arm64 Mac can take well over 15 s for a first post.
     const res = await fetch(`${this.url}/api/v4${path}`, {
       method,
       headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(15_000),
-    });
+      signal: AbortSignal.timeout(60_000),
+    }).catch((e: Error) => { throw new Error(`Mattermost ${method} ${path.split('?')[0]}: ${e.message}`); });
     const text = await res.text();
     const data = (text ? JSON.parse(text) : null) as T;
     if (!okStatuses.includes(res.status)) {
@@ -30,14 +31,33 @@ export class Mattermost {
     return res.ok ? res.headers.get('x-version-id') : null;
   }
 
-  /** Sign up (no auth; open server) or, if the account exists, just sign in. Returns a client holding the session. */
-  static async persona(url: string, username: string, password: string, firstName: string): Promise<{ mm: Mattermost; user: MmUser; created: boolean }> {
+  /** Sign up (no auth; open server) or, if the account exists, just sign in. Returns a client holding the session.
+   *  If the account exists but the stored password is refused (build/eval/personas.json was lost, e.g.
+   *  with a removed worktree), `admin()` gives a sysadmin client that resets it to the stored one. */
+  static async persona(url: string, username: string, password: string, firstName: string, admin?: () => Promise<Mattermost>): Promise<{ mm: Mattermost; user: MmUser; created: boolean; reset: boolean }> {
     const anon = new Mattermost(url);
     const made = await anon.req<MmUser>('POST', '/users', { username, password, email: `${username}@ck-eval.local`, first_name: firstName }, [201, 400]);
-    const res = await anon.req<MmUser>('POST', '/users/login', { login_id: username, password });
+    let reset = false;
+    let res = await anon.req<MmUser>('POST', '/users/login', { login_id: username, password }, [200, 401]);
+    if (res.status === 401 && made.status === 400 && admin) {
+      const a = await admin();
+      const u = await a.userByUsername(username);
+      if (!u) throw new Error(`Mattermost: ${username} can't sign in and doesn't exist`);
+      await a.req('PUT', `/users/${u.id}/password`, { new_password: password });
+      reset = true;
+      res = await anon.req<MmUser>('POST', '/users/login', { login_id: username, password });
+    } else if (res.status === 401) throw new Error(`Mattermost POST /users/login: 401 for ${username}`);
     const token = res.headers.get('token');
     if (!token) throw new Error(`Mattermost sign-in for ${username} gave no token`);
-    return { mm: new Mattermost(url, token), user: res.data, created: made.status === 201 };
+    return { mm: new Mattermost(url, token), user: res.data, created: made.status === 201, reset };
+  }
+
+  /** The server's sysadmin, used only to reset a persona password (never to post: the bridge drops its posts). */
+  static async admin(url: string, username: string, password: string): Promise<Mattermost> {
+    const res = await new Mattermost(url).req<MmUser>('POST', '/users/login', { login_id: username, password });
+    const token = res.headers.get('token');
+    if (!token) throw new Error('Mattermost admin sign-in gave no token');
+    return new Mattermost(url, token);
   }
 
   async teamByName(name: string) { return (await this.req<{ id: string }>('GET', `/teams/name/${name}`)).data; }

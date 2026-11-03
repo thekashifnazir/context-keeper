@@ -1,0 +1,1549 @@
+{
+  "schema": "ck.score/1",
+  "meta": {
+    "run_id": "r20261103-2217-f718",
+    "set": "main",
+    "mode": "real-time",
+    "model": "claude-opus-5-5",
+    "burst_gap_s": 20,
+    "started_at": "2026-11-03T22:18:12.988Z",
+    "versions": {
+      "harness_sha": "1167bde9b4e795015ce81d9f90f90099719f1de2",
+      "agent_sha": "1167bde9b4e795015ce81d9f90f90099719f1de2",
+      "switch": "ok",
+      "mattermost": "11.9.0.28847360617.c473b66b835687963ea56067351ebc1fa6ee1bcfeab088033350f370a34020a5.false"
+    },
+    "incidents": [],
+    "cases_sha256": "47eefba0e49c7702e8b5fb20ce3880e5b816b54fbed294e9b5e03e704c07ef18",
+    "content_sha256": "ee9d98b0c9e4fdd7af3e366ebe3e1016e82ab52ac089be25fec633ed2e9c8efc",
+    "prices_as_of": "2026-10-06"
+  },
+  "summary": {
+    "set": "main",
+    "overall": {
+      "passed": 12,
+      "total": 13
+    },
+    "job_a": {
+      "passed": 12,
+      "total": 13
+    },
+    "job_d": {
+      "passed": 0,
+      "total": 0
+    },
+    "job_b": {
+      "passed": 0,
+      "total": 0
+    },
+    "quiet": {
+      "passed": 0,
+      "total": 0
+    },
+    "bursts": {
+      "B1": true,
+      "B2": true
+    },
+    "confident_wrong": 0,
+    "diagnostics": {
+      "covered_on_other": 1,
+      "citations_verified": {
+        "verified": 37,
+        "cited": 37
+      },
+      "quotes_verified": {
+        "verified": 37,
+        "cited": 37
+      },
+      "briefs_seen": {
+        "T01": false,
+        "T16": false
+      },
+      "trace_missing": 0,
+      "trace_mismatch": 0,
+      "unattributed": 0,
+      "latency_s": {
+        "p50": 34.7,
+        "p95": 53.3,
+        "n": 13
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "T01",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": "B1",
+      "window": "ledgerly-pilot:B1",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §2",
+          "led-002"
+        ]
+      },
+      "item": {
+        "message_id": "sw_a350d122fb770f9a4fc86a462d837b39",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §2",
+            "quote": "Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off)."
+          },
+          {
+            "ref": "product.md §2",
+            "quote": "Shipped in v0.6 (12 Aug 2026)."
+          },
+          {
+            "ref": "status.md §1",
+            "quote": "Payment reminders, all three tones (product.md §2)"
+          },
+          {
+            "ref": "research.md §2",
+            "quote": "10 of 12 chase late payments by hand, and it's the most-hated admin task. (This led to the reminders in product.md §2.)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "cb2eb800-1759-409d-960c-5dd47fae0a5b",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "product.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "dzgsueqjs3fqbjq7nipjzd5nny",
+      "public_post_ids": [
+        "ogewtyxknjb59xczikgtieofxr"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Welcome back, Rowan! Good news: automatic reminders at 3, 7 and 14 days overdue, with friendly, neutral and firm tones, shipped in v0.6 on 12 Aug and have been tested with real partner data. They came straight from the September interviews, where 10 of 12 agencies said chasing by hand was their most-hated admin task.\n> Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).\n— product.md §2, 20 Oct\nAlso: status.md §1, research.md §2\n\nGood news: direct debit through GoCardless is in the product, so agencies can avoid card fees on large invoices. It came from the interviews, where 7 of 12 named card fees as a pain. Heads-up for partner comms: it's still shipped-untested (sandbox only), and a live test is booked for 17 Nov.\n> **Direct debit through GoCardless**, so agencies avoid card fees on large invoices.\n— product.md §3, 20 Oct\nAlso: status.md §2, research.md §2\n\nGood news: each client gets a portal where they can download their invoice PDFs and payment receipts, and update their billing contact. The portal has been tested with real partner data.\n> Each client gets a portal listing all their invoices.\n— product.md §5, 20 Oct\nAlso: status.md §1"
+      ],
+      "owner_text": [],
+      "latency_s": 51.9,
+      "also_expect": "returner_brief"
+    },
+    {
+      "id": "T02",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": "B1",
+      "window": "ledgerly-pilot:B1",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §3"
+        ]
+      },
+      "item": {
+        "message_id": "sw_2069eeff324cc5ecb177073471eb639d",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §3",
+            "quote": "**Direct debit through GoCardless**, so agencies avoid card fees on large invoices."
+          },
+          {
+            "ref": "status.md §2",
+            "quote": "**GoCardless direct debit** (shipped-untested): sandbox only. A live test is booked for 17 Nov."
+          },
+          {
+            "ref": "research.md §2",
+            "quote": "7 of 12 named card fees on large invoices as a pain. (This led to GoCardless in product.md §3.)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "cb2eb800-1759-409d-960c-5dd47fae0a5b",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §3: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §3",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "56cc19s8qpbdtjx7rzrgr7s3uo",
+      "public_post_ids": [
+        "ogewtyxknjb59xczikgtieofxr"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Welcome back, Rowan! Good news: automatic reminders at 3, 7 and 14 days overdue, with friendly, neutral and firm tones, shipped in v0.6 on 12 Aug and have been tested with real partner data. They came straight from the September interviews, where 10 of 12 agencies said chasing by hand was their most-hated admin task.\n> Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).\n— product.md §2, 20 Oct\nAlso: status.md §1, research.md §2\n\nGood news: direct debit through GoCardless is in the product, so agencies can avoid card fees on large invoices. It came from the interviews, where 7 of 12 named card fees as a pain. Heads-up for partner comms: it's still shipped-untested (sandbox only), and a live test is booked for 17 Nov.\n> **Direct debit through GoCardless**, so agencies avoid card fees on large invoices.\n— product.md §3, 20 Oct\nAlso: status.md §2, research.md §2\n\nGood news: each client gets a portal where they can download their invoice PDFs and payment receipts, and update their billing contact. The portal has been tested with real partner data.\n> Each client gets a portal listing all their invoices.\n— product.md §5, 20 Oct\nAlso: status.md §1"
+      ],
+      "owner_text": [],
+      "latency_s": 43.9,
+      "also_expect": null
+    },
+    {
+      "id": "T03",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": "B1",
+      "window": "ledgerly-pilot:B1",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §5"
+        ]
+      },
+      "item": {
+        "message_id": "sw_a411149993d338723233bb4f35083366",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §5",
+            "quote": "Each client gets a portal listing all their invoices."
+          },
+          {
+            "ref": "product.md §5",
+            "quote": "Clients can download PDFs and payment receipts, and update their billing contact."
+          },
+          {
+            "ref": "status.md §1",
+            "quote": "The client portal (product.md §5)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "cb2eb800-1759-409d-960c-5dd47fae0a5b",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §5: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §5",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "product.md §5",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "brxq1opm4p8e9dfr77wmt76ser",
+      "public_post_ids": [
+        "ogewtyxknjb59xczikgtieofxr"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Welcome back, Rowan! Good news: automatic reminders at 3, 7 and 14 days overdue, with friendly, neutral and firm tones, shipped in v0.6 on 12 Aug and have been tested with real partner data. They came straight from the September interviews, where 10 of 12 agencies said chasing by hand was their most-hated admin task.\n> Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).\n— product.md §2, 20 Oct\nAlso: status.md §1, research.md §2\n\nGood news: direct debit through GoCardless is in the product, so agencies can avoid card fees on large invoices. It came from the interviews, where 7 of 12 named card fees as a pain. Heads-up for partner comms: it's still shipped-untested (sandbox only), and a live test is booked for 17 Nov.\n> **Direct debit through GoCardless**, so agencies avoid card fees on large invoices.\n— product.md §3, 20 Oct\nAlso: status.md §2, research.md §2\n\nGood news: each client gets a portal where they can download their invoice PDFs and payment receipts, and update their billing contact. The portal has been tested with real partner data.\n> Each client gets a portal listing all their invoices.\n— product.md §5, 20 Oct\nAlso: status.md §1"
+      ],
+      "owner_text": [],
+      "latency_s": 37.9,
+      "also_expect": null
+    },
+    {
+      "id": "T04",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T04",
+      "expected": {
+        "job": "A",
+        "verdict": "parked",
+        "sources": [
+          "roadmap.md §1",
+          "led-016"
+        ],
+        "must_mention": [
+          "Rowan"
+        ]
+      },
+      "item": {
+        "message_id": "sw_9135b6f387dea400fb6b7ed7d829d065",
+        "job": "A",
+        "verdict": "parked",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**QuickBooks integration.** Two of the 12 interviewed agencies use it. Parked so the pilot stays on Xero CSV users (`led-016`)."
+          },
+          {
+            "ref": "led-016",
+            "quote": "QuickBooks is parked for phase 2. Only 2 of 12 use it, and the pilot partners are all on Xero. Added to roadmap §1."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "f8bbf258-64d4-4c19-856f-05658369a09f",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict parked"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "roadmap.md §1: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-016",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "1uksknw9gtfgpnt9jmgfs51zmr",
+      "public_post_ids": [
+        "8zx3y3w69bdc3cajs815c7uyow"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "QuickBooks is on the phase 2 list for after the pilot (from Jan 2027). It's parked, not rejected. Kash parked it on 20 Oct because only 2 of the 12 interviewed agencies use it and all the pilot partners are on Xero.\n> **QuickBooks integration.** Two of the 12 interviewed agencies use it. Parked so the pilot stays on Xero CSV users (`led-016`).\n— roadmap.md §1, 28 Oct\nAlso: led-016"
+      ],
+      "owner_text": [],
+      "latency_s": 29.9,
+      "also_expect": null
+    },
+    {
+      "id": "T05",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T05",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-011"
+        ],
+        "must_mention": [
+          "weekday"
+        ]
+      },
+      "item": {
+        "message_id": "sw_6ab64149c301c5befd4ada43ded26a37",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |"
+          },
+          {
+            "ref": "led-011",
+            "quote": "Decision D1: onboarding calls Tue to Thu, weekdays only. Partner finance staff are weekday only, and we can't staff support at weekends. Confirmed."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "4a83e08b-c8f0-4f13-afaf-838c8b200c6e",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "pilot-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-011",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "hbm4w1hoebge5rmdc7c9yb491h",
+      "public_post_ids": [
+        "9upox945mfgpik551mpuzdw63a"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thought, Rowan. Kash confirmed onboarding calls for Tue to Thu on 6 Oct (D1), because partner finance staff work weekdays only and we can't staff support at weekends. Reopen if: a partner can't make any Tue–Thu slot.\n> Onboarding calls on **weekdays, Tue to Thu**: Partner finance staff work weekdays only; support is staffed on weekdays\n— Kash, 6 Oct (pilot-plan.md §2 D1)\nAlso: led-011"
+      ],
+      "owner_text": [],
+      "latency_s": 29.1,
+      "also_expect": null
+    },
+    {
+      "id": "T06",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T06",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "research.md §1",
+          "led-008",
+          "led-010"
+        ]
+      },
+      "item": {
+        "message_id": "sw_0a86343387195c27f30dc68642b0f592",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D4 | confirmed | **Customer interviews before the pilot**, not a survey | 12 agencies interviewed in Sep; surveys only hear from people who already want the thing | A mailing-list survey (selection bias) | Slower than a survey | Never for this pilot (already done) | `led-008` |"
+          },
+          {
+            "ref": "led-008",
+            "quote": "Decision: interviews, not a survey. Surveys mostly get answers from people who already want the thing. I've booked 12 agency interviews for September; the summary will go in research.md."
+          },
+          {
+            "ref": "led-010",
+            "quote": "Interviews done, 12 of 12. Summary is in research.md. Big ones: chasing payments by hand, and card fees on big invoices."
+          },
+          {
+            "ref": "research.md §1",
+            "quote": "**12 agency interviews** of 30 minutes each, with owners or finance leads at agencies of 2 to 30 people."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "874f0864-5927-4135-9273-1f5cabaeb52c",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "led-008: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-008",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-010",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "fukpukhoyirdjb8nkbq9hfzwfa",
+      "public_post_ids": [
+        "m8ag3tanhfydzjogu1fhsqaqpr"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good news: 12 agency interviews (owners or finance leads) were done in September, and the summary is in research.md. The biggest themes were chasing payments by hand and card fees on big invoices. Kash chose interviews over a survey on 10 Sep (D4) because surveys mostly hear from people who already want the thing. Reopen if: Never for this pilot (already done).\n> **Customer interviews before the pilot**, not a survey: 12 agencies interviewed in Sep; surveys only hear from people who already want the thing\n— Kash, 10 Sep (pilot-plan.md §2 D4)\nAlso: led-008, led-010, research.md §1"
+      ],
+      "owner_text": [],
+      "latency_s": 34.7,
+      "also_expect": null
+    },
+    {
+      "id": "T07",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T07",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §7",
+          "led-006"
+        ],
+        "must_mention": [
+          "Sam"
+        ]
+      },
+      "item": {
+        "message_id": "sw_1e5343aa706e2fc5684266e3b5e45883",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §7",
+            "quote": "**A native mobile app.** The web app is fully responsive. Decided 9 Sep, because agencies invoice from a desk and two codebases would halve our speed (see `led-006`)."
+          },
+          {
+            "ref": "led-006",
+            "quote": "Decision: no native mobile app. Agencies invoice from a desk, and none of the interviews so far asked for one. Responsive web only. Added to product doc §7."
+          },
+          {
+            "ref": "led-004",
+            "quote": "Could we get a mobile app on the roadmap? Feels like everyone expects one."
+          },
+          {
+            "ref": "research.md §2",
+            "quote": "None asked for a mobile app."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "91db7395-cad1-4904-8879-bcc80b154414",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §7: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §7",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-006",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-004",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "3ejhtjquatfsdf1t3p3wcx57rc",
+      "public_post_ids": [
+        "ft4k6o934j8rtdgg8dfw67b61c"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thought, Rowan. Sam asked about this on 3 Sep, and Kash decided on 9 Sep to go responsive web only, with no native app. The reasons were that agencies invoice from a desk, none of the 12 interviewed agencies asked for an app, and two codebases would halve our speed. If you've heard partners asking for one, that would be useful new evidence.\n> **A native mobile app.** The web app is fully responsive. Decided 9 Sep, because agencies invoice from a desk and two codebases would halve our speed (see `led-006`).\n— product.md §7, 20 Oct\nAlso: led-006, led-004, research.md §2"
+      ],
+      "owner_text": [],
+      "latency_s": 31.6,
+      "also_expect": null
+    },
+    {
+      "id": "T08",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T08",
+      "expected": {
+        "job": "A",
+        "verdict": "new",
+        "sources": [],
+        "must_mention": [
+          "Rowan"
+        ]
+      },
+      "item": {
+        "message_id": "sw_5221668c47d5fed08dfd5e21d4f55051",
+        "job": "A",
+        "verdict": "new",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "940eb2c1-9f78-4494-a879-80a8d0aa5ecf",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict new"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for new"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [],
+      "case_post_id": "guzuzzku9tfr5yjs968sxpmj6e",
+      "public_post_ids": [
+        "n9jj9dt4oty4jyjbp9sdzjr3hr"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Thanks Rowan, I've logged dark mode for the invoice editor as a new idea, and it'll go on the backlog for review."
+      ],
+      "owner_text": [],
+      "latency_s": 24.2,
+      "also_expect": null
+    },
+    {
+      "id": "T09",
+      "room": "ledgerly-pilot",
+      "author": "Sam",
+      "burst": null,
+      "window": "ledgerly-pilot:T09",
+      "expected": {
+        "job": "A",
+        "verdict": "might-be-related",
+        "sources": [
+          "product.md §1"
+        ]
+      },
+      "item": {
+        "message_id": "sw_e7b5fb7ebfdac9f69af52d51bcf6b388",
+        "job": "A",
+        "verdict": "might-be-related",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §1",
+            "quote": "**Editable templates:** every label on the invoice (such as \"Invoice\", \"Due date\" and \"Total\") can be renamed per client. There is no built-in translation."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "3c7aef96-e4ef-4907-907e-99f3d6c28735",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict might-be-related"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §1: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "qiamrnhspfrk58ptaar6htjkao",
+      "public_post_ids": [
+        "qnkgh4si7iy6ubnno7mqxptqga"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good news: invoice templates are editable, so every label (like \"Invoice\", \"Due date\" and \"Total\") can be renamed per client. That means the Cardiff agency could set its labels in Welsh. There's no built-in translation, though, so a proper Welsh-language option would be a new capability.\n> **Editable templates:** every label on the invoice (such as \"Invoice\", \"Due date\" and \"Total\") can be renamed per client. There is no built-in translation.\n— product.md §1, 20 Oct"
+      ],
+      "owner_text": [],
+      "latency_s": 29.5,
+      "also_expect": null
+    },
+    {
+      "id": "T10",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T10",
+      "expected": {
+        "job": "A",
+        "verdict": "contradicts-record",
+        "sources": [
+          "status.md §2",
+          "product.md §4",
+          "roadmap.md §1"
+        ],
+        "routing": "owner_private_allowed"
+      },
+      "item": {
+        "message_id": "sw_5371185c08b87c15b71fc44998ecdfc2",
+        "job": "A",
+        "verdict": "contradicts-record",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "status.md §2",
+            "quote": "**Xero:** CSV export is shipped-tested. **Live sync is planned, and doesn't exist yet** (roadmap.md §1)."
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**Live two-way Xero sync** (today it's a CSV export; see product.md §4)."
+          },
+          {
+            "ref": "product.md §4",
+            "quote": "**Xero: CSV export only.** Live two-way sync is planned for phase 2 (see roadmap.md §1)."
+          },
+          {
+            "ref": "led-017",
+            "quote": "Makes sense. Xero is CSV export for now; live sync is phase 2 as well."
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "A two-week pilot from **Tue 24 Nov to Fri 4 Dec 2026**."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "8620e7f4-0c25-4216-ba4b-fe2c24ccf647",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict contradicts-record"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "status.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "status.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "product.md §4",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-017",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "o3agkj8zepbomriyr965g1dtjh",
+      "public_post_ids": [
+        "i6jpm79qx3rau8e5wdkuosbkme"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Thanks for keeping Northbank warm, Rowan. One thing to check before the pilot: for now Xero is CSV export only, which is tested and works. Live two-way sync is planned for phase 2 (from Jan 2027), as Priya confirmed on 20 Oct and status.md shows as of 2 Nov, so it won't be ready for the 24 Nov to 4 Dec pilot.\n> **Xero:** CSV export is shipped-tested. **Live sync is planned, and doesn't exist yet** (roadmap.md §1).\n— status.md §2, 2 Nov\nAlso: roadmap.md §1, product.md §4, led-017, pilot-plan.md §1"
+      ],
+      "owner_text": [],
+      "latency_s": 34.6,
+      "also_expect": null
+    },
+    {
+      "id": "T16",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": "B2",
+      "window": "riverside-build-night:B2",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "event-plan.md §2",
+          "riv-004"
+        ],
+        "also_sources": [
+          "event-plan.md §4"
+        ]
+      },
+      "item": {
+        "message_id": "sw_cde50c6fb19a7c465091406cba86a850",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §2",
+            "quote": "| E1 | confirmed | **Weekday evening, not a weekend** | First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs | A weekend (parked to §4) | A sponsor funds a full weekend | `riv-004` |"
+          },
+          {
+            "ref": "riv-003",
+            "quote": "Would a weekend give people more time to build?"
+          },
+          {
+            "ref": "riv-004",
+            "quote": "Decision E1: weekday evening for this one. It's a first small pilot. A weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Weekend version is parked for later."
+          },
+          {
+            "ref": "event-plan.md §4",
+            "quote": "**A full weekend hackathon**, once we have a bigger sponsor and a community to draw on."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "2d14964d-14c4-4f9c-b5c8-f2b56ccc2e07",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "event-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-003",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-004",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "event-plan.md §4",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "4o65p1kt7igu5qgzkbbro7rmqo",
+      "public_post_ids": [
+        "n6gjbmhonprbicr99j6iarwcph"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thinking, and a full weekend hackathon is parked for a later event. Dana asked the same on 14 Oct, and Kash decided (E1) on a weekday evening for this one: it's a first small pilot, and a weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Reopen if: A sponsor funds a full weekend.\n> **Weekday evening, not a weekend**: First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs\n— Kash, 14 Oct (event-plan.md §2 E1)\nAlso: riv-003, riv-004, event-plan.md §4\n\nThanks Alex, a survey was considered. Kash decided on 19 Oct (E2) not to run a pre-event survey, because surveys only hear from people who already want X. Reopen if: Never for event #1.\n> **No pre-event survey**: Surveys only hear from people who already want X\n— Kash, 19 Oct (event-plan.md §2 E2)\nAlso: riv-006\n\nGreat news that you can bring students from the uni society. They're welcome, and a students-only night with the society is parked for later. When Dana asked about the society on 22 Oct, Kash decided (E3) to keep this one community-wide, because the venue's programme is for everyone and student no-show rates are high. Reopen if: The uni society co-hosts a separate night.\n> **Community-wide, not students-only**: The venue's programme is for everyone; student no-show rates are high\n— Kash, 22 Oct (event-plan.md §2 E3)\nAlso: riv-007, riv-008"
+      ],
+      "owner_text": [],
+      "latency_s": 53.3,
+      "also_expect": "joiner_brief"
+    },
+    {
+      "id": "T17",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": "B2",
+      "window": "riverside-build-night:B2",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "event-plan.md §2",
+          "riv-006"
+        ]
+      },
+      "item": {
+        "message_id": "sw_aadb0e1b03467b62378c2474422d23c7",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §2",
+            "quote": "| E2 | confirmed | **No pre-event survey** | Surveys only hear from people who already want X | A survey to the mailing list | Never for event #1 | `riv-006` |"
+          },
+          {
+            "ref": "riv-006",
+            "quote": "Decision E2: no pre-event survey. Surveys only hear from people who already want X."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "2d14964d-14c4-4f9c-b5c8-f2b56ccc2e07",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "event-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-006",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "xq8rdqfu8fguxjygm94fk5dfao",
+      "public_post_ids": [
+        "n6gjbmhonprbicr99j6iarwcph"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thinking, and a full weekend hackathon is parked for a later event. Dana asked the same on 14 Oct, and Kash decided (E1) on a weekday evening for this one: it's a first small pilot, and a weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Reopen if: A sponsor funds a full weekend.\n> **Weekday evening, not a weekend**: First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs\n— Kash, 14 Oct (event-plan.md §2 E1)\nAlso: riv-003, riv-004, event-plan.md §4\n\nThanks Alex, a survey was considered. Kash decided on 19 Oct (E2) not to run a pre-event survey, because surveys only hear from people who already want X. Reopen if: Never for event #1.\n> **No pre-event survey**: Surveys only hear from people who already want X\n— Kash, 19 Oct (event-plan.md §2 E2)\nAlso: riv-006\n\nGreat news that you can bring students from the uni society. They're welcome, and a students-only night with the society is parked for later. When Dana asked about the society on 22 Oct, Kash decided (E3) to keep this one community-wide, because the venue's programme is for everyone and student no-show rates are high. Reopen if: The uni society co-hosts a separate night.\n> **Community-wide, not students-only**: The venue's programme is for everyone; student no-show rates are high\n— Kash, 22 Oct (event-plan.md §2 E3)\nAlso: riv-007, riv-008"
+      ],
+      "owner_text": [],
+      "latency_s": 46.3,
+      "also_expect": null
+    },
+    {
+      "id": "T18",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": "B2",
+      "window": "riverside-build-night:B2",
+      "expected": {
+        "job": "A",
+        "verdict": "parked",
+        "sources": [
+          "event-plan.md §4",
+          "riv-008"
+        ],
+        "also_sources": [
+          "event-plan.md §5"
+        ]
+      },
+      "item": {
+        "message_id": "sw_e0e1874086b5817cb23ea66e54286599",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §2",
+            "quote": "| E3 | confirmed | **Community-wide, not students-only** | The venue's programme is for everyone; student no-show rates are high | Students-only (parked to §4) | The uni society co-hosts a separate night | `riv-008` |"
+          },
+          {
+            "ref": "riv-007",
+            "quote": "Could we pull in the uni computing society?"
+          },
+          {
+            "ref": "riv-008",
+            "quote": "Decision E3: they're welcome, but this one is community-wide, not students-only. A students-only night with the society is parked for later."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "2d14964d-14c4-4f9c-b5c8-f2b56ccc2e07",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "fail",
+          "reason": "verdict covered, expected parked"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "riv-008: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": false,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": true,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-007",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-008",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "3b5id9fq4bgedqrmxfkdt1stdh",
+      "public_post_ids": [
+        "n6gjbmhonprbicr99j6iarwcph"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thinking, and a full weekend hackathon is parked for a later event. Dana asked the same on 14 Oct, and Kash decided (E1) on a weekday evening for this one: it's a first small pilot, and a weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Reopen if: A sponsor funds a full weekend.\n> **Weekday evening, not a weekend**: First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs\n— Kash, 14 Oct (event-plan.md §2 E1)\nAlso: riv-003, riv-004, event-plan.md §4\n\nThanks Alex, a survey was considered. Kash decided on 19 Oct (E2) not to run a pre-event survey, because surveys only hear from people who already want X. Reopen if: Never for event #1.\n> **No pre-event survey**: Surveys only hear from people who already want X\n— Kash, 19 Oct (event-plan.md §2 E2)\nAlso: riv-006\n\nGreat news that you can bring students from the uni society. They're welcome, and a students-only night with the society is parked for later. When Dana asked about the society on 22 Oct, Kash decided (E3) to keep this one community-wide, because the venue's programme is for everyone and student no-show rates are high. Reopen if: The uni society co-hosts a separate night.\n> **Community-wide, not students-only**: The venue's programme is for everyone; student no-show rates are high\n— Kash, 22 Oct (event-plan.md §2 E3)\nAlso: riv-007, riv-008"
+      ],
+      "owner_text": [],
+      "latency_s": 38.3,
+      "also_expect": null
+    }
+  ],
+  "bursts": [
+    {
+      "id": "B1",
+      "members": [
+        "T01",
+        "T02",
+        "T03"
+      ],
+      "answered_once": true,
+      "reason": "one decision covers all; 1 public non-brief post(s); 1 reply decision(s)"
+    },
+    {
+      "id": "B2",
+      "members": [
+        "T16",
+        "T17",
+        "T18"
+      ],
+      "answered_once": true,
+      "reason": "one decision covers all; 1 public non-brief post(s); 1 reply decision(s)"
+    }
+  ],
+  "briefs": [
+    {
+      "id": "T01",
+      "expect": "returner_brief",
+      "seen": false
+    },
+    {
+      "id": "T16",
+      "expect": "joiner_brief",
+      "seen": false
+    }
+  ],
+  "unattributed": [],
+  "pre_replay_posts": [
+    {
+      "post_id": "dwo6mcccxpby5bbf9y484zrrso",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "Hi there! Just @context-keeper-eval me when you're ready."
+    },
+    {
+      "post_id": "m3tdmjpnujriixu6der5ddu87e",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "📄 created room document “Ledgerly pilot plan”."
+    },
+    {
+      "post_id": "31mdp9joxtfc5k93mqkwuzpape",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "📄 created room document “Ledgerly: product overview”."
+    },
+    {
+      "post_id": "gzkoe6ngij88fmyxdpoh4s7ogh",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "📄 created room document “Ledgerly: customer research summary”."
+    },
+    {
+      "post_id": "fdmiojitd3b97k8zgj4d69838c",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "📄 created room document “Ledgerly roadmap”."
+    },
+    {
+      "post_id": "g9r5rk4intnn7eehhed5s8ox5o",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "📄 created room document “Ledgerly: pilot readiness status”."
+    },
+    {
+      "post_id": "me8spusjttgk5ecsh5khw87eiy",
+      "channel_id": "d13aisra6tbx5y6wrsp1wkx5za",
+      "message": "📄 created room document “Channel archive”."
+    },
+    {
+      "post_id": "tsmzrtcgkjfr7pc7gr74cxfd9a",
+      "channel_id": "78jmomj493gs8nm811ts7tij6y",
+      "message": "Hi! I'm here to help — mention @context-keeper-eval anytime."
+    },
+    {
+      "post_id": "5ofurs11etf83nk8qpwz7we9py",
+      "channel_id": "78jmomj493gs8nm811ts7tij6y",
+      "message": "📄 created room document “Riverside Build Night #1: event plan”."
+    },
+    {
+      "post_id": "iujuz6ogkpgsbdxebwgqesp89w",
+      "channel_id": "78jmomj493gs8nm811ts7tij6y",
+      "message": "📄 created room document “Channel archive”."
+    }
+  ],
+  "usage": {
+    "calls": 16,
+    "input_tokens": 9065,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 99765,
+    "output_tokens": 9852,
+    "est_cost_usd": 0.7321
+  }
+}

@@ -9,20 +9,35 @@ import type { Capture, MmPost } from './capture.ts';
 import { resolveRef, type Case, type RoomContent } from './content.ts';
 
 export const SCORER_VERSION = 'ck.score/1';
-/** Verdicts whose case needs a verified citation from expect.sources (P3). */
-export const P3_VERDICTS = new Set(['covered', 'parked', 'contradicts-record', 'might-be-related']);
+/** Verdicts whose case needs a verified citation from expect.sources (P3). reopen and parked-recall
+ *  added by Kash's scoring call of 3 Nov: a reopen must cite the decision it reopens, a recall the parked items. */
+export const P3_VERDICTS = new Set(['covered', 'parked', 'contradicts-record', 'might-be-related', 'reopen', 'parked-recall']);
 /** Visible text is compared on its first 120 normalised characters, in case the bridge reformats the tail. */
 const PREFIX = 120;
 
-/** USD per million tokens. From the claude-api skill's model table as cached 6 Oct 2026 (PREP eval-harness §8).
- *  Cache write = 1.25 × input and Opus cache read = 0.1 × input are assumptions, not quoted prices. */
+/** USD per million tokens. From the claude-api skill's model table as cached 6 Oct 2026 (PREP eval-harness §8):
+ *  input, output, and the Opus/Sonnet 5.5 cache read ($0.20) are quoted. Cache write = 1.25 × input and the
+ *  Haiku cache read = 0.1 × input are assumptions. A trace line's model id joins every model the decision
+ *  called ("claude-opus-5-5+claude-haiku-5-5") with the tokens summed, so it's priced at the dearest of
+ *  them: an upper bound (the Haiku reviewer's tokens are a small share). */
 export const PRICES = {
   as_of: '2026-10-06',
   per_mtok: {
     'claude-sonnet-5-5': { input: 2.0, output: 10.0, cache_read: 0.2, cache_write: 2.5 },
-    'claude-opus-5-5': { input: 4.0, output: 20.0, cache_read: 0.4, cache_write: 5.0 },
+    'claude-opus-5-5': { input: 4.0, output: 20.0, cache_read: 0.2, cache_write: 5.0 },
+    'claude-haiku-5-5': { input: 0.1, output: 0.5, cache_read: 0.01, cache_write: 0.125 },
   } as Record<string, { input: number; output: number; cache_read: number; cache_write: number }>,
 };
+
+/** The price for a trace line's model id; for a joined id, the dearest component per field (upper bound). */
+export function priceOf(id: string) {
+  const parts = id.split('+').map((m) => PRICES.per_mtok[m]);
+  if (!parts.length || parts.some((p) => !p)) return null;
+  return {
+    input: Math.max(...parts.map((p) => p.input)), output: Math.max(...parts.map((p) => p.output)),
+    cache_read: Math.max(...parts.map((p) => p.cache_read)), cache_write: Math.max(...parts.map((p) => p.cache_write)),
+  };
+}
 
 type Status = 'pass' | 'fail' | 'n/a';
 export interface Rule { status: Status; reason: string }
@@ -199,7 +214,9 @@ export function score(input: ScoreInput) {
     const cap = captured.get(c.id)!;
     const w = windowOfCase.get(c.id)!;
     const lines = linesIn(w).filter((l) => [...caseOfInput.get(l)!.values()].includes(c.id));
-    const decision = lines.find((l) => l.kind !== 'brief') ?? lines[0] ?? null;
+    // A brief attempt (trigger room_join) is never the message's decision, even when it failed and was
+    // traced as silence; it's counted under briefs.
+    const decision = lines.find((l) => l.kind !== 'brief' && l.trigger !== 'room_join') ?? lines[0] ?? null;
     const msgId = decision ? [...caseOfInput.get(decision)!].find(([, id]) => id === c.id)![0] : null;
     const item: TraceItem | null = decision?.items.find((i) => i.message_id === msgId) ?? null;
     const vis = visibleIn(w);
@@ -238,7 +255,7 @@ export function score(input: ScoreInput) {
     else if (!item) p3 = fail('no item');
     else {
       const good = cites.find((ci) => ci.expected && ci.verified);
-      if (good) p3 = pass(`${good.ref}: resolves, quote verified, shown in the reply`);
+      if (good) p3 = pass(`${good.ref}: resolves, quote verified, shown in the ${e.routing === 'owner_private_required' ? 'reply or owner desk' : 'reply'}`);
       else if (!cites.length) p3 = fail('no sources cited');
       else {
         const why = cites.map((ci) => `${ci.ref}: ${!ci.expected ? 'not an expected source' : !ci.resolves ? "doesn't resolve" : !ci.quote_verified ? 'quote not in source' : 'not shown in the public reply'}`);
@@ -328,7 +345,7 @@ export function score(input: ScoreInput) {
     if (!l.model) continue;
     usage.calls += l.model.calls; usage.input_tokens += l.model.input_tokens; usage.cache_read_tokens += l.model.cache_read_tokens;
     usage.cache_write_tokens += l.model.cache_write_tokens; usage.output_tokens += l.model.output_tokens;
-    const p = PRICES.per_mtok[l.model.id];
+    const p = priceOf(l.model.id);
     if (!p || usage.est_cost_usd === null) { usage.est_cost_usd = null; continue; }
     usage.est_cost_usd += (l.model.input_tokens * p.input + l.model.output_tokens * p.output + l.model.cache_read_tokens * p.cache_read + l.model.cache_write_tokens * p.cache_write) / 1e6;
   }
@@ -359,7 +376,7 @@ export function score(input: ScoreInput) {
     schema: SCORER_VERSION,
     meta: {
       run_id: meta.run_id, set: meta.set, mode: meta.mode, model: meta.model, burst_gap_s: meta.burst_gap_s,
-      started_at: meta.started_at, versions: meta.versions, cases_sha256: input.cases_sha256, content_sha256: input.content_sha256,
+      started_at: meta.started_at, versions: meta.versions, incidents: meta.incidents ?? [], cases_sha256: input.cases_sha256, content_sha256: input.content_sha256,
       prices_as_of: PRICES.as_of,
     },
     summary,

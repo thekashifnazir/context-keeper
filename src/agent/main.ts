@@ -5,6 +5,10 @@
 // Safety while other lanes are live: it only posts into rooms whose name starts with one of
 // CK_POST_ROOMS (default "ck-smoke-,ck-eval-"); everywhere else it decides, traces and logs the
 // draft, but sends nothing. The owner desk gets posts only with CK_POST_OWNER=1.
+// CK_LISTEN_ROOMS (prefixes, unset = every room) limits which rooms it connects to at all: the eval
+// sets it to its own run's ck-eval-<runid>- rooms, since connect_to_room takes a room from any other
+// session of the agent. CK_STATE_DIR (default state) holds its local files; CK_OWNER_DESK_ROOM
+// overrides state/owner.json's desk (the eval passes the desk the seed made).
 // Room record: until the seed lane's room documents land, the record is demo/<room> (chosen by
 // CK_ROOM_DEMO, or by "ledgerly"/"riverside" in the room name) plus every live message as it arrives.
 // Owner desk (state/owner.json, or CK_OWNER_SENDER / CK_OWNER_DESK_ROOM): its messages never go to
@@ -32,17 +36,20 @@ const need = (k: string) => process.env[k] || (console.error(`missing ${k}`), pr
 const endpoint = need('SWITCH_API_URL');
 const agentId = need('SWITCH_AGENT_ID');
 const token = need('SWITCH_AGENT_API_KEY');
-mkdirSync('state', { recursive: true });
+const SD = process.env.CK_STATE_DIR || 'state';
+mkdirSync(SD, { recursive: true });
 
 const readJson = <T,>(f: string, d: T): T => { try { return existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as T) : d; } catch { return d; } };
-const idFile = 'state/agent-connection.json';
+const idFile = `${SD}/agent-connection.json`;
 const connectionId = readJson<{ id?: string }>(idFile, {}).id ?? randomUUID();
 atomicWriteJson(idFile, { id: connectionId });
-const posFile = 'state/agent-position.json';
-const roomsFile = 'state/agent-rooms.json';
-const ownerFile = readJson<{ owner_desk_room?: string; owner_sender?: string }>('state/owner.json', {});
+const posFile = `${SD}/agent-position.json`;
+const roomsFile = `${SD}/agent-rooms.json`;
+const ownerFile = readJson<{ owner_desk_room?: string; owner_sender?: string }>(`${SD}/owner.json`, {});
 const owner = { owner_desk_room: process.env.CK_OWNER_DESK_ROOM || ownerFile.owner_desk_room, owner_sender: process.env.CK_OWNER_SENDER || ownerFile.owner_sender };
-const postPrefixes = (process.env.CK_POST_ROOMS ?? 'ck-smoke-,ck-eval-').split(',').map((s) => s.trim()).filter(Boolean);
+const prefixes = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean);
+const postPrefixes = prefixes(process.env.CK_POST_ROOMS ?? 'ck-smoke-,ck-eval-');
+const listenPrefixes = process.env.CK_LISTEN_ROOMS ? prefixes(process.env.CK_LISTEN_ROOMS) : null;
 const gapMs = Number(process.env.CK_BURST_GAP_S ?? 20) * 1000;
 const CAP_MS = 90_000;
 
@@ -65,7 +72,7 @@ const ourEvents = new Set<string>();
 const eventIdOf = (r: any): string | null => r?.result?.message_id ?? r?.result?.event_id ?? r?.message_id ?? r?.event_id ?? null;
 
 const poster: Poster = {
-  ownerRoom: owner.owner_desk_room ? { id: owner.owner_desk_room, name: 'owner desk' } : null,
+  get ownerRoom() { return owner.owner_desk_room ? { id: owner.owner_desk_room, name: roomNames.get(owner.owner_desk_room) ?? 'owner desk' } : null; },
   async thread(roomId, threadId, body) {
     if (!allowed(roomId)) { console.log(`[dry-run: ${roomNames.get(roomId)} not in CK_POST_ROOMS] would reply:\n${body}`); return null; }
     await op(roomId, 'connect_to_room', { room_id: roomId });
@@ -76,7 +83,7 @@ const poster: Poster = {
   async owner(body) {
     const desk = owner.owner_desk_room;
     if (!desk) return null;
-    if (process.env.CK_POST_OWNER !== '1') { console.log(`[dry-run owner desk] ${body}`); return null; }
+    if (process.env.CK_POST_OWNER !== '1' || (listenPrefixes && !allowed(desk))) { console.log(`[dry-run owner desk] ${body}`); return null; }
     await op(desk, 'connect_to_room', { room_id: desk });
     const id = eventIdOf(await op(desk, 'post_message', { body }));
     if (id) ourEvents.add(id);
@@ -88,8 +95,8 @@ const selfSenders = new Set((process.env.CK_SELF_SENDERS ?? '').split(',').map((
 let stopped = false;
 const deps: Deps = {
   claude: realClaude(), cfg: modelConfigFromEnv(), system: systemPrompt('.'), poster,
-  state: new AgentState('state/agent-state.json'), selfSenders,
-  ownerSender: owner.owner_sender ?? null, ownerName: process.env.CK_OWNER_NAME || 'Kash', pending: new PendingStore('state/pending.json'),
+  state: new AgentState(`${SD}/agent-state.json`), selfSenders,
+  ownerSender: owner.owner_sender ?? null, ownerName: process.env.CK_OWNER_NAME || 'Kash', pending: new PendingStore(`${SD}/pending.json`),
   onFatal: (why) => { stopped = true; console.error('fatal, stopping:', why); setTimeout(() => process.exit(2), 2000); },
 };
 
@@ -170,7 +177,7 @@ async function onEvent(ev: AgentBridgeEvent) {
 
 async function joinRooms() {
   const rooms = ((await op(null, 'list_rooms', {})) as { result: { room_id: string; name: string; archived: boolean }[] }).result;
-  const live = rooms.filter((x) => !x.archived);
+  const live = rooms.filter((x) => !x.archived && (!listenPrefixes || listenPrefixes.some((p) => x.name.startsWith(p))));
   atomicWriteJson(roomsFile, live.map((r) => r.room_id));
   for (const r of live) {
     roomNames.set(r.room_id, r.name);

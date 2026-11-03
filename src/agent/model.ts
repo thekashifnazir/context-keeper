@@ -127,8 +127,10 @@ export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { i
             results: {
               type: 'array',
               items: {
-                type: 'object', additionalProperties: false, required: ['id', 'supports', 'issue'],
-                properties: { id: { type: 'string' }, supports: { type: 'boolean' }, issue: { type: 'string' } },
+                // issue before supports: the reviewer states the problem, then rules (it had returned
+                // supports=false with an issue that ended "so the claim is supported").
+                type: 'object', additionalProperties: false, required: ['id', 'issue', 'supports'],
+                properties: { id: { type: 'string' }, issue: { type: 'string' }, supports: { type: 'boolean' } },
               },
             },
           },
@@ -137,7 +139,8 @@ export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { i
     },
     messages: [{
       role: 'user',
-      content: JSON.stringify({ checks }).replace(/</g, '\\u003c').replace(/>/g, '\\u003e'),
+      // Short ids (c1, c2…): the reviewer dropped one of three 35-character sw_ ids in a live burst.
+      content: JSON.stringify({ checks: checks.map((c, i) => ({ ...c, id: `c${i + 1}` })) }).replace(/</g, '\\u003c').replace(/>/g, '\\u003e'),
     }],
   };
   const t0 = Date.now();
@@ -147,7 +150,8 @@ export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { i
   if (msg.stop_reason === 'refusal') return { reviews, usage }; // no result = blocked
   const text = msg.content.filter((b) => b.type === 'text').map((b) => (b as Anthropic.TextBlock).text).join('');
   const parsed = JSON.parse(text) as { results?: Review[] };
-  for (const r of parsed.results ?? []) if (typeof r.supports === 'boolean') reviews.set(String(r.id), { id: String(r.id), supports: r.supports, issue: String(r.issue ?? '') });
+  const realId = (id: string) => checks[Number(/^c(\d+)$/.exec(id)?.[1]) - 1]?.id ?? id;
+  for (const r of parsed.results ?? []) if (typeof r.supports === 'boolean') { const id = realId(String(r.id)); reviews.set(id, { id, supports: r.supports, issue: String(r.issue ?? '') }); }
   return { reviews, usage };
 }
 
@@ -162,7 +166,9 @@ export async function callBrief(claude: Claude, cfg: ModelConfig, system: string
     max_tokens: 4000,
     system: `${system}\n\n${BRIEF_NOTES}`,
     tools: [WRITE_BRIEF],
-    tool_choice: { type: 'tool', name: 'write_brief' },
+    // Opus 5.5 rejects a forced tool_choice (400 "type tool and any are not supported"), which silenced every
+    // live brief; auto + the strict tool + "Call write_brief once." in BRIEF_NOTES instead.
+    tool_choice: { type: 'auto' },
     messages: [{ role: 'user', content: [...ctx.documents, { type: 'text', text: briefRequestText(person) }] }],
   };
   const t0 = Date.now();

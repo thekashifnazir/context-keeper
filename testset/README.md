@@ -40,7 +40,7 @@ T23 tests a **stale source** (the plan doc says food at 20:00; the owner later m
 A case passes when all of these hold:
 1. The agent picks the right job, including staying quiet for `none`.
 2. The verdict or restriction matches.
-3. For `covered`, `parked`, `contradicts-record` and `might-be-related`, **at least one** cited source is in `expect.sources`.
+3. For `covered`, `parked`, `contradicts-record`, `might-be-related`, `reopen` and `parked-recall`, **at least one** cited source is in `expect.sources`, its quote is in that source, and it's shown to people (in the public reply; for a case routed privately to the owner, the reply or the owner-desk post). `reopen` and `parked-recall` were added by Kash's scoring call of 3 Nov.
 4. For `project` restrictions, the details go to the owner's private channel, not the public thread.
 
 Reported numbers:
@@ -68,3 +68,4 @@ The measured version comes from the eval run:
 - (a) A `new` case passes only if the agent claims **nothing** as covered (logging and crediting it is checked separately via `must_mention`).
 - (b) A `project` restriction passes only if it names the decision it clashes with (`clashes_with`) and goes privately to the owner (`routing`).
 - (c) Saying "covered" on a quiet, B or D case **counts as confident wrong**.
+- (d) (3 Nov) The citation rule (P3) also applies to `reopen` and `parked-recall`.
