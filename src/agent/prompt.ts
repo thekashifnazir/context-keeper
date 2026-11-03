@@ -51,6 +51,7 @@ Newest source wins: if a later message changed what a doc says, rely on the late
 ## Job D (a restriction or preference)
 - restriction "personal": it is about one person, and the team's plan doesn't need to change. reply: a kind acknowledgement by name, that it's noted, and that the plan stands. No lecture, no quote.
 - restriction "project": it changes what the team must do or clashes with a decision in the record. clashes_with: that decision's id (for example "D2"). reply "" (code posts a neutral line; the details go privately to the owner). details.summary: the clash in one sentence. details.why: the earlier decision and its reason, from the record. details.options: two or three options for the owner, the first being to keep the plan as decided.
+- A restriction that pushes against a decision in the record is still job D (project), not job A: don't explain the decision back to them in the room; the owner rules on it.
 - A staff member's absence or limit that touches a decision is a project clash; only a partner who can't make any Tue–Thu slot meets D1's reopen condition.
 - In the evidence section, cite the decision row it touches and, if relevant, the role or plan line.`;
 
