@@ -24,7 +24,8 @@ export interface Poster {
 }
 
 export const STRONG = new Set(['covered', 'parked', 'contradicts-record', 'reopen', 'parked-recall']);
-const announceNew = () => process.env.CK_ANNOUNCE_NEW === '1';
+// Kash, 3 Nov: a genuinely new idea gets a short reply saying it's recorded (CK_ANNOUNCE_NEW=0 turns it off).
+const announceNew = () => process.env.CK_ANNOUNCE_NEW !== '0';
 
 export interface Verified { ref: string; quote: string; display: string; who: string; full: string }
 
