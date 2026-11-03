@@ -63,6 +63,10 @@ describe('block layout', () => {
     }
     expect(ctx.table.flat().map((b) => b.blockId)).toEqual(['product.md header', 'product.md §2.1', 'product.md §2.2', 'led-002']);
     expect(ctx.documents.at(-1)!.cache_control).toEqual({ type: 'ephemeral' });
+    // and one before the archive, which grows with every live message (the stable prefix is tools + system + docs)
+    expect(ctx.documents.at(-1)!.title).toBe('Channel archive');
+    expect(ctx.documents.at(-2)!.cache_control).toEqual({ type: 'ephemeral' });
+    expect(ctx.documents.filter((d) => d.cache_control)).toHaveLength(2);
   });
 });
 

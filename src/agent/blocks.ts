@@ -133,7 +133,13 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
     });
     table.push(archive);
   }
-  // One cache breakpoint after the last document: tools + system + the whole room are the cached prefix.
+  // Two cache breakpoints. The archive grows with every live message (and our own posts), so a
+  // breakpoint only after it never matches the next call's prefix: every call wrote the whole room
+  // to cache and none read it. The first breakpoint sits after the last room doc, before the
+  // archive: tools + system + docs stay byte-identical between calls and are read from cache. The
+  // second, after the archive, still covers back-to-back calls on an unchanged record (a retry).
+  const docCount = documents.length - (archive.length ? 1 : 0);
+  if (docCount > 0 && docCount < documents.length) documents[docCount - 1].cache_control = { type: 'ephemeral' };
   if (documents.length) documents[documents.length - 1].cache_control = { type: 'ephemeral' };
   return { roomName: room.name, documents, table, sourceText };
 }
