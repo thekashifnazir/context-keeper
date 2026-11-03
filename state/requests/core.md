@@ -1,9 +1,0 @@
-# Requests from the core lane (D2-3, 3 Nov)
-
-1. **package.json (foundation):** add scripts `"replay": "tsx src/cli/replay.ts"`, `"probes": "tsx src/cli/probes.ts"`, `"agent": "tsx src/agent/main.ts"`. Until then run them with `npx tsx …`.
-2. **package.json (foundation):** add a YAML parser (e.g. `yaml`). `src/agent/room.ts` reads `cases.yaml` and `chat-history.yaml` through `python3 -E` + PyYAML for now (data tooling only, not the live path).
-3. **test/fake-claude.ts** is listed under foundation, but it didn't exist; core wrote it (scripted fake, asserts the call sequence). Foundation may adopt or move it.
-4. **src/shared/trace.ts (foundation):** an optional `notes: string[]` field. Gate events (`gate_blocked`, downgrades with the reviewer's reason, duplicate suppressed, embedded_instruction seen) currently go in `error`, joined with `; `.
-5. **Kash, behaviour call:** job A `new` (T08). His 3 Nov spec says speak untagged only when the record covers it; the test set and design say a new idea gets a public "logged, credited to you" reply, and eval P4 expects exactly one public reply for T08. Current default: no public post, the idea goes on the room's idea list in `state/`; `CK_ANNOUNCE_NEW=1` posts the reply instead. Which one?
-6. **Seed lane:** `src/agent/main.ts` builds the room record from `demo/<room>` plus live messages. When the seeded room documents exist, the record should come from Switch (`load_internal_documents` for docs and the "Channel archive"); tell core the document names/format.
-7. **Eval lane:** run the agent with `npx tsx src/agent/main.ts` and `CK_POST_ROOMS=ck-eval-` (it posts only into rooms with an allowed name prefix; elsewhere it's a dry run). Trace refs are the scored refs (`product.md §2`, `led-011`); live messages are cited by their Switch message id. The agent's own sender id is learned when its own post comes back, or set with `CK_SELF_SENDERS`.
