@@ -2,7 +2,7 @@
 //   1. the quote gate: every cited block's text (header stripped) must be verbatim in its source
 //      (src/shared/quote.ts, the scorer's own rule). A strong verdict with no verified quote drops to
 //      might-be-related with the link; with no citation at all it becomes silence + gate_blocked.
-//   2. the reviewer (one Haiku call for the decision; sees only each reply and its quotes). A block
+//   2. the reviewer (one Haiku call for the decision; sees only each claim and its quotes). A block
 //      drops covered / parked / contradicts-record / reopen / parked-recall to might-be-related.
 //   3. compose: the model's reply, then the quote and who/when, built by code from verified text.
 //   4. idempotency (room + thread + text hash, in state/), then send; a failed send retries once,
@@ -43,7 +43,8 @@ export function gateSources(cited: Cited[], ctx: RoomContext): { verified: Verif
     if (!source || !quoteVerified(quote, source)) continue;
     if (verified.some((v) => v.ref === b.ref && v.quote === quote)) continue;
     const day = fmtDay(b.at);
-    const who = b.kind === 'message' ? `${b.author}, ${day} (${b.ref})` : `${b.blockId.replace(/^(\S+ §\d+)\.\d+$/, '$1')}${day ? `, ${day}` : ''}`;
+    const where = b.kind === 'message' ? b.ref : b.blockId.replace(/^(\S+ §\d+)\.\d+$/, '$1');
+    const who = b.author ? `${b.author}, ${day} (${where})` : `${where}${day ? `, ${day}` : ''}`;
     verified.push({ ref: b.ref, quote, display: b.display, who, full: c.citedText });
   }
   return { verified, refsSeen };
@@ -120,7 +121,7 @@ export async function postPublic(
   const toReview = plans.filter((p) => p.body && p.verdict && STRONG.has(p.verdict) && p.sources.length);
   if (toReview.length) {
     try {
-      const r = await callReviewer(deps.claude, deps.cfg, toReview.map((p) => ({ id: p.it.message_id, reply: p.it.reply, quotes: p.sources.map((s) => s.full) })));
+      const r = await callReviewer(deps.claude, deps.cfg, toReview.map((p) => ({ id: p.it.message_id, claim: p.it.claim || p.it.reply, quotes: p.sources.map((s) => s.full) })));
       usage = r.usage;
       for (const p of toReview) {
         const rv = r.reviews.get(p.it.message_id);

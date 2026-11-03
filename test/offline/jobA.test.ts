@@ -119,11 +119,11 @@ describe('R1 quote gate', () => {
 
   it('a verified quote the reviewer says does not support the claim → might-be-related, never covered', async () => {
     const claude = new FakeClaude([
-      { model: OPUS, respond: verdictMessage(OPUS, ctx, [item('m1', { reply: 'Meeting reminders for partner calls are live.' })], [{ blockId: 'led-002' }]) },
+      { model: OPUS, respond: verdictMessage(OPUS, ctx, [item('m1', { claim: 'Covered: meeting reminders for partner calls are live.', reply: 'Meeting reminders for partner calls are live.' })], [{ blockId: 'led-002' }]) },
       { model: HAIKU, respond: (p: any) => {
         const sent = JSON.parse(p.messages[0].content);
-        expect(Object.keys(sent)).toEqual(['checks']); // the reviewer sees only reply + quotes
-        expect(sent.checks[0]).toEqual({ id: 'm1', reply: 'Meeting reminders for partner calls are live.', quotes: [ctx.table[1][0].text] });
+        expect(Object.keys(sent)).toEqual(['checks']); // the reviewer sees only the claim + quotes
+        expect(sent.checks[0]).toEqual({ id: 'm1', claim: 'Covered: meeting reminders for partner calls are live.', quotes: [ctx.table[1][0].text] });
         return reviewerMessage(HAIKU, [{ id: 'm1', supports: false, issue: 'payment reminders, not meetings' }]);
       } },
     ]);

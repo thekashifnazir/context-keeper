@@ -18,7 +18,7 @@ export interface BlockInfo {
   body: string; // text without the header
   display: string; // what a post shows as the quote (verbatim pieces only)
   at: string | null; // ISO date or datetime, null if undated
-  author: string | null; // archive messages only
+  author: string | null; // archive messages, and decision rows whose source message is known
   kind: 'message' | 'row' | 'bullet' | 'para';
 }
 
@@ -55,6 +55,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
   const table: BlockInfo[][] = [];
   const sourceText = new Map<string, string>();
   const msgAt = new Map(room.messages.map((m) => [m.id, shortStamp(m.at)]));
+  const msgAuthor = new Map(room.messages.map((m) => [m.id, m.author]));
 
   for (const doc of room.docs) {
     const infos: BlockInfo[] = [];
@@ -71,9 +72,9 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
       const lines = (head ? part.slice(part.indexOf('\n') + 1) : part).split('\n');
       let bullet = 0;
       let para: string[] = [];
-      const add = (blockId: string, tag: string, body: string, kind: BlockInfo['kind'], display: string, at: string | null) => {
+      const add = (blockId: string, tag: string, body: string, kind: BlockInfo['kind'], display: string, at: string | null, author: string | null = null) => {
         const header = `[${blockId} · ${title} · ${tag}] `;
-        infos.push({ blockId, ref, headerLen: header.length, text: header + body, body, display: trimDisplay(display), at, author: null, kind });
+        infos.push({ blockId, ref, headerLen: header.length, text: header + body, body, display: trimDisplay(display), at, author, kind });
       };
       const flush = () => {
         if (para.length) add(ref, dateTag, para.join(' ').trim(), 'para', para.join(' ').trim(), date);
@@ -88,7 +89,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
           if (/^[A-Z]\d+$/.test(c[0])) {
             const src = (line.match(/`((?:led|riv)-\d{3})`/) ?? [])[1] ?? null;
             const at = src ? (msgAt.get(src) ?? date) : date;
-            add(`${ref} ${c[0]}`, `${src ?? 'doc'} · ${at ?? 'UNDATED'}`, line.trim(), 'row', `${c[2]}: ${c[3]}`, at);
+            add(`${ref} ${c[0]}`, `${src ?? 'doc'} · ${at ?? 'UNDATED'}`, line.trim(), 'row', `${c[2]}: ${c[3]}`, at, src ? (msgAuthor.get(src) ?? null) : null);
           } else if (!/^\|[\s|:-]+\|$/.test(line.trim())) {
             columns = `Decision table columns: ${c.join(' | ')}`;
           }

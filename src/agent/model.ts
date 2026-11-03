@@ -107,18 +107,18 @@ export async function callVerdict(claude: Claude, cfg: ModelConfig, system: stri
   return { msg, usage: usageOf(msg, Date.now() - t0) };
 }
 
-// ---- call 2: the narrow reviewer (sees only each reply and its quotes) ---------------------------
+// ---- call 2: the narrow reviewer (sees only each claim and its quotes) ---------------------------
 
 export interface Review { id: string; supports: boolean; issue: string }
 
 /** One call for the whole decision (a burst's items are reviewed together), so a message costs at most 2 calls. */
-export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { id: string; reply: string; quotes: string[] }[]): Promise<{ reviews: Map<string, Review>; usage: Usage }> {
+export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { id: string; claim: string; quotes: string[] }[]): Promise<{ reviews: Map<string, Review>; usage: Usage }> {
   const params = {
     model: cfg.reviewerModel,
     max_tokens: 2000,
     system: REVIEWER_SYSTEM,
     output_config: {
-      effort: 'low',
+      effort: 'medium',
       format: {
         type: 'json_schema',
         schema: {
