@@ -3,6 +3,7 @@
 // own words. Citations are tied to an item by the "item: <id>" line that precedes them.
 import type Anthropic from '@anthropic-ai/sdk';
 import type { BlockInfo, RoomContext } from './blocks.ts';
+import type { DecisionRecord } from '../shared/trace.ts';
 import type { Details } from './pending.ts';
 
 export interface Cited {
@@ -23,10 +24,10 @@ export interface ModelItem {
   details: Details; // jobs B and D: what goes to the owner desk (empty otherwise)
   cited: Cited[];
   /** Set by code for job B (never by the model directly): the trace's decision record. */
-  decision_record?: { summary: string; owner: string; date: string } | null;
+  decision_record?: DecisionRecord | null;
 }
 
-export const emptyDetails = (): Details => ({ summary: '', why: '', date: '', suggested_owner: '', owner_basis: '', options: [] });
+export const emptyDetails = (): Details => ({ summary: '', why: '', date: '', action_owner: '', suggested_owner: '', owner_basis: '', reopen_if: '', options: [] });
 
 function parseDetails(v: any): Details {
   const s = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
@@ -35,7 +36,7 @@ function parseDetails(v: any): Details {
   return {
     summary: s(v.summary), why: s(v.why),
     date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
-    suggested_owner: s(v.suggested_owner), owner_basis: s(v.owner_basis),
+    action_owner: s(v.action_owner), suggested_owner: s(v.suggested_owner), owner_basis: s(v.owner_basis), reopen_if: s(v.reopen_if),
     options: Array.isArray(v.options) ? v.options.map(s).filter(Boolean).slice(0, 4) : [],
   };
 }

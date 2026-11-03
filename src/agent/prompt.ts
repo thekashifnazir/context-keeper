@@ -41,10 +41,12 @@ Newest source wins: if a later message changed what a doc says, rely on the late
 - details: for job B and job D only (otherwise every field "" and options []). It goes privately to the owner desk, never to the room.
 
 ## Job B (a decision the chat agreed)
-- verdict "decision". reply "" (code posts the one short line once the decision makers confirm).
+- verdict "decision". reply "" (code posts the one short line).
 - details.summary: exactly what was agreed, in one sentence, as the people said it. details.why: the reason they gave, or the record's reason; "" if none was given (never invent one).
 - details.date: the date it happens or is due, as YYYY-MM-DD, worked out from the message and the record's dates (for example "Tue 24th" in a month the record names); "" if no date was said.
-- details.suggested_owner: who should own it, only when a cited block (roles, who does what, availability) supports it; else "". details.owner_basis: that block's words, briefly. Never guess an owner.
+- details.action_owner: who does the work, only if the chat names them for it; else "". Who decided is not the action owner just because they decided.
+- details.suggested_owner: when action_owner is "", who might do the work, only when a cited block (roles, who does what, availability) supports it; else "". details.owner_basis: that block's words, briefly. Never guess an owner.
+- details.reopen_if: what would make this decision worth revisiting: the decision row's "Reopen if" if the record has this decision, else what the chat said; "" if neither says (never invent one).
 - details.options: [].
 - In the evidence section, cite the block behind the suggested owner, if any.
 
@@ -99,13 +101,15 @@ export const RECORD_VERDICT: Anthropic.Tool = {
               type: 'object',
               additionalProperties: false,
               description: 'Jobs B and D only (see the operator notes); otherwise every string "" and options []',
-              required: ['summary', 'why', 'date', 'suggested_owner', 'owner_basis', 'options'],
+              required: ['summary', 'why', 'date', 'action_owner', 'suggested_owner', 'owner_basis', 'reopen_if', 'options'],
               properties: {
                 summary: { type: 'string' },
                 why: { type: 'string' },
                 date: { type: 'string', description: 'YYYY-MM-DD or ""' },
+                action_owner: { type: 'string', description: 'Job B: who the chat named to do the work, else ""' },
                 suggested_owner: { type: 'string' },
                 owner_basis: { type: 'string' },
+                reopen_if: { type: 'string', description: 'Job B: what would make it worth revisiting, from the record or the chat, else ""' },
                 options: { type: 'array', items: { type: 'string' } },
               },
             },
@@ -181,6 +185,7 @@ export const OWNER_REPLY_SYSTEM = `You read the room owner's reply to one open i
 Return:
 - action: "confirm" (B: the decision stands, possibly with a different owner, date or wording; D: the owner gave a ruling), "drop" (B: not a decision after all; D: no ruling to share), or "unclear" (you can't tell what they decided).
 - summary: B: the decision as confirmed, one sentence (the item's summary unless the owner corrected it). D: "".
-- owner: B: who owns it, if the owner named someone or accepted the suggestion; else "". D: "".
-- date: B: YYYY-MM-DD if the owner gave or kept a date; else "". D: "".
+- owner: B: who does the work, if the owner named someone or accepted the suggestion; else "" (never the owner himself unless he says he'll do it). D: "".
+- date: B: YYYY-MM-DD if the owner gave or kept a due date; else "". D: "".
+- reopen_if: B: what would make the decision worth revisiting, if the owner said; else "". D: "".
 - line: D: the ruling as one short, neutral sentence for the team (no blame, nothing about private notes). B: "".`;

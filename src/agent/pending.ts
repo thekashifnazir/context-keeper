@@ -8,14 +8,20 @@ export interface Details {
   summary: string;
   why: string;
   date: string; // YYYY-MM-DD, or ""
+  action_owner: string; // job B: who the chat named to do the work, else "" (unassigned)
   suggested_owner: string; // only when the record supports it, else ""
   owner_basis: string; // the record line behind the suggestion, else ""
+  reopen_if: string; // job B: what would make it worth revisiting (record or chat), else ""
   options: string[];
 }
 
 export interface PendingItem {
   n: number;
   kind: 'B' | 'D';
+  /** Job B: 'confirm' = a teammate's decision waiting for the approver; 'assign' = the owner stated it
+   *  (already logged in the thread) and the desk is asked only for the missing owner, due date or
+   *  reopen-if. Absent in files written before 3 Nov: read as 'confirm'. */
+  stage?: 'confirm' | 'assign';
   status: 'open' | 'confirmed' | 'dropped';
   room_id: string;
   room_name: string;
@@ -29,7 +35,8 @@ export interface PendingItem {
   note_event_id: string | null; // the owner-desk note, so a thread reply finds its item
   created_at: string;
   resolved_at: string | null;
-  resolution: { by: string; message_id: string; summary: string; owner: string; date: string; line: string } | null;
+  /** owner = the action owner ("" = unassigned), date = the due date. */
+  resolution: { by: string; message_id: string; summary: string; owner: string; date: string; reopen_if?: string; line: string } | null;
 }
 
 interface PendingFile { next: number; items: PendingItem[] }
@@ -67,8 +74,9 @@ export class PendingStore {
   get(n: number): PendingItem | undefined { return this.data.items.find((i) => i.n === n); }
   open(): PendingItem[] { return this.data.items.filter((i) => i.status === 'open'); }
   all(): PendingItem[] { return [...this.data.items]; }
-  /** Confirmed decisions (job B), oldest first: the Decision log's content. */
+  /** Logged decisions (job B), oldest first: the Decision log's content. An owner-stated decision
+   *  whose owner or date is still being asked for is already logged, so it counts. */
   decisions(roomId?: string): PendingItem[] {
-    return this.data.items.filter((i) => i.kind === 'B' && i.status === 'confirmed' && (!roomId || i.room_id === roomId));
+    return this.data.items.filter((i) => i.kind === 'B' && (i.status === 'confirmed' || (i.status === 'open' && i.stage === 'assign')) && (!roomId || i.room_id === roomId));
   }
 }

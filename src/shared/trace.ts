@@ -8,6 +8,27 @@ export const VERDICTS = ['covered', 'might-be-related', 'parked', 'new', 'contra
 
 const Iso = z.string();
 const Source = z.object({ ref: z.string(), quote: z.string() });
+// Job B's record (agreed with Kash, 3 Nov): who decided is kept apart from who does the work.
+// action_owner null = unassigned (never quietly the room owner); due = when the work is due
+// (YYYY-MM-DD) or null; reopen_if = what would make it worth revisiting, or null; date = the day it
+// was decided (YYYY-MM-DD). decided_by is "" while a teammate's decision waits for the approver.
+export const DecisionRecord = z.object({
+  summary: z.string(),
+  decided_by: z.string(),
+  action_owner: z.string().nullable(),
+  due: z.string().nullable(),
+  reopen_if: z.string().nullable(),
+  date: z.string(),
+});
+export type DecisionRecord = z.infer<typeof DecisionRecord>;
+/** Lines written before 3 Nov carry { summary, owner, date }: owner was the action owner or, silently,
+ *  the room owner (the two can't be told apart), and date was the due date. Readers see the new shape. */
+export function upgradeDecisionRecord(v: unknown): unknown {
+  if (!v || typeof v !== 'object' || 'decided_by' in v || !('owner' in v)) return v;
+  const o = v as { summary?: unknown; owner?: unknown; date?: unknown };
+  const str = (x: unknown) => (typeof x === 'string' ? x : '');
+  return { summary: str(o.summary), decided_by: '', action_owner: str(o.owner) || null, due: str(o.date) || null, reopen_if: null, date: '' };
+}
 const Item = z.object({
   message_id: z.string(),
   job: z.enum(['A', 'B', 'D', 'none']),
@@ -15,7 +36,7 @@ const Item = z.object({
   restriction: z.enum(['personal', 'project', 'not-a-restriction']).nullable(),
   clashes_with: z.string().nullable(),
   sources: z.array(Source),
-  decision_record: z.object({ summary: z.string(), owner: z.string(), date: z.string() }).nullable(),
+  decision_record: z.preprocess(upgradeDecisionRecord, DecisionRecord.nullable()),
   brief_for: z.string().nullable(),
 });
 const Post = z.object({

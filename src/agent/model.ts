@@ -178,9 +178,9 @@ export async function callBrief(claude: Claude, cfg: ModelConfig, system: string
 
 // ---- owner desk: what did the owner decide? (only when the plain-text rules can't tell) ----------
 
-export interface OwnerReading { action: 'confirm' | 'drop' | 'unclear'; summary: string; owner: string; date: string; line: string }
+export interface OwnerReading { action: 'confirm' | 'drop' | 'unclear'; summary: string; owner: string; date: string; reopen_if: string; line: string }
 
-export async function callOwnerReply(claude: Claude, cfg: ModelConfig, item: { kind: 'B' | 'D'; summary: string; suggested_owner: string; date: string; options: string[] }, reply: string): Promise<{ reading: OwnerReading; usage: Usage }> {
+export async function callOwnerReply(claude: Claude, cfg: ModelConfig, item: { kind: 'B' | 'D'; summary: string; suggested_owner: string; date: string; reopen_if?: string; options: string[] }, reply: string): Promise<{ reading: OwnerReading; usage: Usage }> {
   const str = { type: 'string' };
   const params = {
     model: cfg.model,
@@ -191,8 +191,8 @@ export async function callOwnerReply(claude: Claude, cfg: ModelConfig, item: { k
       format: {
         type: 'json_schema',
         schema: {
-          type: 'object', additionalProperties: false, required: ['action', 'summary', 'owner', 'date', 'line'],
-          properties: { action: { type: 'string', enum: ['confirm', 'drop', 'unclear'] }, summary: str, owner: str, date: str, line: str },
+          type: 'object', additionalProperties: false, required: ['action', 'summary', 'owner', 'date', 'reopen_if', 'line'],
+          properties: { action: { type: 'string', enum: ['confirm', 'drop', 'unclear'] }, summary: str, owner: str, date: str, reopen_if: str, line: str },
         },
       },
     },
@@ -204,5 +204,5 @@ export async function callOwnerReply(claude: Claude, cfg: ModelConfig, item: { k
   const text = msg.content.filter((b) => b.type === 'text').map((b) => (b as Anthropic.TextBlock).text).join('');
   const r = JSON.parse(text) as Partial<OwnerReading>;
   const action = r.action === 'confirm' || r.action === 'drop' ? r.action : 'unclear';
-  return { reading: { action, summary: String(r.summary ?? ''), owner: String(r.owner ?? ''), date: /^\d{4}-\d{2}-\d{2}$/.test(String(r.date)) ? String(r.date) : '', line: String(r.line ?? '') }, usage };
+  return { reading: { action, summary: String(r.summary ?? ''), owner: String(r.owner ?? ''), date: /^\d{4}-\d{2}-\d{2}$/.test(String(r.date)) ? String(r.date) : '', reopen_if: String(r.reopen_if ?? '').trim(), line: String(r.line ?? '') }, usage };
 }

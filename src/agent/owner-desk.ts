@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { writeTrace, type TraceItem, type TraceLine, type TracePost } from '../shared/trace.ts';
 import type { RoomContext } from './blocks.ts';
-import { confirmNote, loggedLine, readPlain } from './jobs/decision.ts';
+import { assignNote, confirmNote, loggedLine, readPlain, updateLine } from './jobs/decision.ts';
 import { clashNote, neutralClashLine, personalReply } from './jobs/restriction.ts';
 import { callOwnerReply, type OwnerReading, type Usage } from './model.ts';
 import { PendingStore, type PendingItem } from './pending.ts';
@@ -19,6 +19,8 @@ import type { ModelItem } from './verdict.ts';
 export const ownerNameOf = (deps: Pick<Deps, 'ownerName'>) => deps.ownerName || 'Kash';
 export const isOwner = (deps: Pick<Deps, 'ownerSender'>, sender: string) => !!deps.ownerSender && sender === deps.ownerSender;
 const store = (deps: Deps): PendingStore => (deps.pending ??= new PendingStore(null));
+const day = (iso: string) => iso.slice(0, 10);
+const orNull = (s: string | undefined) => (s && s.trim() ? s.trim() : null);
 
 /** The decision row a clash id names ("D2"), as code knows it from the record, never from the model. */
 function decisionRow(ctx: RoomContext, it: ModelItem): string | null {
@@ -41,20 +43,34 @@ export async function planJobs(deps: Deps, roomId: string, roomName: string, ctx
     const base = { room_id: roomId, room_name: roomName, thread_id: threadId, message_id: m.message_id, raised_by: m.sender_name, raised_by_sender: m.sender, text: m.body, details: it.details, created_at: m.received_at };
 
     if (it.job === 'B') {
-      const summary = it.details.summary || m.body.trim();
+      const d = it.details;
+      const summary = d.summary || m.body.trim();
+      // Who does the work: only someone the chat named. A suggestion from the record is not an
+      // assignment, and the work never quietly defaults to the room owner.
+      const record = { summary, action_owner: orNull(d.action_owner), due: orNull(d.date), reopen_if: orNull(d.reopen_if), date: day(m.received_at) };
       if (isOwner(deps, m.sender)) {
-        // The owner said it himself: his message is the confirmation. One short line, no desk note.
-        it.decision_record = { summary, owner, date: it.details.date };
-        it.reply = loggedLine({ summary, owner: '', date: it.details.date, confirmedBy: owner });
-        const p = store(deps).add({ ...base, kind: 'B', status: 'open', clashes_with: null });
-        if (p.status === 'open') store(deps).resolve(p.n, 'confirmed', { by: m.sender, message_id: m.message_id, summary, owner: '', date: it.details.date, line: it.reply });
-        events.push(`decision #${p.n} stated by the owner: confirmed`);
-      } else {
-        it.decision_record = { summary, owner: it.details.suggested_owner || owner, date: it.details.date };
-        it.reply = ''; // nothing public until the decision makers confirm
-        const p = store(deps).add({ ...base, kind: 'B', status: 'open', clashes_with: null });
+        // The owner said it himself: he's the approver. The one-line record goes to the thread now.
+        it.decision_record = { ...record, decided_by: owner };
+        it.reply = loggedLine({ summary, owner: record.action_owner ?? '', date: record.due ?? '', reopenIf: record.reopen_if ?? '', confirmedBy: owner });
+        if (record.action_owner && record.due) {
+          const p = store(deps).add({ ...base, kind: 'B', stage: 'assign', status: 'open', clashes_with: null });
+          if (p.status === 'open') store(deps).resolve(p.n, 'confirmed', { by: m.sender, message_id: m.message_id, summary, owner: record.action_owner, date: record.due, reopen_if: record.reopen_if ?? '', line: it.reply });
+          events.push(`decision #${p.n} stated by the owner: logged`);
+          continue;
+        }
+        // No action owner or no due date: the desk is asked (with a suggested owner if the record has one).
+        const p = store(deps).add({ ...base, kind: 'B', stage: 'assign', status: 'open', clashes_with: null });
         if (p.note_event_id) { events.push(`decision #${p.n}: desk note already sent`); continue; }
-        const sent = await sendOwner(deps, confirmNote({ n: p.n, roomName, raisedBy: m.sender_name, text: m.body, details: it.details, messageRef: m.message_id }), events);
+        const sent = await sendOwner(deps, assignNote({ n: p.n, roomName, text: m.body, details: d, messageRef: m.message_id }), events);
+        if (sent.post) posts.push(sent.post);
+        if (sent.eventId) store(deps).setNoteEvent(p.n, sent.eventId);
+        events.push(sent.error ? `decision #${p.n} stated by the owner: logged; ask for ${record.action_owner ? 'a date' : 'an owner'}: ${sent.error}` : `decision #${p.n} stated by the owner: logged; asked the desk for ${[!record.action_owner && 'an owner', !record.due && 'a date'].filter(Boolean).join(' and ')}`);
+      } else {
+        it.decision_record = { ...record, decided_by: '' }; // "" until the approver confirms
+        it.reply = ''; // nothing public until the decision makers confirm
+        const p = store(deps).add({ ...base, kind: 'B', stage: 'confirm', status: 'open', clashes_with: null });
+        if (p.note_event_id) { events.push(`decision #${p.n}: desk note already sent`); continue; }
+        const sent = await sendOwner(deps, confirmNote({ n: p.n, roomName, raisedBy: m.sender_name, text: m.body, details: d, messageRef: m.message_id }), events);
         if (sent.post) posts.push(sent.post);
         if (sent.eventId) store(deps).setNoteEvent(p.n, sent.eventId);
         if (sent.error) events.push(`decision #${p.n}: ${sent.error}`);
@@ -143,10 +159,10 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
   let reading: OwnerReading;
   const plain = readPlain(input.body, item.kind);
   if (plain) {
-    reading = { action: plain.action, summary: '', owner: plain.owner, date: plain.date, line: item.kind === 'D' ? 'the plan stands.' : '' };
+    reading = { action: plain.action, summary: '', owner: plain.owner, date: plain.date, reopen_if: '', line: item.kind === 'D' ? 'the plan stands.' : '' };
   } else {
     try {
-      const r = await callOwnerReply(deps.claude, deps.cfg, { kind: item.kind, summary: item.details.summary || item.text, suggested_owner: item.details.suggested_owner, date: item.details.date, options: item.details.options }, input.body);
+      const r = await callOwnerReply(deps.claude, deps.cfg, { kind: item.kind, summary: item.details.summary || item.text, suggested_owner: item.details.action_owner || item.details.suggested_owner, date: item.details.date, reopen_if: item.details.reopen_if ?? '', options: item.details.options }, input.body);
       usages.push(r.usage);
       reading = r.reading;
     } catch (e) {
@@ -159,11 +175,19 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
   const owner = ownerNameOf(deps);
   const ti: TraceItem = { ...quiet(input.message_id, item.kind), verdict: item.kind === 'B' ? 'decision' : null, restriction: item.kind === 'D' ? 'project' : null, clashes_with: item.clashes_with };
   if (reading.action === 'unclear' || (item.kind === 'D' && reading.action === 'confirm' && !reading.line.trim())) {
-    const s = await sendOwner(deps, `I couldn't tell what you decided on #${item.n}, so nothing was posted. ${item.kind === 'B' ? 'Try "confirm", "owner <name>", a corrected line, or "drop".' : 'Reply with your ruling in a sentence, or "plan stands".'}`, events);
+    const s = await sendOwner(deps, `I couldn't tell what you decided on #${item.n}, so nothing was posted. ${item.kind === 'B' ? `Try "confirm", "owner <name>", a date, "reopen if ...", ${item.stage === 'assign' ? '"leave it"' : 'a corrected line, or "drop"'}.` : 'Reply with your ruling in a sentence, or "plan stands".'}`, events);
     if (s.post) posts.push(s.post);
     return write(posts.length ? 'owner_note' : 'silence', [ti], `owner_desk: #${item.n} reply unclear`);
   }
+  const assign = item.kind === 'B' && item.stage === 'assign';
   if (reading.action === 'drop') {
+    if (assign) {
+      // The decision itself was the owner's own and is already logged; "leave it" just closes the ask.
+      const d = item.details;
+      ti.decision_record = { summary: d.summary || item.text, decided_by: owner, action_owner: orNull(d.action_owner), due: orNull(d.date), reopen_if: orNull(d.reopen_if), date: day(item.created_at) };
+      store(deps).resolve(item.n, 'confirmed', { by: input.sender, message_id: input.message_id, summary: d.summary || item.text, owner: d.action_owner ?? '', date: d.date, reopen_if: d.reopen_if ?? '', line: '' });
+      return write('silence', [ti], `owner_desk: #${item.n} left as it is (the work stays ${d.action_owner ? 'without a date' : 'unassigned'}); nothing posted`);
+    }
     store(deps).resolve(item.n, 'dropped', { by: input.sender, message_id: input.message_id, summary: '', owner: '', date: '', line: '' });
     return write('silence', [ti], `owner_desk: #${item.n} dropped by the owner; nothing posted`);
   }
@@ -171,12 +195,27 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
   let line: string;
   let resolution: NonNullable<PendingItem['resolution']>;
   if (item.kind === 'B') {
-    const summary = reading.summary || item.details.summary || item.text;
-    const actionOwner = reading.owner || item.details.suggested_owner;
-    const date = reading.date || item.details.date;
-    line = loggedLine({ summary, owner: actionOwner, date, confirmedBy: owner });
-    ti.decision_record = { summary, owner: actionOwner || owner, date };
-    resolution = { by: input.sender, message_id: input.message_id, summary, owner: actionOwner, date, line };
+    const d = item.details;
+    const summary = (assign ? '' : reading.summary) || d.summary || item.text;
+    // "confirm" takes the suggestion the note offered; with none, the work stays unassigned (null),
+    // never the room owner by default.
+    const actionOwner = reading.owner || d.action_owner || d.suggested_owner || '';
+    const date = reading.date || d.date;
+    const reopenIf = reading.reopen_if || d.reopen_if || '';
+    ti.decision_record = { summary, decided_by: owner, action_owner: orNull(actionOwner), due: orNull(date), reopen_if: orNull(reopenIf), date: day(assign ? item.created_at : input.received_at) };
+    resolution = { by: input.sender, message_id: input.message_id, summary, owner: actionOwner, date, reopen_if: reopenIf, line: '' };
+    if (assign) {
+      // Already logged in the thread: post only what's new.
+      const fresh = { owner: actionOwner && actionOwner !== d.action_owner ? actionOwner : '', date: date && date !== d.date ? date : '', reopenIf: reopenIf && reopenIf !== d.reopen_if ? reopenIf : '' };
+      if (!fresh.owner && !fresh.date && !fresh.reopenIf) {
+        store(deps).resolve(item.n, 'confirmed', resolution);
+        return write('silence', [ti], `owner_desk: #${item.n} nothing new to add; nothing posted`);
+      }
+      line = updateLine({ summary, ...fresh, confirmedBy: owner });
+    } else {
+      line = loggedLine({ summary, owner: actionOwner, date, reopenIf, confirmedBy: owner });
+    }
+    resolution.line = line;
   } else {
     const ruling = reading.line.trim();
     line = `Update from ${owner}: ${ruling.charAt(0).toUpperCase()}${ruling.slice(1)}`;

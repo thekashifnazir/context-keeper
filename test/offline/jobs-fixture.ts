@@ -76,11 +76,11 @@ export function setup(prefix: string) {
 export const msg = (id: string, body: string, sender = ROWAN, sender_name = 'Rowan', extra: Partial<Input> = {}): Input =>
   ({ message_id: id, sender, sender_name, body, received_at: '2026-11-04T14:20:00Z', ...extra });
 
-export const details = (over: Record<string, unknown> = {}) => ({ summary: '', why: '', date: '', suggested_owner: '', owner_basis: '', options: [], ...over });
+export const details = (over: Record<string, unknown> = {}) => ({ summary: '', why: '', date: '', action_owner: '', suggested_owner: '', owner_basis: '', reopen_if: '', options: [], ...over });
 export const jobItem = (id: string, over: Record<string, unknown>) => item(id, { verdict: 'none', reply: '', details: details(), ...over });
 
 export const briefMessage = (lines: { kind: string; text: string; block: string; quote: string }[]) =>
   message(OPUS, [{ type: 'tool_use', id: 'tu_b', name: 'write_brief', input: { lines } }], 'tool_use');
 
-export const ownerReadingMessage = (r: { action: string; summary?: string; owner?: string; date?: string; line?: string }) =>
-  message(OPUS, [{ type: 'text', text: JSON.stringify({ summary: '', owner: '', date: '', line: '', ...r }) }]);
+export const ownerReadingMessage = (r: { action: string; summary?: string; owner?: string; date?: string; reopen_if?: string; line?: string }) =>
+  message(OPUS, [{ type: 'text', text: JSON.stringify({ summary: '', owner: '', date: '', reopen_if: '', line: '', ...r }) }]);
