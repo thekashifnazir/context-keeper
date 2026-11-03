@@ -184,6 +184,54 @@ describe('quiet, routing and matching rules', () => {
   });
 });
 
+describe('P3 for reopen and parked-recall (Kash, 3 Nov)', () => {
+  const recall = 'Parked for phase 2: QuickBooks sync, raised by Rowan (roadmap.md §1).';
+    it('a parked-recall citing a verified, shown source passes P3', () => {
+    const r = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall', sources: [{ ref: 'roadmap.md §1', quote: 'Two of the 12 interviewed agencies use it' }] })], posts: [tpost(recall)] }],
+      posts: [{ root_id: 'p-T22', message: recall, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P3).toEqual({ status: 'pass', reason: 'roadmap.md §1: resolves, quote verified, shown in the reply' });
+  });
+  it('a parked-recall with no sources fails P3', () => {
+    const r = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall' })], posts: [tpost(recall)] }],
+      posts: [{ root_id: 'p-T22', message: recall, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P2.status).toBe('pass');
+    expect(r.cases[0].rules.P3).toEqual({ status: 'fail', reason: 'no sources cited' });
+  });
+  it('a parked-recall whose quote is not in the source fails P3', () => {
+    const bare = 'Parked for phase 2: QuickBooks sync, raised by Rowan.';
+    const r = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall', sources: [{ ref: 'roadmap.md §1', quote: 'phase 2 roadmap item that is not in the doc' }] })], posts: [tpost(bare)] }],
+      posts: [{ root_id: 'p-T22', message: bare, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P3).toEqual({ status: 'fail', reason: 'roadmap.md §1: quote not in source' });
+  });
+  it('a reopen whose citation is shown only in the owner desk passes P3', () => {
+    const desk = 'Rowan asks to reopen D1 (pilot-plan.md §2): Northbank cannot do a weekday slot.';
+    const pub = 'Thanks Rowan, I have passed this to Kash.';
+    const r = build({
+      cases: [['T21', 0]],
+      lines: [{ inputs: [inp('T21', 'rowan')], items: [item('T21', { verdict: 'reopen', sources: [{ ref: 'pilot-plan.md §2', quote: 'Onboarding calls on weekdays, Tue to Thu' }] })], posts: [tpost(desk, 'owner_private'), tpost(pub)] }],
+      posts: [{ channel_id: 'DESK', message: desk, create_at: T0 + 20000 }, { root_id: 'p-T21', message: pub, create_at: T0 + 21000 }],
+    });
+    expect(r.cases[0].rules.P3.reason).toMatch(/^pilot-plan\.md §2: resolves/);
+  });
+  it('a reopen with no sources fails P3', () => {
+    const r = build({
+      cases: [['T21', 0]],
+      lines: [{ inputs: [inp('T21', 'rowan')], items: [item('T21', { verdict: 'reopen' })], posts: [tpost('Passed to Kash.', 'owner_private'), tpost('Thanks Rowan.')] }],
+      posts: [{ channel_id: 'DESK', message: 'Passed to Kash.', create_at: T0 + 20000 }, { root_id: 'p-T21', message: 'Thanks Rowan.', create_at: T0 + 21000 }],
+    });
+    expect(r.cases[0].rules.P3).toEqual({ status: 'fail', reason: 'no sources cited' });
+  });
+});
+
 describe('flags', () => {
   it('parses the run flags', () => {
     const a = parseArgs(['--fast', '--only', 'T05,T08', '--set', 'redteam', '--keep']);

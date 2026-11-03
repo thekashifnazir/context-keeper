@@ -9,8 +9,9 @@ import type { Capture, MmPost } from './capture.ts';
 import { resolveRef, type Case, type RoomContent } from './content.ts';
 
 export const SCORER_VERSION = 'ck.score/1';
-/** Verdicts whose case needs a verified citation from expect.sources (P3). */
-export const P3_VERDICTS = new Set(['covered', 'parked', 'contradicts-record', 'might-be-related']);
+/** Verdicts whose case needs a verified citation from expect.sources (P3). reopen and parked-recall
+ *  added by Kash's scoring call of 3 Nov: a reopen must cite the decision it reopens, a recall the parked items. */
+export const P3_VERDICTS = new Set(['covered', 'parked', 'contradicts-record', 'might-be-related', 'reopen', 'parked-recall']);
 /** Visible text is compared on its first 120 normalised characters, in case the bridge reformats the tail. */
 const PREFIX = 120;
 
@@ -238,7 +239,7 @@ export function score(input: ScoreInput) {
     else if (!item) p3 = fail('no item');
     else {
       const good = cites.find((ci) => ci.expected && ci.verified);
-      if (good) p3 = pass(`${good.ref}: resolves, quote verified, shown in the reply`);
+      if (good) p3 = pass(`${good.ref}: resolves, quote verified, shown in the ${e.routing === 'owner_private_required' ? 'reply or owner desk' : 'reply'}`);
       else if (!cites.length) p3 = fail('no sources cited');
       else {
         const why = cites.map((ci) => `${ci.ref}: ${!ci.expected ? 'not an expected source' : !ci.resolves ? "doesn't resolve" : !ci.quote_verified ? 'quote not in source' : 'not shown in the public reply'}`);
