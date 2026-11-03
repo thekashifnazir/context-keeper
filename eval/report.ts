@@ -22,7 +22,8 @@ export function summaryMarkdown(r: ScoreResult, resultsPath: string): string {
   const table = rows.map((row) => `| ${row.join(' | ')} |`).join('\n');
   const m = r.meta;
   const day = m.started_at.slice(0, 10);
-  const line = `Run ${day}${m.model ? ` on ${m.model}` : ''}, ${m.mode}, ${s.overall.total} cases from the ${s.set} set. Raw results: ${resultsPath}`;
+  const inc = m.incidents.length ? ` Mattermost restarted ${m.incidents.length} time(s) during the run (see incidents in the JSON).` : '';
+  const line = `Run ${day}${m.model ? ` on ${m.model}` : ''}, ${m.mode}, ${s.overall.total} cases from the ${s.set} set.${inc} Raw results: ${resultsPath}`;
   return `${table}\n\n${line}\n`;
 }
 

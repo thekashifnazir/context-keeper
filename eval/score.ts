@@ -374,7 +374,7 @@ export function score(input: ScoreInput) {
     schema: SCORER_VERSION,
     meta: {
       run_id: meta.run_id, set: meta.set, mode: meta.mode, model: meta.model, burst_gap_s: meta.burst_gap_s,
-      started_at: meta.started_at, versions: meta.versions, cases_sha256: input.cases_sha256, content_sha256: input.content_sha256,
+      started_at: meta.started_at, versions: meta.versions, incidents: meta.incidents ?? [], cases_sha256: input.cases_sha256, content_sha256: input.content_sha256,
       prices_as_of: PRICES.as_of,
     },
     summary,

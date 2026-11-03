@@ -19,6 +19,54 @@ import { Gateway, health, readEnvFile, serverEnv, type Room } from './switchapi.
 import { loadYaml } from './yaml.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// ── Mattermost outages ──
+// The compose file's Mattermost is amd64-only; under qemu on an Apple Silicon Mac it dies at random
+// ("fatal error: fault") every few minutes of load, which would lose a whole run. On a timeout or a
+// refused connection the harness restarts that one container (CK_EVAL_MM_CONTAINER, default
+// ckswitch-mattermost-1; CK_EVAL_RESTART_MM=0 turns this off), waits for it, checks whether the call
+// already landed, and retries once. Every outage is logged and kept in capture.json as an incident.
+// It never touches the switch, gateway or postgres containers.
+const MM_CONTAINER = process.env.CK_EVAL_MM_CONTAINER || 'ckswitch-mattermost-1';
+const incidents: string[] = [];
+let recovering: Promise<boolean> | null = null;
+const isOutage = (e: unknown) => /timeout|aborted|fetch failed|ECONNREFUSED|ECONNRESET|socket hang up|other side closed/i.test(String((e as Error)?.message ?? e));
+
+async function mmRecover(runDir: string, mmUrl: string, what: string): Promise<boolean> {
+  if (process.env.CK_EVAL_RESTART_MM === '0') return false;
+  recovering ??= (async () => {
+    const mm = new Mattermost(mmUrl);
+    if (await mm.ping().catch(() => null)) { incidents.push(`${new Date().toISOString()} ${what}: Mattermost slow but alive; retried`); return true; }
+    log(runDir, `Mattermost not answering during ${what}; restarting container ${MM_CONTAINER} (only that container)`);
+    const r = spawnSync('docker', ['restart', MM_CONTAINER], { encoding: 'utf8', timeout: 120_000 });
+    if (r.status !== 0) { log(runDir, `docker restart ${MM_CONTAINER} failed: ${(r.stderr || '').trim().slice(0, 200)}`); return false; }
+    for (let i = 0; i < 60; i++) {
+      await sleep(3000);
+      if (await mm.ping().catch(() => null)) {
+        incidents.push(`${new Date().toISOString()} ${what}: Mattermost down; container ${MM_CONTAINER} restarted, back after ${(i + 1) * 3} s`);
+        log(runDir, `Mattermost back after ${(i + 1) * 3} s`);
+        await sleep(5000); // let the Switch bridge reconnect
+        return true;
+      }
+    }
+    return false;
+  })().finally(() => setTimeout(() => { recovering = null; }, 0));
+  return recovering;
+}
+
+/** Run a Mattermost call; on an outage, recover, then return what `landed()` finds or call again once. */
+async function mmRetry<T>(runDir: string, mmUrl: string, what: string, fn: () => Promise<T>, landed?: () => Promise<T | null>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (!isOutage(e)) throw e;
+    log(runDir, `${what}: ${(e as Error).message}`);
+    if (!(await mmRecover(runDir, mmUrl, what))) throw e;
+    const got = landed ? await landed().catch(() => null) : null;
+    if (got) { log(runDir, `${what}: it had landed before the outage`); return got; }
+    return await fn();
+  }
+}
 const L_S = 120; // longest model time after a decision is due
 const SHORT: Record<string, string> = { 'ledgerly-pilot': 'ledgerly', 'riverside-build-night': 'riverside' };
 
@@ -92,6 +140,7 @@ export async function runLive(args: Args) {
 }
 
 async function runOnce(args: Args, n: number) {
+  incidents.length = 0;
   const env = loadEnv(args);
   const { cases: all } = loadCases(ROOT, args.set);
   if (args.only) for (const id of args.only) if (!all.some((c) => c.id === id)) throw new Error(`--only: no case ${id} in the ${args.set} set`);
@@ -193,7 +242,7 @@ async function runOnce(args: Args, n: number) {
       const r = metaRooms[room];
       for (const u of joiners.get(room) ?? []) {
         await gw.addUsers(r.room_id, [u]).catch((e) => log(runDir, `addUsers ${u}: ${e.message}`));
-        await people.get(u)!.mm.joinChannel(r.channel_id, people.get(u)!.id).catch(() => undefined);
+        await mmRetry(runDir, env.mmUrl, `join ${u}`, () => people.get(u)!.mm.joinChannel(r.channel_id, people.get(u)!.id)).catch(() => undefined);
         joins.push({ room, username: u, at_ms: Date.now() });
         log(runDir, `${room}: ${u} joined; waiting 20 s`);
         await sleep(20_000);
@@ -206,7 +255,9 @@ async function runOnce(args: Args, n: number) {
           if (wait > 0) await sleep(wait);
           const c = m.cases[0];
           const p = people.get(usernameOf(c.author))!;
-          const post = await p.mm.post(r.channel_id, c.message);
+          const sent = Date.now();
+          const post = await mmRetry(runDir, env.mmUrl, `post ${c.id}`, () => p.mm.post(r.channel_id, c.message),
+            async () => (await p.mm.allPosts(r.channel_id, sent - 5000)).find((x) => x.user_id === p.id && x.message === c.message) ?? null);
           posted.push({ id: c.id, post_id: post.id, create_at: post.create_at });
           mine.push({ c, post });
           log(runDir, `${c.id} posted by ${usernameOf(c.author)} (${post.id})`);
@@ -227,13 +278,13 @@ async function runOnce(args: Args, n: number) {
     for (const room of Object.keys(metaRooms)) {
       const deskName = lines.filter((l) => l.room_id === metaRooms[room].room_id).flatMap((l) => l.posts).find((p) => p.route === 'owner_private')?.room_name;
       if (!deskName) continue;
-      const desk = (await kash.mm.myChannels(team.id)).find((c) => c.type === 'P' && (c.display_name === deskName || c.name === deskName));
+      const desk = (await mmRetry(runDir, env.mmUrl, 'read owner desks', () => kash.mm.myChannels(team.id))).find((c) => c.type === 'P' && (c.display_name === deskName || c.name === deskName));
       metaRooms[room].owner_desk_channel_id = desk?.id ?? null;
     }
     const posts: MmPost[] = [];
     const channels = new Set(Object.values(metaRooms).flatMap((r) => [r.channel_id, r.owner_desk_channel_id].filter((x): x is string => !!x)));
     for (const ch of [...channels].sort()) {
-      for (const p of await kash.mm.allPosts(ch)) if (!p.delete_at) posts.push({ id: p.id, channel_id: p.channel_id, user_id: p.user_id, root_id: p.root_id ?? '', message: p.message, type: p.type ?? '', create_at: p.create_at });
+      for (const p of await mmRetry(runDir, env.mmUrl, `read posts ${ch}`, () => kash.mm.allPosts(ch))) if (!p.delete_at) posts.push({ id: p.id, channel_id: p.channel_id, user_id: p.user_id, root_id: p.root_id ?? '', message: p.message, type: p.type ?? '', create_at: p.create_at });
     }
     stopAgent(agent);
 
@@ -243,7 +294,7 @@ async function runOnce(args: Args, n: number) {
       started_at: new Date(t0).toISOString(), t0_ms: t0, ended_at_ms: Date.now(),
       agent: { name: env.agentName, mm_user_id: bot }, owner_username: 'kash',
       personas: Object.fromEntries(CAST.map((c) => [c, usernameOf(c)])), rooms: metaRooms, joins,
-      cases: posted.sort((a, b) => a.create_at - b.create_at),
+      cases: posted.sort((a, b) => a.create_at - b.create_at), incidents: [...incidents],
       versions: { harness_sha: git(['rev-parse', 'HEAD']), agent_sha: git(['rev-parse', 'HEAD']), switch: switchVersion, mattermost: mmVersion },
     };
     const secrets = knownSecrets(ROOT);

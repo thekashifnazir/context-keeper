@@ -30,6 +30,8 @@ export const CaptureMeta = z.object({
   rooms: z.record(z.string(), Room), // cases.yaml room -> where it ran
   joins: z.array(z.object({ room: z.string(), username: z.string(), at_ms: z.number() })),
   cases: z.array(z.object({ id: z.string(), post_id: z.string(), create_at: z.number() })),
+  // Mattermost outages during the run and what the harness did (eval/replay.ts mmRetry); empty when none.
+  incidents: z.array(z.string()).optional(),
   versions: z.object({
     harness_sha: z.string().nullable(), agent_sha: z.string().nullable(),
     switch: z.string().nullable(), mattermost: z.string().nullable(),
