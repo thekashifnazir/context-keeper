@@ -67,8 +67,14 @@ export function plan(cases: Case[]) {
 }
 
 function preflightCases(cases: Case[]) {
-  const r = spawnSync('python3', ['testset/check_cases.py'], { cwd: ROOT, encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`testset/check_cases.py failed:\n${r.stdout}${r.stderr}`);
+  // The test set's own checker needs python3 + PyYAML; a clean clone without them skips it (said
+  // out loud) rather than failing, since the cases and sources are also checked by the scorer.
+  const py = spawnSync('python3', ['-c', 'import yaml'], { cwd: ROOT, encoding: 'utf8' });
+  if (py.status !== 0) console.warn('preflight: testset/check_cases.py skipped (needs python3 with PyYAML)');
+  else {
+    const r = spawnSync('python3', ['testset/check_cases.py'], { cwd: ROOT, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`testset/check_cases.py failed:\n${r.stdout}${r.stderr}`);
+  }
   const bodies = new Map<string, string>();
   for (const c of cases) {
     const n = normalise(c.message);
