@@ -226,6 +226,8 @@ async function runOnce(args: Args, n: number) {
       ...(evalAgent ? { SWITCH_AGENT_ID: evalAgent.id, SWITCH_AGENT_API_KEY: evalAgent.key } : {}),
       CK_LISTEN_ROOMS: `ck-eval-${runId}-`, CK_POST_ROOMS: `ck-eval-${runId}-`, CK_STATE_DIR: join(runDir, 'agent-state'),
       ...(desks.get(deskRoom) ? { CK_OWNER_DESK_ROOM: desks.get(deskRoom)!, CK_POST_OWNER: '1' } : {}),
+      // The owner is the kash persona; Switch's sender id for a Mattermost user is @switch-mattermost-<bridge>-<username>:localhost.
+      CK_OWNER_SENDER: `@switch-mattermost-${bridge.bridge_id}-kash:localhost`, CK_OWNER_NAME: 'Kash',
     });
     const traceStart = existsSync(traceFile) ? readFileSync(traceFile, 'utf8').length : 0;
     const readLines = () => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8').slice(traceStart)) : []);
