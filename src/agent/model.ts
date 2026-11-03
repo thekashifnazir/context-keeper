@@ -162,7 +162,9 @@ export async function callBrief(claude: Claude, cfg: ModelConfig, system: string
     max_tokens: 4000,
     system: `${system}\n\n${BRIEF_NOTES}`,
     tools: [WRITE_BRIEF],
-    tool_choice: { type: 'tool', name: 'write_brief' },
+    // Opus 5.5 rejects a forced tool_choice (400 "type tool and any are not supported"), which silenced every
+    // live brief; auto + the strict tool + "Call write_brief once." in BRIEF_NOTES instead.
+    tool_choice: { type: 'auto' },
     messages: [{ role: 'user', content: [...ctx.documents, { type: 'text', text: briefRequestText(person) }] }],
   };
   const t0 = Date.now();

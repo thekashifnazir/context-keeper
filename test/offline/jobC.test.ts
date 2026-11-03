@@ -66,7 +66,7 @@ describe('job C: the brief', () => {
     expect(d.state.isBriefed('room1', ALEX)).toBe(true);
     // The brief call saw only the record and the person, as data.
     const params = claude.calls[0].params;
-    expect(params.tool_choice).toEqual({ type: 'tool', name: 'write_brief' });
+    expect(params.tool_choice).toEqual({ type: 'auto' }); // forced tool_choice is a 400 on Opus 5.5
     expect(params.messages[0].content.at(-1).text).toContain('"kind":"joiner"');
   });
 
