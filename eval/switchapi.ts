@@ -39,7 +39,7 @@ export class Gateway {
     const res = await fetch(`${this.api}/gateway${path}`, {
       method, headers: { 'Content-Type': 'application/json', Cookie: this.cookie },
       body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(30_000),
-    });
+    }).catch((e: Error) => { throw new Error(`Gateway ${method} ${path}: ${e.message}`); });
     const text = await res.text();
     if (!res.ok) throw new Error(`Gateway ${method} ${path}: ${res.status} ${text.slice(0, 300)}`);
     return (text ? JSON.parse(text) : null) as T;
@@ -52,6 +52,8 @@ export class Gateway {
     agent_names?: string[]; join_event_listeners?: string[]; user_names?: string[]; instructions?: string;
   }) { return this.req<Room>('POST', '/rooms', body); }
   addUsers(roomId: string, userNames: string[]) { return this.req<unknown>('POST', `/rooms/${roomId}/users`, { user_names: userNames }); }
+  /** A Gateway API key, used once to register the eval's own agent (eval/evalagent.ts). */
+  mintApiKey(label: string) { return this.req<{ key: string }>('POST', '/api-keys', { label }); }
   archive(roomId: string) { return this.req<Room>('POST', `/rooms/${roomId}/archive`); }
 }
 

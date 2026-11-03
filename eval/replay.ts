@@ -10,6 +10,8 @@ import { readTrace, type TraceLine } from '../src/shared/trace.ts';
 import type { CaptureMeta, MmPost } from './capture.ts';
 import { type Args, ROOT, rescore, writeResult } from './cli.ts';
 import { loadCases, ROOM_DIRS, type Case } from './content.ts';
+import { ensureEvalAgent, type EvalAgent } from './evalagent.ts';
+import { appendFacts, factRows } from './facts.ts';
 import { Mattermost, type MmRawPost } from './mattermost.ts';
 import { CAST, nameClashes, passwordFor, usernameOf } from './personas.ts';
 import { assertNoSecrets, knownSecrets } from './secrets.ts';
@@ -103,6 +105,9 @@ async function runOnce(args: Args, n: number) {
   const mmVersion = await mm0.ping().catch(() => null);
   if (!mmVersion) throw new Error(`Mattermost isn't answering at ${env.mmUrl} (scripts/server-up.sh --with-mattermost)`);
   const gw = await Gateway.login(env.api, env.adminEmail, env.adminPassword);
+  // The agent under test runs as its own identity, never as the demo's context-keeper (eval/evalagent.ts).
+  const evalAgent = args.setupOnly || args.attach ? null : await ensureEvalAgent(ROOT, gw, env.api, (m) => console.log(m));
+  if (evalAgent) env.agentName = evalAgent.name;
   const bridge = (await gw.bridges()).find((b) => b.bridge_type === 'mattermost' && b.status === 'active');
   if (!bridge) throw new Error('no active Mattermost bridge on the Switch server (scripts/server-up.sh --with-mattermost)');
   const agentNames = (await gw.agents()).map((a) => a.name);
@@ -119,17 +124,23 @@ async function runOnce(args: Args, n: number) {
   log(runDir, `run ${runId} (${n}/${args.repeat}): ${cases.length} ${args.set} case(s), Switch ${switchVersion}, Mattermost ${mmVersion}, bridge ${bridge.bridge_id}`);
 
   // ── Personas (open sign-up, then join the open team) ──
-  const team = await (await Mattermost.persona(env.mmUrl, 'kash', passwordFor(ROOT, 'kash'), 'Kash')).mm.teamByName(env.team);
+  const srv = serverEnv(ROOT);
+  let adminMm: Promise<Mattermost> | null = null;
+  const admin = () => (adminMm ??= srv.MATTERMOST_ADMIN_USER && srv.MATTERMOST_ADMIN_PASSWORD
+    ? Mattermost.admin(env.mmUrl, srv.MATTERMOST_ADMIN_USER, srv.MATTERMOST_ADMIN_PASSWORD)
+    : Promise.reject(new Error('persona password refused and no Mattermost admin in server/.env')));
+  const team = await (await Mattermost.persona(env.mmUrl, 'kash', passwordFor(ROOT, 'kash'), 'Kash', admin)).mm.teamByName(env.team);
   const people = new Map<string, { mm: Mattermost; id: string }>();
   for (const name of CAST) {
     const u = usernameOf(name);
-    const p = await Mattermost.persona(env.mmUrl, u, passwordFor(ROOT, u), name);
+    const p = await Mattermost.persona(env.mmUrl, u, passwordFor(ROOT, u), name, admin);
     await p.mm.joinTeam(team.id, p.user.id);
     people.set(u, { mm: p.mm, id: p.user.id });
-    log(runDir, `persona ${u} ${p.created ? 'signed up' : 'signed in'}`);
+    log(runDir, `persona ${u} ${p.created ? 'signed up' : p.reset ? 'signed in (password reset by the Mattermost admin: the stored one was lost)' : 'signed in'}`);
   }
   const kash = people.get('kash')!;
   const rooms: Room[] = [];
+  let agent: ChildProcess | null = null;
 
   try {
     if (args.setupOnly) return await smoke(gw, bridge.bridge_id, runId, runDir, people, rooms, team.id);
@@ -138,6 +149,7 @@ async function runOnce(args: Args, n: number) {
     const roomPlan = plan(cases);
     const metaRooms: CaptureMeta['rooms'] = {};
     const joiners = new Map<string, string[]>(); // room -> usernames added at replay time (job C trigger)
+    const desks = new Map<string, string>(); // room -> the owner desk the seed made for it
     for (const room of roomPlan.keys()) {
       const hist = loadYaml<{ members: string[] }>(join(ROOT, 'demo', ROOM_DIRS[room], 'chat-history.yaml'));
       const members = hist.members.map(usernameOf);
@@ -152,13 +164,20 @@ async function runOnce(args: Args, n: number) {
       for (const u of members) await people.get(u)!.mm.joinChannel(channel, people.get(u)!.id).catch(() => undefined);
       metaRooms[room] = { room_id: r.id, room_name: r.name, channel_id: channel, owner_desk_channel_id: null };
       log(runDir, `room ${r.name} (${r.id}) -> channel ${channel}; members ${members.join(', ')}`);
-      seedRoom(runDir, r.id);
+      const desk = seedRoom(runDir, r.id, ROOM_DIRS[room], evalAgent);
+      if (desk) { desks.set(room, desk); rooms.push({ id: desk, name: `${r.name}-desk`, external_channel_id: null, bridge_id: r.bridge_id, archived: false }); }
     }
+    // One owner desk for the agent: the first room with a case routed to the owner (all are ledgerly today).
+    const deskRoom = [...roomPlan.keys()].find((room) => cases.some((c) => c.room === room && c.expect.routing)) ?? [...roomPlan.keys()][0];
 
     // ── Agent: started after setup, caps off; or --attach to one already running ──
     const traceFile = args.attach ? process.env.CK_TRACE_FILE || join(ROOT, 'state/trace.jsonl') : join(runDir, 'trace.jsonl');
     const gapS = Number(process.env.CK_BURST_GAP_S || 20);
-    const agent = args.attach ? null : startAgent(runDir, traceFile, gapS, env.model);
+    agent = args.attach ? null : startAgent(runDir, traceFile, gapS, env.model, {
+      ...(evalAgent ? { SWITCH_AGENT_ID: evalAgent.id, SWITCH_AGENT_API_KEY: evalAgent.key } : {}),
+      CK_LISTEN_ROOMS: `ck-eval-${runId}-`, CK_POST_ROOMS: `ck-eval-${runId}-`, CK_STATE_DIR: join(runDir, 'agent-state'),
+      ...(desks.get(deskRoom) ? { CK_OWNER_DESK_ROOM: desks.get(deskRoom)!, CK_POST_OWNER: '1' } : {}),
+    });
     const traceStart = existsSync(traceFile) ? readFileSync(traceFile, 'utf8').length : 0;
     const readLines = () => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8').slice(traceStart)) : []);
     const bot = await waitBot(kash.mm, env.agentName);
@@ -216,7 +235,7 @@ async function runOnce(args: Args, n: number) {
     for (const ch of [...channels].sort()) {
       for (const p of await kash.mm.allPosts(ch)) if (!p.delete_at) posts.push({ id: p.id, channel_id: p.channel_id, user_id: p.user_id, root_id: p.root_id ?? '', message: p.message, type: p.type ?? '', create_at: p.create_at });
     }
-    agent?.kill('SIGTERM');
+    stopAgent(agent);
 
     // ── Capture, score, write ──
     const meta: CaptureMeta = {
@@ -237,9 +256,14 @@ async function runOnce(args: Args, n: number) {
     const out = resultPath(env.model ?? 'unknown-model', args.set);
     const md = writeResult(result, out);
     log(runDir, `wrote ${relative(ROOT, out)}`);
+    const dirty = git(['status', '--porcelain', '--untracked-files=no', '--', 'src', 'eval', 'prompts', 'seed', 'testset', 'demo']);
+    const sha = git(['rev-parse', 'HEAD']);
+    appendFacts(ROOT, factRows(result, `npm run eval -- ${process.argv.slice(2).join(' ')}`.trim(), sha && dirty ? `${sha.slice(0, 7)}+changes` : sha, relative(ROOT, out)));
+    log(runDir, 'appended facts.md');
     console.log('\n' + md);
     if (args.readme) swapReadme(md);
   } finally {
+    stopAgent(agent); // also on a failed run: never leave the agent under test running
     if (!args.keep) for (const r of rooms) await gw.archive(r.id).then(() => log(runDir, `archived ${r.name}`)).catch((e) => log(runDir, `archive ${r.name}: ${e.message}`));
   }
 }
@@ -267,12 +291,19 @@ async function waitBot(mm: Mattermost, agentName: string): Promise<string> {
   throw new Error(`no Mattermost bot user named ${agentName}`);
 }
 
-function seedRoom(runDir: string, roomId: string) {
+/** Seed a fresh room with `npm run seed` (the same command as the README) as the agent under test.
+ *  Returns the owner desk room it made. */
+function seedRoom(runDir: string, roomId: string, demo: string, agent: EvalAgent | null): string | null {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
-  if (!pkg.scripts?.seed) { log(runDir, 'seed: no `npm run seed` yet (seed lane), room left unseeded'); return; }
-  const r = spawnSync('npm', ['run', '-s', 'seed', '--', '--bridge', 'mattermost', '--room', roomId, '--owner-username', 'kash'], { cwd: ROOT, encoding: 'utf8' });
+  if (!pkg.scripts?.seed) { log(runDir, 'seed: no `npm run seed` yet (seed lane), room left unseeded'); return null; }
+  const env = { ...process.env, ...(agent ? { SWITCH_AGENT_ID: agent.id, SWITCH_AGENT_API_KEY: agent.key } : {}) };
+  const r = spawnSync('npm', ['run', '-s', 'seed', '--', '--bridge', 'mattermost', '--demo', demo, '--room', roomId, '--owner-username', 'kash'], { cwd: ROOT, encoding: 'utf8', env });
   appendFileSync(join(runDir, 'harness.log'), r.stdout + r.stderr);
   if (r.status !== 0) throw new Error(`seed failed for ${roomId} (see harness.log)`);
+  const rec = join(ROOT, 'state/seed', `${roomId}.json`);
+  const desk = existsSync(rec) ? (JSON.parse(readFileSync(rec, 'utf8')) as { owner_desk_room?: string }).owner_desk_room ?? null : null;
+  log(runDir, `seeded ${roomId} (${demo}); owner desk ${desk ?? 'none'}`);
+  return desk;
 }
 
 function agentCommand(): string {
@@ -282,13 +313,19 @@ function agentCommand(): string {
   return cmd;
 }
 
-function startAgent(runDir: string, traceFile: string, gapS: number, model: string | null): ChildProcess {
+function startAgent(runDir: string, traceFile: string, gapS: number, model: string | null, extra: Record<string, string>): ChildProcess {
   const cmd = agentCommand();
   const out = join(runDir, 'agent.log');
-  const child = spawn(cmd, { cwd: ROOT, shell: true, env: { ...process.env, CK_TRACE_FILE: traceFile, CK_CAPS: 'off', CK_BURST_GAP_S: String(gapS), ...(model ? { CK_MODEL: model } : {}) } });
+  const child = spawn(cmd, { cwd: ROOT, shell: true, detached: true, env: { ...process.env, ...extra, CK_TRACE_FILE: traceFile, CK_CAPS: 'off', CK_BURST_GAP_S: String(gapS), ...(model ? { CK_MODEL: model } : {}) } });
   child.stdout?.on('data', (d) => appendFileSync(out, d));
   child.stderr?.on('data', (d) => appendFileSync(out, d));
   return child;
+}
+
+/** The agent runs through a shell and npx, so signal its whole process group. */
+function stopAgent(child: ChildProcess | null) {
+  if (!child?.pid || child.exitCode !== null) return;
+  try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); }
 }
 
 function resultPath(model: string, set: string): string {
