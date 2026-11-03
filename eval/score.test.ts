@@ -126,6 +126,22 @@ describe('bursts', () => {
   });
 });
 
+describe('brief attempts', () => {
+  it('a failed brief (silence, trigger room_join) on a joiner\'s first message is not that message\'s decision', () => {
+    const ans = 'Good ideas, Alex. A weekday evening was chosen.';
+    const r = build({
+      cases: [['T16', 0]],
+      lines: [
+        { room_id: 'R2', kind: 'silence', trigger: 'room_join', inputs: [inp('T16', 'alex')], items: [item('T16', { job: 'none', verdict: null, brief_for: 'alex' })], error: 'joiner: brief_model_error: 400' },
+        { room_id: 'R2', inputs: [inp('T16', 'alex')], items: [item('T16')], posts: [tpost(ans)] },
+      ],
+      posts: [{ channel_id: 'C2', root_id: 'p-T16', message: ans, create_at: T0 + 30000 }],
+    });
+    expect(r.cases[0].rules.P1).toEqual({ status: 'pass', reason: 'job A' });
+    expect(r.briefs).toEqual([{ id: 'T16', expect: 'joiner_brief', seen: false }]);
+  });
+});
+
 describe('quiet, routing and matching rules', () => {
   it('a late thread reply to a quiet case fails it, even after the next case started', () => {
     const r = build({

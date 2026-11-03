@@ -214,7 +214,9 @@ export function score(input: ScoreInput) {
     const cap = captured.get(c.id)!;
     const w = windowOfCase.get(c.id)!;
     const lines = linesIn(w).filter((l) => [...caseOfInput.get(l)!.values()].includes(c.id));
-    const decision = lines.find((l) => l.kind !== 'brief') ?? lines[0] ?? null;
+    // A brief attempt (trigger room_join) is never the message's decision, even when it failed and was
+    // traced as silence; it's counted under briefs.
+    const decision = lines.find((l) => l.kind !== 'brief' && l.trigger !== 'room_join') ?? lines[0] ?? null;
     const msgId = decision ? [...caseOfInput.get(decision)!].find(([, id]) => id === c.id)![0] : null;
     const item: TraceItem | null = decision?.items.find((i) => i.message_id === msgId) ?? null;
     const vis = visibleIn(w);
