@@ -4,7 +4,9 @@
   "description": "<!-- Skeleton for the public build repo's README. The headings mirror the judging criteria so a judge can score straight down the page.      Required by the submit list: which agents are connected, how the channel is set up, how to run it.      Prose goes in Kash's voice at the end; [NEED] marks gaps. Don't fill numbers until they're measured. -->",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "tsx seed/index.ts",
+    "ck": "tsx src/cli/ck.ts"
   },
   "keywords": [],
   "author": "",
