@@ -68,8 +68,9 @@ export function parseVerdict(msg: Anthropic.Message, ctx: RoomContext, inputIds:
   let tool: { items?: unknown[] } | null = null;
   for (const b of msg.content) {
     if (b.type === 'text') {
+      // The model sometimes formats the line as markdown ("**item: sw_…**"), so strip wrapping punctuation.
       for (const m of b.text.matchAll(/item:\s*([^\s]+)/g)) {
-        const id = m[1].replace(/[`"'.,;:]+$/g, '');
+        const id = m[1].replace(/[`"'.,;:*)\]]+$/g, '').replace(/^[`"'*(\[]+/g, '');
         if (cites.has(id)) current = id;
       }
       for (const c of b.citations ?? []) {
