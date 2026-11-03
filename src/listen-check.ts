@@ -4,6 +4,7 @@
 // Run: npx tsx src/listen-check.ts   (reads .env and .env.local; scripts/server-up.sh writes the latter)
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { displayName } from './names.ts';
 import { SwitchEventStream, type AgentBridgeEvent, type MessagePayload } from '../vendor/switch-agent-runtime/src/index.ts';
 
 function loadEnv(file: string) {
@@ -58,15 +59,16 @@ async function onEvent(ev: AgentBridgeEvent) {
   const m = ev.payload as MessagePayload;
   if (seen.has(m.message_id)) return; // a resumed stream can redeliver the last message
   seen.add(m.message_id);
-  trace({ kind: 'message', room: ev.room_id, id: m.message_id, from: m.sender_name, sender_kind: m.sender_kind ?? null,
-          addressed: m.addressed, thread: m.thread_id ?? null, body: m.body });
-  console.log(`[message] ${m.sender_name} (${m.sender_kind ?? 'person'}, addressed=${m.addressed}): ${m.body}`);
+  const who = await displayName(m.sender, m.sender_name); // "Rowan", not the handle "cosmicboard"
+  trace({ kind: 'message', room: ev.room_id, id: m.message_id, from: who, handle: m.sender_name, sender: m.sender,
+          sender_kind: m.sender_kind ?? null, addressed: m.addressed, thread: m.thread_id ?? null, body: m.body });
+  console.log(`[message] ${who} (${m.sender_kind ?? 'person'}, addressed=${m.addressed}): ${m.body}`);
 
   const fromPerson = !m.sender_kind || m.sender_kind === 'user';
   if (!fromPerson || m.addressed || !m.body.trim()) return;
   await op(ev.room_id, 'connect_to_room', { room_id: ev.room_id });
   await op(ev.room_id, 'post_message', {
-    body: `Heard you, ${m.sender_name}, without being tagged. (listen check)`,
+    body: `Heard you, ${who}, without being tagged. (listen check)`,
     thread_id: m.message_id,
   });
   trace({ kind: 'replied', room: ev.room_id, to: m.message_id });
