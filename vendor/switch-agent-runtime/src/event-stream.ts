@@ -281,6 +281,13 @@ export interface SwitchEventStreamDeps {
    * for. Omitted for every other case, where head is right.
    */
   startCursor?: number;
+  /**
+   * [Context Keeper change, 3 Nov 2026] A full saved position (every source,
+   * including `r:<room id>`) to resume from after a restart, so messages posted
+   * in a room while the agent was down are delivered. Takes precedence over
+   * `startCursor`.
+   */
+  startPosition?: Position;
   /** Rooms declared when the stream opens. Declared at open rather than
    * subscribed afterwards: catch-up runs immediately, and a room claimed a
    * moment later arrives too late for the buffered events a reconnect exists
@@ -482,7 +489,12 @@ export class SwitchEventStream {
   constructor(deps: SwitchEventStreamDeps) {
     this.deps = deps;
     this.rooms = [...deps.rooms];
-    this._position = deps.startCursor === undefined ? {} : { [OWN_EVENTS]: deps.startCursor };
+    // [Context Keeper change] resume from a saved full position when given.
+    this._position = deps.startPosition
+      ? { ...deps.startPosition }
+      : deps.startCursor === undefined
+        ? {}
+        : { [OWN_EVENTS]: deps.startCursor };
     this.spawnCapable = deps.spawnCapable === true;
     this.declaredSpawnCapable = this.spawnCapable;
   }

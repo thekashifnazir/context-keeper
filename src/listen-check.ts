@@ -26,8 +26,15 @@ mkdirSync('state', { recursive: true });
 const idFile = 'state/connection-id';
 const connectionId = existsSync(idFile) ? readFileSync(idFile, 'utf8').trim() : randomUUID();
 writeFileSync(idFile, connectionId);
+// Where we got to, so a restart resumes instead of starting at "now" (saved after each event and on exit).
+const posFile = 'state/position.json';
+const roomsFile = 'state/rooms.json';
+const seenFile = 'state/seen.json';
+const readJson = <T,>(f: string, fallback: T): T => (existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as T) : fallback);
+const savedPosition = readJson<Record<string, number> | null>(posFile, null);
+const savedRooms = readJson<string[]>(roomsFile, []);
 const sessionByRoom = new Map<string, string>(); // one session id per room (lets us hold several rooms at once)
-const seen = new Set<string>();
+const seen = new Set<string>(readJson<string[]>(seenFile, []));
 
 const trace = (rec: Record<string, unknown>) =>
   appendFileSync('state/trace.jsonl', JSON.stringify({ t: new Date().toISOString(), ...rec }) + '\n');
@@ -59,6 +66,7 @@ async function onEvent(ev: AgentBridgeEvent) {
   const m = ev.payload as MessagePayload;
   if (seen.has(m.message_id)) return; // a resumed stream can redeliver the last message
   seen.add(m.message_id);
+  writeFileSync(seenFile, JSON.stringify([...seen].slice(-500)));
   const who = await displayName(m.sender, m.sender_name); // "Rowan", not the handle "cosmicboard"
   trace({ kind: 'message', room: ev.room_id, id: m.message_id, from: who, handle: m.sender_name, sender: m.sender,
           sender_kind: m.sender_kind ?? null, addressed: m.addressed, thread: m.thread_id ?? null, body: m.body });
@@ -82,7 +90,9 @@ async function joinRooms() {
     body: '{}',
   });
   const rooms = ((await res.json()) as { result: { room_id: string; name: string; archived: boolean }[] }).result;
-  for (const r of rooms.filter((r) => !r.archived)) {
+  const live = rooms.filter((r) => !r.archived);
+  writeFileSync(roomsFile, JSON.stringify(live.map((r) => r.room_id)));
+  for (const r of live) {
     await op(r.room_id, 'connect_to_room', { room_id: r.room_id });
     // Join events are off by default, even for an agent in the room; the catch-up brief needs them.
     await op(r.room_id, 'update_room', { room_id: r.room_id, join_event_listeners: { 'context-keeper': true } });
@@ -96,14 +106,15 @@ const log = {
   error: (msg: string, meta?: Record<string, unknown>) => console.error('error', msg, meta ?? ''),
 };
 const abort = new AbortController();
-process.on('SIGINT', () => abort.abort());
 
-new SwitchEventStream({
+if (savedPosition) console.log('resuming from saved position', JSON.stringify(savedPosition));
+const stream = new SwitchEventStream({
   creds: { agentId, apiEndpoint: endpoint, token },
   connectionId,
   scope: 'all',
   filter: 'all',
-  rooms: [],
+  rooms: savedRooms, // declared at open, so catch-up covers them
+  ...(savedPosition ? { startPosition: savedPosition } : {}),
   onEvent: (ev) => onEvent(ev).catch((e) => console.error('handler failed:', e.message)),
   onRooms: (rooms) => console.log('covering rooms:', rooms.join(', ') || '(none)'),
   // The stream opens with no rooms; claim every room we've been invited to, so their messages flow.
@@ -116,4 +127,14 @@ new SwitchEventStream({
   onEvicted: (e) => console.warn('evicted:', e),
   log,
   signal: abort.signal,
-}).start();
+});
+stream.start();
+// Save the position after events are handled (the stream advances it once a handler returns).
+let lastSaved = '';
+const savePosition = () => {
+  const p = JSON.stringify(stream.position);
+  if (p !== lastSaved && p !== '{}') writeFileSync(posFile, (lastSaved = p));
+};
+setInterval(savePosition, 1000);
+process.on('SIGINT', () => { savePosition(); process.exit(0); });
+process.on('SIGTERM', () => { savePosition(); process.exit(0); });
