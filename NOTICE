@@ -1,5 +1,5 @@
 Context Keeper
-Copyright 2026 Kashif Nazir. Licensed under the Apache License, Version 2.0 (see LICENSE).
+Copyright 2026 Kashif Nazir. Licensed under the MIT License (see LICENSE).
 
 This repository includes vendor/switch-agent-runtime, copied unchanged (test files left out) from
 https://github.com/sandbox-quantum/switch, console/packages/switch-agent-runtime, commit 7e18c5e

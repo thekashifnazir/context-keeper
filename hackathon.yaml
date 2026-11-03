@@ -8,7 +8,7 @@ project:
   icon: archive
 team: {name: "[as registered]", members: ["Kashif Nazir"]}
 deadlines: {video_freeze: "17:59", code_freeze: "17:59"}   # 30 min before 18:29 UK, the stricter reading
-repo: {must_be_public: true, license: Apache-2.0}          # our code. The vendored switch-agent-runtime keeps Switch's licence: Apache 2.0 limited by a modified Commons Clause (repo LICENSE), stated in NOTICE and the README
+repo: {must_be_public: true, license: MIT}          # our code. The vendored switch-agent-runtime keeps Switch's licence: Apache 2.0 limited by a modified Commons Clause (repo LICENSE), stated in NOTICE and the README
 judging:
   - {criterion: "Use of Switch", weight: 30}
   - {criterion: "Technical execution", weight: 25}
