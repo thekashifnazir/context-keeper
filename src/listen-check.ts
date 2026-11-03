@@ -52,8 +52,8 @@ async function op(roomId: string, name: string, args: Record<string, unknown>) {
 
 async function onEvent(ev: AgentBridgeEvent) {
   if (ev.type !== 'message') {
-    trace({ kind: ev.type, room: ev.room_id });
-    console.log(`[${ev.type}] room ${ev.room_id}`);
+    trace({ kind: ev.type, room: ev.room_id, payload: ev.payload });
+    console.log(`[${ev.type}] room ${ev.room_id}`, JSON.stringify(ev.payload));
     return;
   }
   const m = ev.payload as MessagePayload;
@@ -84,6 +84,8 @@ async function joinRooms() {
   const rooms = ((await res.json()) as { result: { room_id: string; name: string; archived: boolean }[] }).result;
   for (const r of rooms.filter((r) => !r.archived)) {
     await op(r.room_id, 'connect_to_room', { room_id: r.room_id });
+    // Join events are off by default, even for an agent in the room; the catch-up brief needs them.
+    await op(r.room_id, 'update_room', { room_id: r.room_id, join_event_listeners: { 'context-keeper': true } });
     console.log(`listening in ${r.name} (${r.room_id})`);
   }
 }
