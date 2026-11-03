@@ -1,0 +1,95 @@
+# Seeded history for #ledgerly-pilot (invented). Loaded into a fresh room before the demo.
+# Ids are what the agent cites. `thread` = id of the parent message, if it's a reply.
+room: ledgerly-pilot
+owner: Kash
+docs: [docs/product.md, docs/pilot-plan.md, docs/roadmap.md, docs/status.md, docs/research.md]
+members: [Kash, Priya, Sam, Rowan]
+messages:
+  - id: led-001
+    at: 2026-09-01T09:12:00+01:00
+    author: Kash
+    text: "Morning all. Pinned the product overview and the roadmap in the room docs. Pilot planning starts this month."
+  - id: led-002
+    at: 2026-09-01T09:30:00+01:00
+    author: Priya
+    text: "Reminders are live for everyone since v0.6, so 3/7/14 days with the three tones. Worth leading with that for partners."
+  - id: led-003
+    at: 2026-09-02T14:05:00+01:00
+    author: Rowan
+    text: "I'll start sounding out agencies for the pilot. Off from the 14th for a while, so I'll hand over before then."
+  - id: led-004
+    at: 2026-09-03T11:20:00+01:00
+    author: Sam
+    text: "Could we get a mobile app on the roadmap? Feels like everyone expects one."
+  - id: led-005
+    at: 2026-09-03T11:41:00+01:00
+    author: Priya
+    thread: led-004
+    text: "Two codebases with three of us would halve our speed. The web app is already responsive."
+  - id: led-006
+    at: 2026-09-09T10:02:00+01:00
+    author: Kash
+    thread: led-004
+    text: "Decision: no native mobile app. Agencies invoice from a desk, and none of the interviews so far asked for one. Responsive web only. Added to product doc §7."
+  - id: led-007
+    at: 2026-09-10T16:15:00+01:00
+    author: Rowan
+    text: "Should we send a survey to our mailing list to see what people want from the pilot?"
+  - id: led-008
+    at: 2026-09-10T16:40:00+01:00
+    author: Kash
+    thread: led-007
+    text: "Decision: interviews, not a survey. Surveys mostly get answers from people who already want the thing. I've booked 12 agency interviews for September; the summary will go in research.md."
+  - id: led-009
+    at: 2026-09-13T17:55:00+01:00
+    author: Rowan
+    text: "Handover doc is in my drive, shared with Kash. See you all in a few weeks!"
+  - id: led-010
+    at: 2026-09-26T15:00:00+01:00
+    author: Kash
+    text: "Interviews done, 12 of 12. Summary is in research.md. Big ones: chasing payments by hand, and card fees on big invoices."
+  - id: led-011
+    at: 2026-10-06T10:30:00+01:00
+    author: Kash
+    text: "Decision D1: onboarding calls Tue to Thu, weekdays only. Partner finance staff are weekday only, and we can't staff support at weekends. Confirmed."
+  - id: led-012
+    at: 2026-10-06T10:34:00+01:00
+    author: Kash
+    text: "Decision D2: three agencies, max 25 clients each. Support is Priya and me, and one agency would be too small to learn from. Confirmed."
+  - id: led-013
+    at: 2026-10-08T12:10:00+01:00
+    author: Kash
+    text: "Decision D3: pilot currencies GBP, EUR and USD. Northbank bills two US clients. Confirmed."
+  - id: led-014
+    at: 2026-10-08T12:15:00+01:00
+    author: Kash
+    text: "Decision D5: no public launch until the pilot ends. We want the results before self-serve sign-up. Confirmed."
+  - id: led-015
+    at: 2026-10-15T09:45:00+01:00
+    author: Kash
+    text: "Decision D6: £19 per user per month after the pilot, free during it. That's mid-range of what interviewees pay now. Confirmed."
+  - id: led-016
+    at: 2026-10-20T13:20:00+01:00
+    author: Kash
+    text: "QuickBooks is parked for phase 2. Only 2 of 12 use it, and the pilot partners are all on Xero. Added to roadmap §1."
+  - id: led-017
+    at: 2026-10-20T13:25:00+01:00
+    author: Priya
+    thread: led-016
+    text: "Makes sense. Xero is CSV export for now; live sync is phase 2 as well."
+  - id: led-018
+    at: 2026-10-27T11:00:00+00:00
+    author: Kash
+    text: "Pilot dates locked: Tue 24 Nov to Fri 4 Dec. Fieldnote, Harbour & Pine and Northbank all said yes."
+  - id: led-019
+    at: 2026-10-30T16:30:00+00:00
+    author: Kash
+    text: "All three pilot letters signed. The pilot plan is now committed, not a draft."
+  - id: led-020
+    at: 2026-11-02T17:10:00+00:00
+    author: Priya
+    text: "Updated status.md. Tested: invoices, reminders, Stripe, portal. Not yet: GoCardless live (booked 17 Nov), USD partial-payment rounding (#41)."
+  - id: led-021
+    at: 2026-11-03T09:05:00+00:00
+    author: Sam
+    text: "Fixing the blurry PDF logo (#44) this week."

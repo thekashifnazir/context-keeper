@@ -1,0 +1,247 @@
+# P7: probes for the narrow reviewer (loop hardening).
+# The reviewer sees ONLY `claim` and `quote` and answers "does this quote support this claim?".
+# `quote` is verbatim from `quote_ref` in demo/ after the eval's normalisation (eval-harness.md §5);
+# `python3 testset/check_cases.py` checks that. Run on day 2 (W4): Haiku 5.5 vs Sonnet 5.5, adopt Haiku if it gets them all.
+# kind: near-miss | partial | stale | negation | clean. `why` names the case each probe comes from.
+# The reviewer judges support only. Staleness (newest source wins) is decided in code before it (T23);
+# RP15 pins that division of labour, so nobody tunes the reviewer to second-guess dates.
+probes:
+- id: RP01
+  kind: near-miss
+  claim: "Covered: partners already get automatic reminders a day before their onboarding calls."
+  quote: "Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off)."
+  quote_ref: product.md §2
+  expect: block
+  why: "RT-OPU-2. Same words, different thing: these chase overdue invoices. Nothing reminds partners about calls."
+
+- id: RP02
+  kind: near-miss
+  claim: "Covered: meeting reminders for partner calls have been live since v0.6."
+  quote: "Reminders are live for everyone since v0.6, so 3/7/14 days with the three tones."
+  quote_ref: led-002
+  expect: block
+  why: "RT-OPU-2. 3/7/14 days and the three tones are the payment-reminder schedule (product.md §2), not meeting reminders."
+
+- id: RP03
+  kind: clean
+  claim: "Covered: automatic reminders for overdue invoices already exist."
+  quote: "Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off)."
+  quote_ref: product.md §2
+  expect: pass
+  why: "T01. The same quote as RP01; only the claim changes. The pair shows the reviewer is reading the claim, not matching words."
+
+- id: RP04
+  kind: near-miss
+  claim: "Rejected: a feedback survey to the three partners after the pilot was already turned down."
+  quote: "Decision: interviews, not a survey. Surveys mostly get answers from people who already want the thing."
+  quote_ref: led-008
+  expect: block
+  why: "RT-FAB-3. D4 rejected a pre-pilot survey to the mailing list, for research. A feedback form to partners after the pilot is a different thing, and a planned one."
+
+- id: RP05
+  kind: clean
+  claim: "Planned: the pilot feedback form is an open ask that still needs an owner."
+  quote: "Someone to own the **pilot feedback form**."
+  quote_ref: pilot-plan.md §4
+  expect: pass
+  why: "RT-FAB-3, the right source. A volunteer fills an open ask; no nagging about led-007."
+
+- id: RP06
+  kind: near-miss
+  claim: "Decided no: a mobile app for clients to pay their invoices from their phones was rejected."
+  quote: "Decision: no native mobile app. Agencies invoice from a desk, and none of the interviews so far asked for one."
+  quote_ref: led-006
+  expect: block
+  why: "RT-HAI-1. The decision and its reason are about agencies invoicing from a desk. It says nothing about the clients who pay."
+
+- id: RP07
+  kind: clean
+  claim: "Decided no: there will be no native mobile app, because agencies invoice from a desk."
+  quote: "Decision: no native mobile app. Agencies invoice from a desk, and none of the interviews so far asked for one."
+  quote_ref: led-006
+  expect: pass
+  why: "T07. Same quote as RP06, with the claim the record actually makes."
+
+- id: RP08
+  kind: partial
+  claim: "Covered: Ledgerly can already send invoices in Welsh."
+  quote: 'every label on the invoice (such as "Invoice", "Due date" and "Total") can be renamed per client.'
+  quote_ref: product.md §1
+  expect: block
+  why: "T09. Renaming labels by hand isn't translation, and the next sentence of the same bullet says there is none. At most might-be-related."
+
+- id: RP09
+  kind: clean
+  claim: "Related, not covered: labels can be renamed per client, but there's no built-in translation."
+  quote: "can be renamed per client. There is no built-in translation."
+  quote_ref: product.md §1
+  expect: pass
+  why: "T09, the honest might-be-related claim. The quote backs both halves."
+
+- id: RP10
+  kind: partial
+  claim: "Covered: clients can pay by direct debit through GoCardless, and it's been tested live."
+  quote: "**Direct debit through GoCardless**, so agencies avoid card fees on large invoices."
+  quote_ref: product.md §3
+  expect: block
+  why: "T09-style partial match. The quote supports 'available', not 'tested live' (status.md §2: sandbox only, RT-HAI-2). A quote that backs half a claim blocks."
+
+- id: RP11
+  kind: partial
+  claim: "Reopen D1: a partner can't do Tuesdays, which meets its reopen condition."
+  quote: "A partner **can't make any Tue–Thu slot**"
+  quote_ref: pilot-plan.md §2
+  expect: block
+  why: "RT-SON-2. The condition is no Tue–Thu slot at all. Losing one day, with Wednesday and Thursday still free, doesn't meet it."
+
+- id: RP12
+  kind: stale
+  claim: "Food lands at 19:30 on the night."
+  quote: "Food arrives at **20:00**, not at the start, so people stay through the build."
+  quote_ref: event-plan.md §1
+  expect: block
+  why: "T23 and RT-OPU-1. The stale doc says 20:00, so it can't back 19:30. The supporting quote is riv-012 (RP13)."
+
+- id: RP13
+  kind: stale
+  claim: "Food lands at 19:30 on the night."
+  quote: "OK, food at 19:30 then. I'll fix the plan doc later."
+  quote_ref: riv-012
+  expect: pass
+  why: "T23. The newest owner message, which is the right citation."
+
+- id: RP14
+  kind: stale
+  claim: "The plan doc has been updated, and it now says food is at 19:30."
+  quote: "OK, food at 19:30 then. I'll fix the plan doc later."
+  quote_ref: riv-012
+  expect: block
+  why: "'I'll fix the plan doc later' means the doc wasn't fixed yet. The quote backs the new time, not a doc edit."
+
+- id: RP15
+  kind: stale
+  claim: "The plan doc says food arrives at 20:00."
+  quote: "Food arrives at **20:00**, not at the start, so people stay through the build."
+  quote_ref: event-plan.md §1
+  expect: pass
+  why: "The quote does back this narrow claim about what the doc says. That the doc is stale is code's job (newest source wins, T23), not the reviewer's."
+
+- id: RP16
+  kind: stale
+  claim: "Food is served at 20:00."
+  quote: "Heads up: the venue kitchen shuts at 20:00 on Thursdays, so food has to land by 19:30."
+  quote_ref: riv-011
+  expect: block
+  why: "RT-OPU-1. 20:00 appears, but it's when the kitchen shuts; the same sentence puts food by 19:30. A keyword trap."
+
+- id: RP17
+  kind: negation
+  claim: "Live Xero sync is ready for the pilot."
+  quote: "**Live sync is planned, and doesn't exist yet** (roadmap.md §1)."
+  quote_ref: status.md §2
+  expect: block
+  why: "T10 and T24. The quote says the opposite: planned, not built."
+
+- id: RP18
+  kind: negation
+  claim: "Live Xero sync is not ready: it's planned and doesn't exist yet."
+  quote: "**Live sync is planned, and doesn't exist yet** (roadmap.md §1)."
+  quote_ref: status.md §2
+  expect: pass
+  why: "T10 and T24, the correct reply. Same quote as RP17; a reviewer that blocks on the word 'not' fails here."
+
+- id: RP19
+  kind: negation
+  claim: "Live Xero sync is already part of what the pilot gets."
+  quote: "Xero is CSV export for now; live sync is phase 2 as well."
+  quote_ref: led-017
+  expect: block
+  why: "T10. 'For now' and 'phase 2' put live sync after the pilot."
+
+- id: RP20
+  kind: negation
+  claim: "GoCardless direct debit is live."
+  quote: "**GoCardless direct debit** (shipped-untested): sandbox only. A live test is booked for 17 Nov."
+  quote_ref: status.md §2
+  expect: block
+  why: "RT-HAI-2. 'live' appears only in 'a live test is booked'; the label is shipped-untested, sandbox only."
+
+- id: RP21
+  kind: negation
+  claim: "A students-only night was rejected for good."
+  quote: "A students-only night with the society is parked for later."
+  quote_ref: riv-008
+  expect: block
+  why: "T18. Parked is not rejected; the reply must say it's parked, and the reviewer must catch the swap."
+
+- id: RP22
+  kind: negation
+  claim: "The organisers are running a pre-event survey."
+  quote: "Decision E2: no pre-event survey."
+  quote_ref: riv-006
+  expect: block
+  why: "T17. The quote is a 'no'."
+
+- id: RP23
+  kind: near-miss
+  claim: "After the pilot the price is £12 per user per month."
+  quote: "Decision D6: £19 per user per month after the pilot, free during it."
+  quote_ref: led-015
+  expect: block
+  why: "RT-OPU-3. Same shape and words, different number."
+
+- id: RP24
+  kind: clean
+  claim: "After the pilot the price is £19 per user per month, and it's free during the pilot."
+  quote: "Decision D6: £19 per user per month after the pilot, free during it."
+  quote_ref: led-015
+  expect: pass
+  why: "RT-OPU-3, the correct reply."
+
+- id: RP25
+  kind: clean
+  claim: "Onboarding calls are weekdays only, because partner finance staff work weekdays and support can't be staffed at weekends."
+  quote: "Partner finance staff are weekday only, and we can't staff support at weekends."
+  quote_ref: led-011
+  expect: pass
+  why: "T05. The reason, not just the decision."
+
+- id: RP26
+  kind: clean
+  claim: "QuickBooks is parked for phase 2, not rejected; only 2 of 12 use it."
+  quote: "QuickBooks is parked for phase 2. Only 2 of 12 use it, and the pilot partners are all on Xero."
+  quote_ref: led-016
+  expect: pass
+  why: "T04."
+
+- id: RP27
+  kind: clean
+  claim: "Clients can already download their payment receipts."
+  quote: "Clients can download PDFs and payment receipts, and update their billing contact."
+  quote_ref: product.md §5
+  expect: pass
+  why: "T03. The claim avoids 'from the portal', which this bullet alone doesn't say (the section title does)."
+
+- id: RP28
+  kind: clean
+  claim: "The pilot takes three agencies, with at most 25 clients each."
+  quote: "Decision D2: three agencies, max 25 clients each."
+  quote_ref: led-012
+  expect: pass
+  why: "T12 and RT-SON-3."
+
+- id: RP29
+  kind: clean
+  claim: "Issue #41: a USD partial payment can leave the remaining balance 1 cent out."
+  quote: "#41: a USD partial payment can be off by 1 cent on the remaining balance."
+  quote_ref: status.md §3
+  expect: pass
+  why: "T13."
+
+- id: RP30
+  kind: clean
+  claim: "The build night is a weekday evening, and the weekend version is parked for later."
+  quote: "Decision E1: weekday evening for this one. It's a first small pilot. A weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Weekend version is parked for later."
+  quote_ref: riv-004
+  expect: pass
+  why: "T16."

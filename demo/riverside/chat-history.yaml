@@ -1,0 +1,57 @@
+# Seeded history for #riverside-build-night (invented). The organisers' channel.
+room: riverside-build-night
+owner: Kash
+docs: [docs/event-plan.md]
+members: [Kash, Dana]   # Alex joins on 3 Nov, which triggers the late-joiner brief (job C)
+messages:
+  - id: riv-001
+    at: 2026-10-12T19:00:00+01:00
+    author: Kash
+    text: "Set up this channel for Build Night #1. Plan doc is in the room docs."
+  - id: riv-002
+    at: 2026-10-12T19:20:00+01:00
+    author: Dana
+    text: "Happy to host. Our community programme is open to everyone, so no students-only nights from us."
+  - id: riv-003
+    at: 2026-10-14T20:05:00+01:00
+    author: Dana
+    text: "Would a weekend give people more time to build?"
+  - id: riv-004
+    at: 2026-10-14T20:30:00+01:00
+    author: Kash
+    thread: riv-003
+    text: "Decision E1: weekday evening for this one. It's a first small pilot. A weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Weekend version is parked for later."
+  - id: riv-005
+    at: 2026-10-16T18:40:00+01:00
+    author: Kash
+    text: "Decision E4: two tracks, Open Build and Business Challenge. Local businesses set the challenge problems."
+  - id: riv-006
+    at: 2026-10-19T21:10:00+01:00
+    author: Kash
+    text: "Decision E2: no pre-event survey. Surveys only hear from people who already want X."
+  - id: riv-007
+    at: 2026-10-22T18:15:00+01:00
+    author: Dana
+    text: "Could we pull in the uni computing society?"
+  - id: riv-008
+    at: 2026-10-22T18:50:00+01:00
+    author: Kash
+    thread: riv-007
+    text: "Decision E3: they're welcome, but this one is community-wide, not students-only. A students-only night with the society is parked for later."
+  - id: riv-009
+    at: 2026-11-02T12:30:00+00:00
+    author: Kash
+    text: "Patchwork confirmed: free Pro access for every attendee, plus up to £300 for food if we can't find a food sponsor. Venue confirmed with Dana. Date locked: Thu 26 Nov."
+  - id: riv-010
+    at: 2026-11-02T12:45:00+00:00
+    author: Kash
+    text: "Still need: a food sponsor, prizes for both tracks, and two mentors. Shout if you know anyone."
+  - id: riv-011
+    at: 2026-11-02T13:10:00+00:00
+    author: Dana
+    text: "Heads up: the venue kitchen shuts at 20:00 on Thursdays, so food has to land by 19:30."
+  - id: riv-012
+    at: 2026-11-02T13:25:00+00:00
+    author: Kash
+    thread: riv-011
+    text: "OK, food at 19:30 then. I'll fix the plan doc later."
