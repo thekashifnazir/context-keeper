@@ -1,9 +1,13 @@
-// replay: feed test cases through the real job A pipeline with the real model, offline (no Switch).
+// replay: feed test cases through the real pipeline (jobs A, B, D) with the real model, offline (no Switch).
 // Each case sees its room's demo docs plus the seeded chat history before the case's time; posts go
 // to a recorder, not a room. Checks each result against the case's expect: job, verdict, and a
 // verified citation (ref in expect.sources, quote verbatim in that source by src/shared/quote.ts,
-// and visible in the post). Counts confident_wrong. One run, no best-of.
+// and visible in the post), and routing like the eval's P4: A, B and D personal get exactly one
+// thread reply and no owner-desk post; a D project clash gets an owner-desk post naming the decision
+// and one public reply that carries neither the clash id nor any quote. Kash is the room owner
+// (sender @replay-kash). Counts confident_wrong. One run, no best-of.
 //   npx tsx src/cli/replay.ts --only T04,T05,T06,T07,T08,T09
+//   npx tsx src/cli/replay.ts --only T11,T12,T13,T14,T19
 // Not the eval (that's npm run eval, eval lane): no Switch rooms, no P4/P5 routing checks.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,6 +18,7 @@ import { decide, type Input } from '../agent/pipeline.ts';
 import type { Poster } from '../agent/post.ts';
 import { systemPrompt } from '../agent/prompt.ts';
 import { loadDemoRoom, loadYaml, ROOM_DIRS } from '../agent/room.ts';
+import { PendingStore } from '../agent/pending.ts';
 import { AgentState } from '../agent/state.ts';
 import { normalise, quoteVerified } from '../shared/quote.ts';
 import type { TraceLine } from '../shared/trace.ts';
@@ -79,7 +84,7 @@ for (const group of groups) {
     received_at: new Date(String(c.at).replace(' ', 'T')).toISOString(), thread_id: null,
   }));
   const t0 = Date.now();
-  const r = await decide({ claude, cfg, system, poster, state: new AgentState(null), selfSenders: new Set(['@context-keeper']), traceFile }, `replay-${roomName}`, roomName, ctx, inputs);
+  const r = await decide({ claude, cfg, system, poster, state: new AgentState(null), selfSenders: new Set(['@context-keeper']), traceFile, ownerSender: '@replay-kash', ownerName: 'Kash', pending: new PendingStore(null) }, `replay-${roomName}`, roomName, ctx, inputs);
   const ms = Date.now() - t0;
   usages.push(...r.usages);
   const line: TraceLine | null = r.trace;
@@ -97,16 +102,36 @@ for (const group of groups) {
       return src !== null && quoteVerified(s.quote, src) && (publicBody.includes(s.ref) || normalise(publicBody).includes(normalise(s.quote)));
     });
     const p1 = job === exp.job;
-    const p2 = exp.job === 'none' ? true : verdict === want;
+    const clashOk = !(exp.job === 'D' && exp.restriction === 'project') || (it?.clashes_with ?? '').trim().toUpperCase() === String(exp.clashes_with ?? '').toUpperCase();
+    const p2 = exp.job === 'none' ? true : verdict === want && clashOk;
+    // Routing (the eval's P4, on the recorded posts).
+    const pubPosts = poster.sent.filter((p) => p.thread !== 'OWNER');
+    const deskPosts = poster.sent.filter((p) => p.thread === 'OWNER');
+    let p4: string | null = null; // null = ok, else why not
+    if (exp.job === 'none') { if (poster.sent.length) p4 = `${poster.sent.length} post(s) where nothing was expected`; }
+    else if (exp.routing === 'owner_private_required') {
+      const clash = String(exp.clashes_with ?? '');
+      const quotes = (it?.sources ?? []).map((s) => normalise(s.quote)).filter((q) => q.length >= 12);
+      const pub = pubPosts[0]?.body ?? '';
+      if (!deskPosts.length) p4 = 'no owner-desk post';
+      else if (clash && !deskPosts.some((p) => new RegExp(`\\b${clash}\\b`).test(p.body))) p4 = `owner-desk post doesn't name ${clash}`;
+      else if (pubPosts.length !== 1) p4 = `${pubPosts.length} public replies, expected one`;
+      else if ((clash && new RegExp(`\\b${clash}\\b`).test(pub)) || quotes.some((q) => normalise(pub).includes(q))) p4 = 'public reply carries the clash details';
+    } else if (group.length === 1) {
+      if (pubPosts.length !== 1) p4 = `${pubPosts.length} public replies, expected one`;
+      else if (deskPosts.length && exp.routing !== 'owner_private_allowed') p4 = `${deskPosts.length} owner-desk post(s), none expected`;
+    }
     const needsCite = VERDICTS_NEEDING_CITATION.has(String(want));
     const p3 = !needsCite || verified.some((s) => (exp.sources ?? []).includes(s.ref));
     const cw = it?.verdict === 'covered' && (['new', 'might-be-related'].includes(String(exp.verdict)) || verified.length === 0);
     if (cw) confidentWrong += 1;
-    const ok = p1 && p2 && p3 && !cw;
+    const ok = p1 && p2 && p3 && !p4 && !cw;
     if (ok) passed += 1;
     const mustMention = (exp.must_mention ?? []) as string[];
     const missing = mustMention.filter((w) => !publicBody.toLowerCase().includes(w.toLowerCase()));
-    console.log(`${ok ? 'PASS' : 'FAIL'} ${c.id}  want ${exp.job}/${want ?? '-'} [${(exp.sources ?? []).join(', ')}]  got ${job}/${verdict ?? '-'} [${(it?.sources ?? []).map((s) => s.ref).join(', ')}]  verified-citation ${p3 ? 'ok' : 'MISSING'}${cw ? '  CONFIDENT-WRONG' : ''}  ${(ms / 1000).toFixed(1)}s`);
+    const clashTxt = exp.job === 'D' && exp.restriction === 'project' ? ` clashes_with want ${exp.clashes_with} got ${it?.clashes_with ?? '-'}` : '';
+    console.log(`${ok ? 'PASS' : 'FAIL'} ${c.id}  want ${exp.job}/${want ?? '-'} [${(exp.sources ?? []).join(', ')}]  got ${job}/${verdict ?? '-'} [${(it?.sources ?? []).map((s) => s.ref).join(', ')}]${clashTxt}  verified-citation ${p3 ? 'ok' : 'MISSING'}  routing ${p4 ?? 'ok'}${cw ? '  CONFIDENT-WRONG' : ''}  ${(ms / 1000).toFixed(1)}s`);
+    if (it?.decision_record) console.log(`     decision_record ${JSON.stringify(it.decision_record)}`);
     for (const s of it?.sources ?? []) console.log(`     source ${s.ref}: "${s.quote.slice(0, 110)}${s.quote.length > 110 ? '…' : ''}"`);
     if (mustMention.length) console.log(`     must_mention ${mustMention.join(', ')}: ${missing.length ? `missing ${missing.join(', ')}` : 'ok'} (diagnostic)`);
   }

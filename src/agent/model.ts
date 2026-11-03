@@ -2,7 +2,7 @@
 // small interface so offline tests can swap in a scripted fake (test/fake-claude.ts).
 // 30 s per call, no SDK retries: the pipeline decides what a failure means (fail quiet, retry once).
 import Anthropic from '@anthropic-ai/sdk';
-import { RECORD_VERDICT, REVIEWER_SYSTEM, newMessagesText } from './prompt.ts';
+import { BRIEF_NOTES, OWNER_REPLY_SYSTEM, RECORD_VERDICT, REVIEWER_SYSTEM, WRITE_BRIEF, briefRequestText, newMessagesText } from './prompt.ts';
 import type { RoomContext } from './blocks.ts';
 
 export const CALL_TIMEOUT_MS = 30_000;
@@ -149,4 +149,60 @@ export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { i
   const parsed = JSON.parse(text) as { results?: Review[] };
   for (const r of parsed.results ?? []) if (typeof r.supports === 'boolean') reviews.set(String(r.id), { id: String(r.id), supports: r.supports, issue: String(r.issue ?? '') });
   return { reviews, usage };
+}
+
+// ---- job C: the brief (one call; the reviewer runs after, inside postBrief) ---------------------
+
+export interface BriefLine { kind: string; text: string; block: string; quote: string }
+
+export async function callBrief(claude: Claude, cfg: ModelConfig, system: string, ctx: RoomContext, person: { name: string; kind: 'joiner' | 'returner'; since: string | null; first_message: string }): Promise<{ lines: BriefLine[]; usage: Usage }> {
+  maybeFault();
+  const params: Record<string, unknown> = {
+    model: cfg.model,
+    max_tokens: 4000,
+    system: `${system}\n\n${BRIEF_NOTES}`,
+    tools: [WRITE_BRIEF],
+    tool_choice: { type: 'tool', name: 'write_brief' },
+    messages: [{ role: 'user', content: [...ctx.documents, { type: 'text', text: briefRequestText(person) }] }],
+  };
+  const t0 = Date.now();
+  const msg = await claude.create(params, { timeout: CALL_TIMEOUT_MS });
+  const usage = usageOf(msg, Date.now() - t0);
+  const tool = msg.content.find((b) => b.type === 'tool_use' && b.name === 'write_brief') as Anthropic.ToolUseBlock | undefined;
+  const raw = (tool?.input as { lines?: unknown[] } | undefined)?.lines;
+  if (!Array.isArray(raw)) throw new Error(`no write_brief call (stop_reason ${msg.stop_reason})`);
+  const s = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
+  const lines = raw.map((l: any) => ({ kind: s(l?.kind), text: s(l?.text), block: s(l?.block), quote: s(l?.quote) })).filter((l) => l.text);
+  return { lines, usage };
+}
+
+// ---- owner desk: what did the owner decide? (only when the plain-text rules can't tell) ----------
+
+export interface OwnerReading { action: 'confirm' | 'drop' | 'unclear'; summary: string; owner: string; date: string; line: string }
+
+export async function callOwnerReply(claude: Claude, cfg: ModelConfig, item: { kind: 'B' | 'D'; summary: string; suggested_owner: string; date: string; options: string[] }, reply: string): Promise<{ reading: OwnerReading; usage: Usage }> {
+  const str = { type: 'string' };
+  const params = {
+    model: cfg.model,
+    max_tokens: 1000,
+    system: OWNER_REPLY_SYSTEM,
+    output_config: {
+      effort: 'low',
+      format: {
+        type: 'json_schema',
+        schema: {
+          type: 'object', additionalProperties: false, required: ['action', 'summary', 'owner', 'date', 'line'],
+          properties: { action: { type: 'string', enum: ['confirm', 'drop', 'unclear'] }, summary: str, owner: str, date: str, line: str },
+        },
+      },
+    },
+    messages: [{ role: 'user', content: JSON.stringify({ item, owner_reply: reply }).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }],
+  };
+  const t0 = Date.now();
+  const msg = await claude.create(params, { timeout: CALL_TIMEOUT_MS });
+  const usage = usageOf(msg, Date.now() - t0);
+  const text = msg.content.filter((b) => b.type === 'text').map((b) => (b as Anthropic.TextBlock).text).join('');
+  const r = JSON.parse(text) as Partial<OwnerReading>;
+  const action = r.action === 'confirm' || r.action === 'drop' ? r.action : 'unclear';
+  return { reading: { action, summary: String(r.summary ?? ''), owner: String(r.owner ?? ''), date: /^\d{4}-\d{2}-\d{2}$/.test(String(r.date)) ? String(r.date) : '', line: String(r.line ?? '') }, usage };
 }

@@ -7,11 +7,14 @@
 //   3. compose: the model's reply, then the quote and who/when, built by code from verified text.
 //   4. idempotency (room + thread + text hash, in state/), then send; a failed send retries once,
 //      then the owner desk gets the exact draft.
+// Jobs B and D post their lines through here too (no quotes in them; a project clash's line is
+// checked for leaked details), and job C's brief goes through postBrief: the same gate and reviewer.
 // Code rules here only ever tighten a verdict, never loosen it.
 import { quoteVerified } from '../shared/quote.ts';
 import type { TraceItem, TracePost } from '../shared/trace.ts';
 import type { RoomContext } from './blocks.ts';
-import { callReviewer, type Claude, type ModelConfig, type Usage } from './model.ts';
+import { leaksClash } from './jobs/restriction.ts';
+import { callReviewer, type BriefLine, type Claude, type ModelConfig, type Usage } from './model.ts';
 import { postKey, type AgentState } from './state.ts';
 import type { Cited, ModelItem } from './verdict.ts';
 
@@ -82,7 +85,7 @@ const traceItem = (it: ModelItem, verdict: string | null, sources: Verified[]): 
   restriction: it.restriction as TraceItem['restriction'],
   clashes_with: it.clashes_with,
   sources: sources.map((s) => ({ ref: s.ref, quote: s.quote })),
-  decision_record: null,
+  decision_record: it.decision_record ?? null,
   brief_for: null,
 });
 
@@ -113,6 +116,13 @@ export async function postPublic(
       }
     } else if (it.job === 'A' && verdict === 'new' && announceNew() && it.reply.trim()) {
       body = it.reply.trim();
+    } else if ((it.job === 'B' || it.job === 'D') && it.reply.trim()) {
+      body = it.reply.trim();
+      const quotes = [...verified.map((v) => v.quote), ...it.cited.map((c) => c.block.body)];
+      if (it.job === 'D' && it.restriction === 'project' && leaksClash(body, it.clashes_with, quotes)) {
+        events.push(`clash_leak_blocked: ${it.message_id} public line carried clash details; neutral line used`);
+        body = "Noted, and I've flagged it to the owner. The plan stays as it is until they decide.";
+      }
     }
     plans.push({ it, verdict, sources: verified, body });
   }
@@ -141,36 +151,99 @@ export async function postPublic(
 
   // 3. compose one post per decision (a burst gets one combined reply), 4. idempotent send
   const bodies = plans.filter((p) => p.body).map((p) => p.body!);
-  const posts: TracePost[] = [];
+  let posts: TracePost[] = [];
   let error: string | null = null;
-  if (bodies.length) {
-    const body = bodies.join('\n\n');
-    const key = postKey(draft.roomId, draft.threadId, body);
-    const prior = deps.state.postedEvent(key, draft.roomId);
-    if (prior !== undefined) {
-      events.push(`duplicate suppressed: ${key}`);
-    } else {
-      let eventId: string | null = null;
-      let sent = false;
-      for (let attempt = 0; attempt < 2 && !sent; attempt++) {
-        try { eventId = await deps.poster.thread(draft.roomId, draft.threadId, body); sent = true; } catch (e) { error = `post_failed: ${(e as Error).message}`; }
-      }
-      if (sent) {
-        error = null;
-        deps.state.recordPost(draft.roomId, key, eventId);
-        posts.push({ route: 'public_thread', room_id: draft.roomId, room_name: draft.roomName, thread_id: draft.threadId, event_id: eventId, body });
-      } else {
-        const note = `Couldn't post this reply in ${draft.roomName} (thread ${draft.threadId}). Draft:\n${body}`;
-        try {
-          const id = await deps.poster.owner(note);
-          if (deps.poster.ownerRoom) posts.push({ route: 'owner_private', room_id: deps.poster.ownerRoom.id, room_name: deps.poster.ownerRoom.name, thread_id: null, event_id: id, body: note });
-        } catch (e) { error += `; owner note FAILED: ${(e as Error).message}`; }
-      }
-    }
-  }
+  if (bodies.length) ({ posts, error } = await sendPublic(deps, draft.roomId, draft.roomName, draft.threadId, bodies.join('\n\n'), events));
   return finish(plans, posts, events, usage, error, true);
 }
 
 function finish(plans: { it: ModelItem; verdict: string | null; sources: Verified[] }[], posts: TracePost[], events: string[], usage: Usage | null, error: string | null, keepSources: boolean): PublicResult {
   return { items: plans.map((p) => traceItem(p.it, p.verdict, keepSources ? p.sources : [])), posts, events, usage, error };
+}
+
+/** Idempotent send into a public thread: a failed send retries once, then the owner desk gets the draft. */
+export async function sendPublic(
+  deps: { poster: Poster; state: AgentState }, roomId: string, roomName: string, threadId: string | null, body: string, events: string[],
+): Promise<{ posts: TracePost[]; error: string | null }> {
+  const posts: TracePost[] = [];
+  let error: string | null = null;
+  const key = postKey(roomId, threadId, body);
+  if (deps.state.postedEvent(key, roomId) !== undefined) { events.push(`duplicate suppressed: ${key}`); return { posts, error }; }
+  let eventId: string | null = null;
+  let sent = false;
+  for (let attempt = 0; attempt < 2 && !sent; attempt++) {
+    try { eventId = await deps.poster.thread(roomId, threadId, body); sent = true; } catch (e) { error = `post_failed: ${(e as Error).message}`; }
+  }
+  if (sent) {
+    deps.state.recordPost(roomId, key, eventId);
+    posts.push({ route: 'public_thread', room_id: roomId, room_name: roomName, thread_id: threadId, event_id: eventId, body });
+    return { posts, error: null };
+  }
+  const note = `Couldn't post this reply in ${roomName} (thread ${threadId}). Draft:\n${body}`;
+  try {
+    const id = await deps.poster.owner(note);
+    if (deps.poster.ownerRoom) posts.push({ route: 'owner_private', room_id: deps.poster.ownerRoom.id, room_name: deps.poster.ownerRoom.name, thread_id: null, event_id: id, body: note });
+  } catch (e) { error += `; owner note FAILED: ${(e as Error).message}`; }
+  return { posts, error };
+}
+
+/** Idempotent owner-desk note (a retried decision never sends the same note twice). */
+export async function sendOwner(deps: { poster: Poster; state: AgentState }, body: string, events: string[]): Promise<{ post: TracePost | null; eventId: string | null; error: string | null }> {
+  const room = deps.poster.ownerRoom;
+  if (!room) return { post: null, eventId: null, error: 'no owner desk' };
+  const key = postKey(room.id, null, body);
+  const prior = deps.state.postedEvent(key, room.id);
+  if (prior !== undefined) { events.push(`duplicate owner note suppressed: ${key}`); return { post: null, eventId: prior, error: null }; }
+  try {
+    const id = await deps.poster.owner(body);
+    deps.state.recordPost(room.id, key, id);
+    return { post: { route: 'owner_private', room_id: room.id, room_name: room.name, thread_id: null, event_id: id, body }, eventId: id, error: null };
+  } catch (e) {
+    return { post: null, eventId: null, error: `owner_note_failed: ${(e as Error).message}` };
+  }
+}
+
+// ---- job C: the brief --------------------------------------------------------------------------
+
+export interface BriefResult { posts: TracePost[]; sources: { ref: string; quote: string }[]; events: string[]; usage: Usage | null; error: string | null; kept: number }
+
+/** Gate (each line's quote verbatim in its block's source) → reviewer (does the quote back the line?)
+ *  → compose → idempotent send. Lines that fail either check are dropped; with none left, nothing posts. */
+export async function postBrief(
+  deps: { claude: Claude; cfg: ModelConfig; poster: Poster; state: AgentState },
+  ctx: RoomContext,
+  draft: { roomId: string; roomName: string; threadId: string | null; opening: string; closing: string; lines: BriefLine[] },
+): Promise<BriefResult> {
+  const events: string[] = [];
+  const blocks = new Map(ctx.table.flat().map((b) => [b.blockId, b]));
+  type Kept = { line: BriefLine; ref: string; quote: string; full: string };
+  const kept: Kept[] = [];
+  draft.lines.forEach((l, i) => {
+    const b = blocks.get(l.block) ?? ctx.table.flat().find((x) => x.ref === l.block && quoteVerified(l.quote, x.body));
+    const src = b ? ctx.sourceText.get(b.ref) : undefined;
+    if (!b || !src || !quoteVerified(l.quote, b.body) || !quoteVerified(l.quote, src)) { events.push(`brief_gate: line ${i + 1} dropped (quote not in ${l.block || 'any block'})`); return; }
+    kept.push({ line: l, ref: b.ref, quote: l.quote, full: b.text });
+  });
+  let usage: Usage | null = null;
+  if (kept.length) {
+    try {
+      const r = await callReviewer(deps.claude, deps.cfg, kept.map((k, i) => ({ id: `line${i + 1}`, claim: k.line.text, quotes: [k.full] })));
+      usage = r.usage;
+      const before = kept.length;
+      for (let i = before - 1; i >= 0; i--) {
+        const rv = r.reviews.get(`line${i + 1}`);
+        if (!rv?.supports) { events.push(`brief_reviewer: line ${i + 1} dropped (${rv?.issue || 'no result'})`); kept.splice(i, 1); }
+      }
+    } catch (e) {
+      events.push(`reviewer_failed: ${(e as Error).message}`);
+      return { posts: [], sources: [], events, usage, error: `reviewer_failed: ${(e as Error).message}`, kept: 0 };
+    }
+  }
+  if (!kept.length) {
+    events.push('brief_gate_blocked: no line survived the gate and the reviewer');
+    return { posts: [], sources: [], events, usage, error: null, kept: 0 };
+  }
+  const body = [draft.opening, ...kept.slice(0, 5).map((k) => `• ${k.line.text} (${k.ref})`), draft.closing].filter(Boolean).join('\n');
+  const { posts, error } = await sendPublic(deps, draft.roomId, draft.roomName, draft.threadId, body, events);
+  return { posts, sources: kept.slice(0, 5).map((k) => ({ ref: k.ref, quote: k.quote })), events, usage, error, kept: Math.min(kept.length, 5) };
 }

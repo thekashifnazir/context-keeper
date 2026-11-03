@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { writeTrace, type TraceItem, type TraceLine, type TracePost } from '../shared/trace.ts';
 import type { RoomContext } from './blocks.ts';
 import { callVerdict, errorKind, type Claude, type ModelConfig, type Usage } from './model.ts';
+import { planJobs } from './owner-desk.ts';
+import type { PendingStore } from './pending.ts';
 import { postPublic, type Poster } from './post.ts';
 import type { AgentState } from './state.ts';
 import { parseVerdict, ParseError } from './verdict.ts';
@@ -30,6 +32,11 @@ export interface Deps {
   sleep?: (ms: number) => Promise<void>;
   /** Called once when the model key is rejected or credit is out: the agent should stop. */
   onFatal?: (why: string) => void;
+  /** The room owner's Switch sender id: only they confirm decisions (B) and rule on clashes (D). */
+  ownerSender?: string | null;
+  ownerName?: string; // display name, default "Kash"
+  /** Open owner items (B confirms, D clashes); in-memory when not given. */
+  pending?: PendingStore;
 }
 
 export interface Outcome { trace: TraceLine | null; retry: boolean; fatal: boolean }
@@ -106,12 +113,17 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
     if (it.embedded_instruction || looksInjected(body)) notes.push(`embedded_instruction: ${it.message_id}`);
   }
 
+  // Jobs B and D: owner-desk notes first (so "flagged to the owner" is never posted for a note that
+  // didn't go), pending items saved, each item's public line set.
+  const jobs = await planJobs(deps, roomId, roomName, ctx, inputs, items);
+  notes.push(...jobs.events);
+
   // Everything public goes through postPublic (gate → reviewer → idempotent send).
   const threadId = inputs[0].thread_id ?? inputs[0].message_id;
   const pub = await postPublic({ claude: deps.claude, cfg: deps.cfg, poster: deps.poster, state: deps.state }, ctx, { roomId, roomName, threadId, items });
   if (pub.usage) usages.push(pub.usage);
   if (pub.error?.startsWith('reviewer_failed')) {
-    return failQuiet(deps, write, inputs, roomName, usages, pub.error, errorKind(pub.error), opts.notifyOwnerOnError ?? true, pub.items);
+    return failQuiet(deps, write, inputs, roomName, usages, pub.error, errorKind(pub.error), opts.notifyOwnerOnError ?? true, pub.items, jobs.posts);
   }
 
   for (const it of items) {
@@ -123,15 +135,17 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
   deps.state.markProcessed(roomId, inputs.map((m) => m.message_id));
   const events = [...notes, ...pub.events];
   const error = [pub.error, ...events].filter(Boolean).join('; ') || null;
-  const trace = write({ kind: pub.posts.some((p) => p.route !== 'owner_private') ? 'reply' : 'silence', items: pub.items, posts: pub.posts, model: modelSummary(deps.cfg, usages), error });
+  const posts = [...jobs.posts, ...pub.posts];
+  const kind = posts.some((p) => p.route !== 'owner_private') ? 'reply' : posts.length ? 'owner_note' : 'silence';
+  const trace = write({ kind, items: pub.items, posts, model: modelSummary(deps.cfg, usages), error });
   return { trace, retry: false, fatal: false, usages };
 }
 
 async function failQuiet(
   deps: Deps, write: (l: any) => TraceLine, inputs: Input[], roomName: string, usages: Usage[],
-  error: string, kind: string, notify: boolean, items?: TraceItem[],
+  error: string, kind: string, notify: boolean, items?: TraceItem[], earlier: TracePost[] = [],
 ): Promise<DecideResult> {
-  const posts: TracePost[] = [];
+  const posts: TracePost[] = [...earlier];
   const fatal = kind === 'fatal';
   const note = fatal
     ? `Context Keeper stopped: the model key was rejected or credit ran out (${error}). Nothing was posted.`

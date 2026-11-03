@@ -3,6 +3,7 @@
 // own words. Citations are tied to an item by the "item: <id>" line that precedes them.
 import type Anthropic from '@anthropic-ai/sdk';
 import type { BlockInfo, RoomContext } from './blocks.ts';
+import type { Details } from './pending.ts';
 
 export interface Cited {
   block: BlockInfo;
@@ -19,7 +20,24 @@ export interface ModelItem {
   reply: string;
   credit: string;
   embedded_instruction: boolean;
+  details: Details; // jobs B and D: what goes to the owner desk (empty otherwise)
   cited: Cited[];
+  /** Set by code for job B (never by the model directly): the trace's decision record. */
+  decision_record?: { summary: string; owner: string; date: string } | null;
+}
+
+export const emptyDetails = (): Details => ({ summary: '', why: '', date: '', suggested_owner: '', owner_basis: '', options: [] });
+
+function parseDetails(v: any): Details {
+  const s = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
+  if (!v || typeof v !== 'object') return emptyDetails();
+  const date = s(v.date);
+  return {
+    summary: s(v.summary), why: s(v.why),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
+    suggested_owner: s(v.suggested_owner), owner_basis: s(v.owner_basis),
+    options: Array.isArray(v.options) ? v.options.map(s).filter(Boolean).slice(0, 4) : [],
+  };
 }
 
 export class ParseError extends Error {}
@@ -68,17 +86,20 @@ export function parseVerdict(msg: Anthropic.Message, ctx: RoomContext, inputIds:
   return inputIds.map((id) => {
     const it = byId.get(id);
     if (!it) throw new ParseError(`record_verdict has no item for ${id}`);
-    const job = (['A', 'B', 'D', 'none'].includes(it.job) ? it.job : 'none') as ModelItem['job'];
+    let job = (['A', 'B', 'D', 'none'].includes(it.job) ? it.job : 'none') as ModelItem['job'];
+    const restriction = job === 'D' ? none(it.restriction) : null;
+    if (job === 'D' && (restriction === null || restriction === 'not-a-restriction')) job = 'none'; // not a restriction: stay quiet
     return {
       message_id: id,
       job,
-      verdict: job === 'A' || job === 'B' ? none(it.verdict) : null,
-      restriction: job === 'D' ? none(it.restriction) : null,
+      verdict: job === 'A' ? none(it.verdict) : job === 'B' ? 'decision' : null,
+      restriction: job === 'D' ? restriction : null,
       clashes_with: job === 'D' ? none(it.clashes_with) : null,
       claim: String(it.claim ?? ''),
       reply: String(it.reply ?? ''),
       credit: String(it.credit ?? ''),
       embedded_instruction: Boolean(it.embedded_instruction),
+      details: job === 'B' || job === 'D' ? parseDetails(it.details) : emptyDetails(),
       cited: cites.get(id) ?? [],
     };
   });
