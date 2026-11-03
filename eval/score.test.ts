@@ -232,6 +232,15 @@ describe('P3 for reopen and parked-recall (Kash, 3 Nov)', () => {
   });
 });
 
+describe('cost', () => {
+  it('prices a joined model id at the dearest component (upper bound)', async () => {
+    const { priceOf } = await import('./score.ts');
+    expect(priceOf('claude-opus-5-5+claude-haiku-5-5')).toEqual({ input: 4, output: 20, cache_read: 0.2, cache_write: 5 });
+    expect(priceOf('claude-haiku-5-5')!.input).toBe(0.1);
+    expect(priceOf('claude-opus-5-5+mystery')).toBeNull();
+  });
+});
+
 describe('flags', () => {
   it('parses the run flags', () => {
     const a = parseArgs(['--fast', '--only', 'T05,T08', '--set', 'redteam', '--keep']);
