@@ -209,8 +209,8 @@ async function runOnce(args: Args, n: number) {
         bridge_id: bridge.bridge_id, channel_type: 'channel_public', agent_names: [env.agentName], join_event_listeners: [env.agentName], user_names: members,
       });
       rooms.push(r);
-      const channel = await waitChannel(kash.mm, team.id, r);
-      for (const u of members) await people.get(u)!.mm.joinChannel(channel, people.get(u)!.id).catch(() => undefined);
+      const channel = await mmRetry(runDir, env.mmUrl, `find channel ${r.name}`, () => waitChannel(kash.mm, team.id, r));
+      for (const u of members) await mmRetry(runDir, env.mmUrl, `join ${u}`, () => people.get(u)!.mm.joinChannel(channel, people.get(u)!.id)).catch(() => undefined);
       metaRooms[room] = { room_id: r.id, room_name: r.name, channel_id: channel, owner_desk_channel_id: null };
       log(runDir, `room ${r.name} (${r.id}) -> channel ${channel}; members ${members.join(', ')}`);
       const desk = seedRoom(runDir, r.id, ROOM_DIRS[room], evalAgent);
@@ -229,7 +229,7 @@ async function runOnce(args: Args, n: number) {
     });
     const traceStart = existsSync(traceFile) ? readFileSync(traceFile, 'utf8').length : 0;
     const readLines = () => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8').slice(traceStart)) : []);
-    const bot = await waitBot(kash.mm, env.agentName);
+    const bot = await mmRetry(runDir, env.mmUrl, 'find the agent bot user', () => waitBot(kash.mm, env.agentName));
     await sleep(10_000); // let the agent connect before t0
     const t0 = Date.now();
     log(runDir, `t0; agent bot user ${bot}`);
