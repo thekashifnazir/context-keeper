@@ -1,0 +1,31 @@
+{
+  "schema": "ck.capture/1",
+  "run_id": "rfixture-hand-0001",
+  "set": "main",
+  "mode": "fixture",
+  "model": "claude-sonnet-5-5",
+  "burst_gap_s": 20,
+  "started_at": "2026-11-04T10:00:00.000Z",
+  "t0_ms": 1793786460000,
+  "ended_at_ms": 1793787060000,
+  "agent": { "name": "context-keeper", "mm_user_id": "mmu-agent" },
+  "owner_username": "kash",
+  "personas": { "Kash": "kash", "Priya": "priya", "Sam": "sam", "Rowan": "rowan" },
+  "rooms": {
+    "ledgerly-pilot": {
+      "room_id": "room-led-0001",
+      "room_name": "ck-eval-rfixture-hand-0001-ledgerly",
+      "channel_id": "mmch-led",
+      "owner_desk_channel_id": "mmch-desk"
+    }
+  },
+  "joins": [],
+  "cases": [
+    { "id": "T05", "post_id": "mmp-t05", "create_at": 1793786470000 },
+    { "id": "T06", "post_id": "mmp-t06", "create_at": 1793786560000 },
+    { "id": "T08", "post_id": "mmp-t08", "create_at": 1793786660000 },
+    { "id": "T15", "post_id": "mmp-t15", "create_at": 1793786760000 },
+    { "id": "T12", "post_id": "mmp-t12", "create_at": 1793786860000 }
+  ],
+  "versions": { "harness_sha": null, "agent_sha": null, "switch": "0.31.0", "mattermost": "11.9.0" }
+}

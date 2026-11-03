@@ -5,8 +5,17 @@
 # Why not Switch Console's built-in server? Console 0.40.1 runs it with no Gateway, so there's no way to
 # mint a registration key for a custom agent. This is Switch's documented self-host route instead, and
 # Console connects to it with "Connect to an existing server" -> http://127.0.0.1:18000.
+#
+# --with-mattermost also starts the Compose file's own Mattermost (profile `collab`) for the eval's
+# personas, and connects it to Switch as a bridge (scripts/mattermost-bridge.py). On a server that's
+# already running it only ADDS the mattermost container (`up --no-deps mattermost`): switch, gateway
+# and postgres are never recreated or restarted. CK_ROOT picks whose server/ to use (default: this
+# checkout), so a git worktree can drive the one live server.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+WITH_MM=0
+for a in "$@"; do case "$a" in --with-mattermost) WITH_MM=1 ;; *) echo "usage: $0 [--with-mattermost]" >&2; exit 2 ;; esac; done
+cd "${CK_ROOT:-$(dirname "$0")/..}"
+SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 
 VER=0.31.0
 REPO=sandbox-quantum/standalone-compose
@@ -58,15 +67,45 @@ EOF
   )
 fi
 
+# 2b. Mattermost settings (--with-mattermost): appended to server/.env only if missing, never changed.
+if [ "$WITH_MM" = 1 ]; then
+  r() { openssl rand -hex "${1:-24}"; }
+  add() { grep -q "^$1=" "$DIR/.env" || { printf '%s=%s\n' "$1" "$2" >> "$DIR/.env"; say "server/.env: added $1"; }; }
+  add MATTERMOST_HOST_PORT 18065
+  add MATTERMOST_ADMIN_USER sysadmin
+  add MATTERMOST_ADMIN_PASSWORD "$(r 16)"
+  add MATTERMOST_TEAM_NAME switch
+  add MATTERMOST_USER user
+  add MATTERMOST_USER_PASSWORD "$(r 16)"
+fi
+
 # 3. Start it and wait for health (about 10 s with cached images, 2-3 min for the first download).
-say "starting the server (docker compose)"
-( cd "$DIR" && docker compose -f standalone-docker-compose.yml up -d --quiet-pull >/dev/null )
+#    With --with-mattermost and a server already healthy, the core stack is left exactly as it is.
+if [ "$WITH_MM" = 1 ] && [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/health")" = 200 ]; then
+  say "server already running; leaving switch, gateway and postgres as they are"
+else
+  say "starting the server (docker compose)"
+  ( cd "$DIR" && docker compose -f standalone-docker-compose.yml up -d --quiet-pull >/dev/null )
+fi
 for i in $(seq 1 90); do
   [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/health")" = 200 ] && break
   [ "$i" = 90 ] && die "server not healthy after 3 min: try 'docker compose -f $COMPOSE logs switch'"
   sleep 2
 done
 say "server healthy at $API"
+
+# 3b. Mattermost (--with-mattermost): add only its container, then seed it and register the bridge.
+#     Switch's own `setup` service isn't used: it makes Mattermost the default bridge, which would
+#     take the default from a Slack or Discord bridge you already connected.
+if [ "$WITH_MM" = 1 ]; then
+  before=$(cd "$DIR" && docker compose -f standalone-docker-compose.yml ps -q switch)
+  say "starting Mattermost (amd64 image, emulated on Apple Silicon; first boot ~30 s)"
+  ( cd "$DIR" && docker compose -f standalone-docker-compose.yml --profile collab up -d --no-deps --quiet-pull mattermost >/dev/null )
+  after=$(cd "$DIR" && docker compose -f standalone-docker-compose.yml ps -q switch)
+  [ "$before" = "$after" ] || die "switch container changed while adding Mattermost; check 'docker compose ps'"
+  ( set -a; . "$DIR/.env"; set +a; SWITCH_API_URL="$API" python3 "$SCRIPTS/mattermost-bridge.py" ) || die "Mattermost bridge setup failed"
+  say "Mattermost at http://127.0.0.1:$(grep '^MATTERMOST_HOST_PORT=' "$DIR/.env" | cut -d= -f2)"
+fi
 
 # 4. Register Context Keeper, owned by the admin user: sign in to the Gateway, mint a registration key,
 #    register the agent. Its id and keys go to .env.local (mode 600); nothing secret is printed.

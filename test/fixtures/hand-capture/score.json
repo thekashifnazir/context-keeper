@@ -1,0 +1,497 @@
+{
+  "schema": "ck.score/1",
+  "meta": {
+    "run_id": "rfixture-hand-0001",
+    "set": "main",
+    "mode": "fixture",
+    "model": "claude-sonnet-5-5",
+    "burst_gap_s": 20,
+    "started_at": "2026-11-04T10:00:00.000Z",
+    "versions": {
+      "harness_sha": null,
+      "agent_sha": null,
+      "switch": "0.31.0",
+      "mattermost": "11.9.0"
+    },
+    "cases_sha256": "47eefba0e49c7702e8b5fb20ce3880e5b816b54fbed294e9b5e03e704c07ef18",
+    "content_sha256": "9a4e72a5219da5eafb9eebdac4160788e87b07b8065e133ace51ce36809d8775",
+    "prices_as_of": "2026-10-06"
+  },
+  "summary": {
+    "set": "main",
+    "overall": {
+      "passed": 3,
+      "total": 5
+    },
+    "job_a": {
+      "passed": 1,
+      "total": 3
+    },
+    "job_d": {
+      "passed": 1,
+      "total": 1
+    },
+    "job_b": {
+      "passed": 0,
+      "total": 0
+    },
+    "quiet": {
+      "passed": 1,
+      "total": 1
+    },
+    "bursts": {},
+    "confident_wrong": 1,
+    "diagnostics": {
+      "covered_on_other": 0,
+      "citations_verified": {
+        "verified": 4,
+        "cited": 5
+      },
+      "quotes_verified": {
+        "verified": 4,
+        "cited": 5
+      },
+      "briefs_seen": {},
+      "trace_missing": 0,
+      "trace_mismatch": 1,
+      "unattributed": 0,
+      "latency_s": {
+        "p50": 30,
+        "p95": 36,
+        "n": 4
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "T05",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T05",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-011"
+        ],
+        "must_mention": [
+          "weekday"
+        ]
+      },
+      "item": {
+        "message_id": "sw-t05",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "Partner finance staff work weekdays only"
+          },
+          {
+            "ref": "led-011",
+            "quote": "Partner finance staff are weekday only, and we can't staff support at weekends"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "d-t05",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "pilot-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-011",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "mmp-t05",
+      "public_post_ids": [
+        "mmp-r05"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thought, Rowan. This one was decided: onboarding calls are on weekdays, Tue to Thu, because \"partner finance staff work weekdays only\" (pilot-plan.md §2, D1). Kash confirmed it in led-011."
+      ],
+      "owner_text": [],
+      "latency_s": 30,
+      "also_expect": null
+    },
+    {
+      "id": "T06",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T06",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "research.md §1",
+          "led-008",
+          "led-010"
+        ]
+      },
+      "item": {
+        "message_id": "sw-t06",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "research.md §1",
+            "quote": "we surveyed 40 agencies by email"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "d-t06",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "fail",
+          "reason": "research.md §1: quote not in source"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": false,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": true,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "research.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": false,
+          "shown": true,
+          "verified": false
+        }
+      ],
+      "case_post_id": "mmp-t06",
+      "public_post_ids": [
+        "mmp-r06"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Already done, Rowan: we surveyed 40 agencies by email in September (research.md §1)."
+      ],
+      "owner_text": [],
+      "latency_s": 30,
+      "also_expect": null
+    },
+    {
+      "id": "T08",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T08",
+      "expected": {
+        "job": "A",
+        "verdict": "new",
+        "sources": [],
+        "must_mention": [
+          "Rowan"
+        ]
+      },
+      "item": {
+        "message_id": "sw-t08",
+        "job": "A",
+        "verdict": "new",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "d-t08",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict new"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for new"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "fail",
+          "reason": "trace_mismatch: claimed but not seen d-t08:public_thread; seen but not in trace mmp-r08"
+        }
+      },
+      "pass": false,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": true,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [],
+      "case_post_id": "mmp-t08",
+      "public_post_ids": [
+        "mmp-r08"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Dark mode is already covered, Rowan: see product.md §1."
+      ],
+      "owner_text": [],
+      "latency_s": 30,
+      "also_expect": null
+    },
+    {
+      "id": "T12",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T12",
+      "expected": {
+        "job": "D",
+        "restriction": "project",
+        "clashes_with": "D2",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-012"
+        ],
+        "routing": "owner_private_required"
+      },
+      "item": {
+        "message_id": "sw-t12",
+        "job": "D",
+        "verdict": null,
+        "restriction": "project",
+        "clashes_with": "D2",
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "Three agencies, max 25 clients each"
+          },
+          {
+            "ref": "led-012",
+            "quote": "three agencies, max 25 clients each. Support is Priya and me"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "d-t12",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job D"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "restriction project, clashes with D2"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for project"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "owner desk names D2; one neutral thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-012",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "mmp-t12",
+      "public_post_ids": [
+        "mmp-r12"
+      ],
+      "owner_post_ids": [
+        "mmp-d12"
+      ],
+      "public_text": [
+        "Thanks Rowan, noted. I've passed this to Kash; the current plan stays as it is until he decides."
+      ],
+      "owner_text": [
+        "Rowan says three agencies is too much and suggests one. That clashes with D2: three agencies, max 25 clients each (pilot-plan.md §2, led-012). The plan stands until you decide. Reply here with your call."
+      ],
+      "latency_s": 36,
+      "also_expect": null
+    },
+    {
+      "id": "T15",
+      "room": "ledgerly-pilot",
+      "author": "Priya",
+      "burst": null,
+      "window": "ledgerly-pilot:T15",
+      "expected": {
+        "job": "none"
+      },
+      "item": {
+        "message_id": "sw-t15",
+        "job": "none",
+        "verdict": null,
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "d-t15",
+      "decision_kind": "silence",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "quiet: no visible posts, trace says silence"
+        },
+        "P2": {
+          "status": "n/a",
+          "reason": "quiet case"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for none"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "nothing posted"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 0 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": null
+      },
+      "citations": [],
+      "case_post_id": "mmp-t15",
+      "public_post_ids": [],
+      "owner_post_ids": [],
+      "public_text": [],
+      "owner_text": [],
+      "latency_s": null,
+      "also_expect": null
+    }
+  ],
+  "bursts": [],
+  "briefs": [],
+  "unattributed": [],
+  "pre_replay_posts": [
+    {
+      "post_id": "mmp-seed-1",
+      "channel_id": "mmch-led",
+      "message": "Context Keeper is here. I've read the room docs and the channel archive."
+    }
+  ],
+  "usage": {
+    "calls": 10,
+    "input_tokens": 5500,
+    "cache_read_tokens": 30000,
+    "cache_write_tokens": 0,
+    "output_tokens": 1040,
+    "est_cost_usd": 0.0274
+  }
+}

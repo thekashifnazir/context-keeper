@@ -6,7 +6,11 @@
   "scripts": {
     "test": "vitest run",
     "seed": "tsx seed/index.ts",
-    "ck": "tsx src/cli/ck.ts"
+    "ck": "tsx src/cli/ck.ts",
+    "eval": "tsx eval/cli.ts",
+    "replay": "tsx src/cli/replay.ts",
+    "probes": "tsx src/cli/probes.ts",
+    "agent": "tsx src/agent/main.ts"
   },
   "keywords": [],
   "author": "",

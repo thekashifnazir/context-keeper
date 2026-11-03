@@ -1,0 +1,33 @@
+{
+  "posts": [
+    { "id": "mmp-sys-1", "channel_id": "mmch-led", "user_id": "mmu-agent", "root_id": "", "type": "system_join_channel", "create_at": 1793786420000,
+      "message": "context-keeper joined the channel." },
+    { "id": "mmp-seed-1", "channel_id": "mmch-led", "user_id": "mmu-agent", "root_id": "", "type": "", "create_at": 1793786430000,
+      "message": "Context Keeper is here. I've read the room docs and the channel archive." },
+
+    { "id": "mmp-t05", "channel_id": "mmch-led", "user_id": "mmu-rowan", "root_id": "", "type": "", "create_at": 1793786470000,
+      "message": "Why don't we run onboarding on Saturdays? Agency owners have more time at weekends." },
+    { "id": "mmp-r05", "channel_id": "mmch-led", "user_id": "mmu-agent", "root_id": "mmp-t05", "type": "", "create_at": 1793786500000,
+      "message": "Good thought, Rowan. This one was decided: onboarding calls are on weekdays, Tue to Thu, because \"partner finance staff work weekdays only\" (pilot-plan.md §2, D1). Kash confirmed it in led-011." },
+
+    { "id": "mmp-t06", "channel_id": "mmch-led", "user_id": "mmu-rowan", "root_id": "", "type": "", "create_at": 1793786560000,
+      "message": "Before the pilot we really should ask some agencies what they want." },
+    { "id": "mmp-r06", "channel_id": "mmch-led", "user_id": "mmu-agent", "root_id": "mmp-t06", "type": "", "create_at": 1793786590000,
+      "message": "Already done, Rowan: we surveyed 40 agencies by email in September (research.md §1)." },
+
+    { "id": "mmp-t08", "channel_id": "mmch-led", "user_id": "mmu-rowan", "root_id": "", "type": "", "create_at": 1793786660000,
+      "message": "Idea: dark mode for the invoice editor. Designers on the partner side would love it." },
+    { "id": "mmp-r08", "channel_id": "mmch-led", "user_id": "mmu-agent", "root_id": "mmp-t08", "type": "", "create_at": 1793786690000,
+      "message": "Dark mode is already covered, Rowan: see product.md §1." },
+
+    { "id": "mmp-t15", "channel_id": "mmch-led", "user_id": "mmu-priya", "root_id": "", "type": "", "create_at": 1793786760000,
+      "message": "Lunch run in 10, anyone want anything?" },
+
+    { "id": "mmp-t12", "channel_id": "mmch-led", "user_id": "mmu-rowan", "root_id": "", "type": "", "create_at": 1793786860000,
+      "message": "Honestly we can't take three agencies, it's too much. One is plenty." },
+    { "id": "mmp-d12", "channel_id": "mmch-desk", "user_id": "mmu-agent", "root_id": "", "type": "", "create_at": 1793786895000,
+      "message": "Rowan says three agencies is too much and suggests one. That clashes with D2: three agencies, max 25 clients each (pilot-plan.md §2, led-012). The plan stands until you decide. Reply here with your call." },
+    { "id": "mmp-r12", "channel_id": "mmch-led", "user_id": "mmu-agent", "root_id": "mmp-t12", "type": "", "create_at": 1793786896000,
+      "message": "Thanks Rowan, noted. I've passed this to Kash; the current plan stays as it is until he decides." }
+  ]
+}

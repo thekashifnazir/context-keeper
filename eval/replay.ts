@@ -1,0 +1,323 @@
+// replay: the live run (PREP eval-harness §1–§3). Fresh ck-eval-<runid>-* rooms on the Mattermost
+// bridge, personas posting by `at` (rooms in parallel, burst gaps kept), every trace line and post
+// captured to build/eval/<runid>/, then scored by the same pure scorer as --rescore.
+import { randomBytes } from 'node:crypto';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { normalise } from '../src/shared/quote.ts';
+import { readTrace, type TraceLine } from '../src/shared/trace.ts';
+import type { CaptureMeta, MmPost } from './capture.ts';
+import { type Args, ROOT, rescore, writeResult } from './cli.ts';
+import { loadCases, ROOM_DIRS, type Case } from './content.ts';
+import { Mattermost, type MmRawPost } from './mattermost.ts';
+import { CAST, nameClashes, passwordFor, usernameOf } from './personas.ts';
+import { assertNoSecrets, knownSecrets } from './secrets.ts';
+import { Gateway, health, readEnvFile, serverEnv, type Room } from './switchapi.ts';
+import { loadYaml } from './yaml.ts';
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const L_S = 120; // longest model time after a decision is due
+const SHORT: Record<string, string> = { 'ledgerly-pilot': 'ledgerly', 'riverside-build-night': 'riverside' };
+
+function log(runDir: string | null, msg: string) {
+  const line = `${new Date().toISOString()} ${msg}`;
+  console.log(line);
+  if (runDir) appendFileSync(join(runDir, 'harness.log'), line + '\n');
+}
+
+function git(args: string[]): string | null {
+  const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+  return r.status === 0 ? r.stdout.trim() : null;
+}
+
+interface Env { api: string; mmUrl: string; agentName: string; adminEmail: string; adminPassword: string; team: string; model: string | null }
+
+function loadEnv(args: Args): Env {
+  const app = { ...readEnvFile(join(ROOT, '.env')), ...readEnvFile(join(ROOT, '.env.local')) };
+  const srv = serverEnv(ROOT);
+  const pick = (k: string, d?: string) => process.env[k] || app[k] || srv[k] || d || '';
+  const env: Env = {
+    api: pick('SWITCH_API_URL', 'http://127.0.0.1:18000'),
+    mmUrl: pick('MATTERMOST_URL', `http://127.0.0.1:${srv.MATTERMOST_HOST_PORT || '8065'}`),
+    agentName: pick('CK_AGENT_NAME', 'context-keeper'),
+    adminEmail: srv.GATEWAY_ADMIN_EMAIL || process.env.GATEWAY_ADMIN_EMAIL || '',
+    adminPassword: srv.GATEWAY_ADMIN_PASSWORD || process.env.GATEWAY_ADMIN_PASSWORD || '',
+    team: srv.MATTERMOST_TEAM_NAME || process.env.MATTERMOST_TEAM_NAME || 'switch',
+    model: args.model || pick('CK_MODEL') || null,
+  };
+  if (!env.adminEmail || !env.adminPassword) throw new Error('no Gateway admin in server/.env (set CK_SERVER_DIR when running from a worktree)');
+  return env;
+}
+
+/** Windows per room: cases sorted by `at` (not file order); a burst is one window with its real offsets. */
+export function plan(cases: Case[]) {
+  const rooms = new Map<string, { cases: Case[]; offset_ms: number }[][]>();
+  for (const room of [...new Set(cases.map((c) => c.room))].sort()) {
+    const sorted = cases.filter((c) => c.room === room).sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || (a.id < b.id ? -1 : 1));
+    const ws: { cases: Case[]; offset_ms: number }[][] = [];
+    for (const c of sorted) {
+      const prev = ws[ws.length - 1];
+      if (c.burst && prev && prev[0].cases[0].burst === c.burst) prev.push({ cases: [c], offset_ms: Date.parse(c.at) - Date.parse(prev[0].cases[0].at) });
+      else ws.push([{ cases: [c], offset_ms: 0 }]);
+    }
+    rooms.set(room, ws);
+  }
+  return rooms;
+}
+
+function preflightCases(cases: Case[]) {
+  const r = spawnSync('python3', ['testset/check_cases.py'], { cwd: ROOT, encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`testset/check_cases.py failed:\n${r.stdout}${r.stderr}`);
+  const bodies = new Map<string, string>();
+  for (const c of cases) {
+    const n = normalise(c.message);
+    if (bodies.has(n)) throw new Error(`cases ${bodies.get(n)} and ${c.id} have the same body; matching needs them unique`);
+    bodies.set(n, c.id);
+  }
+}
+
+export async function runLive(args: Args) {
+  if (args.robustness) throw new Error('--robustness (R1–R8) is not built yet (eval-harness §10b)');
+  if (args.readme && args.setupOnly) throw new Error('--readme needs a scored run');
+  for (let i = 1; i <= Math.max(1, args.repeat); i++) await runOnce(args, i);
+}
+
+async function runOnce(args: Args, n: number) {
+  const env = loadEnv(args);
+  const { cases: all } = loadCases(ROOT, args.set);
+  if (args.only) for (const id of args.only) if (!all.some((c) => c.id === id)) throw new Error(`--only: no case ${id} in the ${args.set} set`);
+  const cases = args.only ? all.filter((c) => args.only!.includes(c.id)) : all;
+
+  // ── Preflight ──
+  preflightCases(all);
+  const switchVersion = await health(env.api);
+  if (!switchVersion) throw new Error(`Switch isn't answering at ${env.api}/health`);
+  const mm0 = new Mattermost(env.mmUrl);
+  const mmVersion = await mm0.ping().catch(() => null);
+  if (!mmVersion) throw new Error(`Mattermost isn't answering at ${env.mmUrl} (scripts/server-up.sh --with-mattermost)`);
+  const gw = await Gateway.login(env.api, env.adminEmail, env.adminPassword);
+  const bridge = (await gw.bridges()).find((b) => b.bridge_type === 'mattermost' && b.status === 'active');
+  if (!bridge) throw new Error('no active Mattermost bridge on the Switch server (scripts/server-up.sh --with-mattermost)');
+  const agentNames = (await gw.agents()).map((a) => a.name);
+  const usernames = CAST.map(usernameOf);
+  const clash = nameClashes(usernames, agentNames);
+  if (clash.length) throw new Error(`persona name(s) equal an agent or admin name: ${clash.join(', ')}`);
+  if (!args.setupOnly && !agentNames.includes(env.agentName)) throw new Error(`agent ${env.agentName} isn't registered on this server`);
+  if (!args.setupOnly && !args.attach) agentCommand(); // fail before any room exists
+
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 13);
+  const runId = `r${stamp}-${randomBytes(2).toString('hex')}`;
+  const runDir = join(ROOT, 'build/eval', runId);
+  mkdirSync(runDir, { recursive: true });
+  log(runDir, `run ${runId} (${n}/${args.repeat}): ${cases.length} ${args.set} case(s), Switch ${switchVersion}, Mattermost ${mmVersion}, bridge ${bridge.bridge_id}`);
+
+  // ── Personas (open sign-up, then join the open team) ──
+  const team = await (await Mattermost.persona(env.mmUrl, 'kash', passwordFor(ROOT, 'kash'), 'Kash')).mm.teamByName(env.team);
+  const people = new Map<string, { mm: Mattermost; id: string }>();
+  for (const name of CAST) {
+    const u = usernameOf(name);
+    const p = await Mattermost.persona(env.mmUrl, u, passwordFor(ROOT, u), name);
+    await p.mm.joinTeam(team.id, p.user.id);
+    people.set(u, { mm: p.mm, id: p.user.id });
+    log(runDir, `persona ${u} ${p.created ? 'signed up' : 'signed in'}`);
+  }
+  const kash = people.get('kash')!;
+  const rooms: Room[] = [];
+
+  try {
+    if (args.setupOnly) return await smoke(gw, bridge.bridge_id, runId, runDir, people, rooms, team.id);
+
+    // ── Rooms: fresh, public, on the Mattermost bridge, the agent in and listening for joins ──
+    const roomPlan = plan(cases);
+    const metaRooms: CaptureMeta['rooms'] = {};
+    const joiners = new Map<string, string[]>(); // room -> usernames added at replay time (job C trigger)
+    for (const room of roomPlan.keys()) {
+      const hist = loadYaml<{ members: string[] }>(join(ROOT, 'demo', ROOM_DIRS[room], 'chat-history.yaml'));
+      const members = hist.members.map(usernameOf);
+      const late = [...new Set(cases.filter((c) => c.room === room && !members.includes(usernameOf(c.author))).map((c) => usernameOf(c.author)))];
+      joiners.set(room, late);
+      const r = await gw.createRoom({
+        name: `ck-eval-${runId}-${SHORT[room] ?? room}`, description: `Context Keeper eval ${runId} (${room}); invented demo data`,
+        bridge_id: bridge.bridge_id, channel_type: 'channel_public', agent_names: [env.agentName], join_event_listeners: [env.agentName], user_names: members,
+      });
+      rooms.push(r);
+      const channel = await waitChannel(kash.mm, team.id, r);
+      for (const u of members) await people.get(u)!.mm.joinChannel(channel, people.get(u)!.id).catch(() => undefined);
+      metaRooms[room] = { room_id: r.id, room_name: r.name, channel_id: channel, owner_desk_channel_id: null };
+      log(runDir, `room ${r.name} (${r.id}) -> channel ${channel}; members ${members.join(', ')}`);
+      seedRoom(runDir, r.id);
+    }
+
+    // ── Agent: started after setup, caps off; or --attach to one already running ──
+    const traceFile = args.attach ? process.env.CK_TRACE_FILE || join(ROOT, 'state/trace.jsonl') : join(runDir, 'trace.jsonl');
+    const gapS = Number(process.env.CK_BURST_GAP_S || 20);
+    const agent = args.attach ? null : startAgent(runDir, traceFile, gapS, env.model);
+    const traceStart = existsSync(traceFile) ? readFileSync(traceFile, 'utf8').length : 0;
+    const readLines = () => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8').slice(traceStart)) : []);
+    const bot = await waitBot(kash.mm, env.agentName);
+    await sleep(10_000); // let the agent connect before t0
+    const t0 = Date.now();
+    log(runDir, `t0; agent bot user ${bot}`);
+
+    // ── Replay: rooms in parallel, windows in `at` order, bursts at their real offsets ──
+    const posted: CaptureMeta['cases'] = [];
+    const joins: CaptureMeta['joins'] = [];
+    const settle = args.fast ? 5_000 : 15_000;
+    await Promise.all([...roomPlan.entries()].map(async ([room, windows]) => {
+      const r = metaRooms[room];
+      for (const u of joiners.get(room) ?? []) {
+        await gw.addUsers(r.room_id, [u]).catch((e) => log(runDir, `addUsers ${u}: ${e.message}`));
+        await people.get(u)!.mm.joinChannel(r.channel_id, people.get(u)!.id).catch(() => undefined);
+        joins.push({ room, username: u, at_ms: Date.now() });
+        log(runDir, `${room}: ${u} joined; waiting 20 s`);
+        await sleep(20_000);
+      }
+      for (const w of windows) {
+        const start = Date.now();
+        const mine: { c: Case; post: MmRawPost }[] = [];
+        for (const m of w) {
+          const wait = start + m.offset_ms - Date.now();
+          if (wait > 0) await sleep(wait);
+          const c = m.cases[0];
+          const p = people.get(usernameOf(c.author))!;
+          const post = await p.mm.post(r.channel_id, c.message);
+          posted.push({ id: c.id, post_id: post.id, create_at: post.create_at });
+          mine.push({ c, post });
+          log(runDir, `${c.id} posted by ${usernameOf(c.author)} (${post.id})`);
+        }
+        const deadline = Date.now() + (gapS + L_S) * 1000;
+        while (Date.now() < deadline && !mine.every(({ c }) => readLines().some((l) => covers(l, c)))) await sleep(1000);
+        const got = mine.filter(({ c }) => readLines().some((l) => covers(l, c))).length;
+        log(runDir, `${w.map((m) => m.cases[0].id).join('+')}: trace covers ${got}/${mine.length}`);
+        await sleep(settle);
+      }
+    }));
+
+    // ── End-of-run sweep, then read every channel once ──
+    log(runDir, `sweep: waiting ${gapS + 60} s for late replies`);
+    await sleep((gapS + 60) * 1000);
+    const lines = readLines();
+    writeFileSync(join(runDir, 'trace.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + (lines.length ? '\n' : ''));
+    for (const room of Object.keys(metaRooms)) {
+      const deskName = lines.filter((l) => l.room_id === metaRooms[room].room_id).flatMap((l) => l.posts).find((p) => p.route === 'owner_private')?.room_name;
+      if (!deskName) continue;
+      const desk = (await kash.mm.myChannels(team.id)).find((c) => c.type === 'P' && (c.display_name === deskName || c.name === deskName));
+      metaRooms[room].owner_desk_channel_id = desk?.id ?? null;
+    }
+    const posts: MmPost[] = [];
+    const channels = new Set(Object.values(metaRooms).flatMap((r) => [r.channel_id, r.owner_desk_channel_id].filter((x): x is string => !!x)));
+    for (const ch of [...channels].sort()) {
+      for (const p of await kash.mm.allPosts(ch)) if (!p.delete_at) posts.push({ id: p.id, channel_id: p.channel_id, user_id: p.user_id, root_id: p.root_id ?? '', message: p.message, type: p.type ?? '', create_at: p.create_at });
+    }
+    agent?.kill('SIGTERM');
+
+    // ── Capture, score, write ──
+    const meta: CaptureMeta = {
+      schema: 'ck.capture/1', run_id: runId, set: args.set, mode: args.fast ? 'fast' : 'real-time', model: env.model, burst_gap_s: gapS,
+      started_at: new Date(t0).toISOString(), t0_ms: t0, ended_at_ms: Date.now(),
+      agent: { name: env.agentName, mm_user_id: bot }, owner_username: 'kash',
+      personas: Object.fromEntries(CAST.map((c) => [c, usernameOf(c)])), rooms: metaRooms, joins,
+      cases: posted.sort((a, b) => a.create_at - b.create_at),
+      versions: { harness_sha: git(['rev-parse', 'HEAD']), agent_sha: git(['rev-parse', 'HEAD']), switch: switchVersion, mattermost: mmVersion },
+    };
+    const secrets = knownSecrets(ROOT);
+    const metaJson = JSON.stringify(meta, null, 2) + '\n';
+    const postsJson = JSON.stringify({ posts }, null, 2) + '\n';
+    assertNoSecrets(metaJson + postsJson + lines.map((l) => JSON.stringify(l)).join('\n'), secrets, `build/eval/${runId}`);
+    writeFileSync(join(runDir, 'capture.json'), metaJson);
+    writeFileSync(join(runDir, 'mattermost.json'), postsJson);
+    const result = rescore(runDir);
+    const out = resultPath(env.model ?? 'unknown-model', args.set);
+    const md = writeResult(result, out);
+    log(runDir, `wrote ${relative(ROOT, out)}`);
+    console.log('\n' + md);
+    if (args.readme) swapReadme(md);
+  } finally {
+    if (!args.keep) for (const r of rooms) await gw.archive(r.id).then(() => log(runDir, `archived ${r.name}`)).catch((e) => log(runDir, `archive ${r.name}: ${e.message}`));
+  }
+}
+
+const covers = (l: TraceLine, c: Case) => l.inputs.some((i) => i.sender.toLowerCase() === usernameOf(c.author) && normalise(i.body).startsWith(normalise(c.message)));
+
+async function waitChannel(mm: Mattermost, teamId: string, r: Room): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    if (r.external_channel_id) return r.external_channel_id;
+    const ch = await mm.channelByName(teamId, r.name);
+    if (ch) return ch.id;
+    const hit = (await mm.searchChannels(teamId, r.name)).find((c) => c.display_name === r.name || c.name === r.name);
+    if (hit) return hit.id;
+    await sleep(1000);
+  }
+  throw new Error(`no Mattermost channel appeared for room ${r.name}`);
+}
+
+async function waitBot(mm: Mattermost, agentName: string): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const u = await mm.userByUsername(agentName);
+    if (u) return u.id;
+    await sleep(1000);
+  }
+  throw new Error(`no Mattermost bot user named ${agentName}`);
+}
+
+function seedRoom(runDir: string, roomId: string) {
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
+  if (!pkg.scripts?.seed) { log(runDir, 'seed: no `npm run seed` yet (seed lane), room left unseeded'); return; }
+  const r = spawnSync('npm', ['run', '-s', 'seed', '--', '--bridge', 'mattermost', '--room', roomId, '--owner-username', 'kash'], { cwd: ROOT, encoding: 'utf8' });
+  appendFileSync(join(runDir, 'harness.log'), r.stdout + r.stderr);
+  if (r.status !== 0) throw new Error(`seed failed for ${roomId} (see harness.log)`);
+}
+
+function agentCommand(): string {
+  const cmd = process.env.CK_AGENT_CMD || 'npx tsx src/agent/main.ts';
+  const entry = cmd.split(' ').find((p) => p.endsWith('.ts'));
+  if (entry && !existsSync(join(ROOT, entry))) throw new Error(`agent entry ${entry} doesn't exist yet (core lane); set CK_AGENT_CMD or use --attach`);
+  return cmd;
+}
+
+function startAgent(runDir: string, traceFile: string, gapS: number, model: string | null): ChildProcess {
+  const cmd = agentCommand();
+  const out = join(runDir, 'agent.log');
+  const child = spawn(cmd, { cwd: ROOT, shell: true, env: { ...process.env, CK_TRACE_FILE: traceFile, CK_CAPS: 'off', CK_BURST_GAP_S: String(gapS), ...(model ? { CK_MODEL: model } : {}) } });
+  child.stdout?.on('data', (d) => appendFileSync(out, d));
+  child.stderr?.on('data', (d) => appendFileSync(out, d));
+  return child;
+}
+
+function resultPath(model: string, set: string): string {
+  const day = new Date().toISOString().slice(0, 10);
+  const base = `testset/results/${day}-${set === 'main' ? '' : `${set}-`}${model}`;
+  for (let i = 1; ; i++) {
+    const p = join(ROOT, `${base}${i === 1 ? '' : `-${i}`}.json`);
+    if (!existsSync(p)) return p;
+  }
+}
+
+function swapReadme(md: string) {
+  const f = join(ROOT, 'README.md');
+  const text = readFileSync(f, 'utf8');
+  const re = /<!-- eval:start -->[\s\S]*?<!-- eval:end -->/;
+  if (!re.test(text)) throw new Error('README.md has no <!-- eval:start --> ... <!-- eval:end --> block');
+  writeFileSync(f, text.replace(re, `<!-- eval:start -->\n${md}<!-- eval:end -->`));
+}
+
+/** --setup-only: prove the posting route without the agent. A fresh ck-eval room with no agents,
+ *  one persona posts, the post is read back, the room is archived. */
+async function smoke(gw: Gateway, bridgeId: string, runId: string, runDir: string, people: Map<string, { mm: Mattermost; id: string }>, rooms: Room[], teamId: string) {
+  const r = await gw.createRoom({ name: `ck-eval-${runId}-smoke`, description: 'Context Keeper eval: posting-route smoke test (no agents)', bridge_id: bridgeId, channel_type: 'channel_public', user_names: ['rowan'] });
+  rooms.push(r);
+  const ch = await waitChannel(people.get('kash')!.mm, teamId, r);
+  const rowan = people.get('rowan')!;
+  await rowan.mm.joinChannel(ch, rowan.id).catch(() => undefined);
+  const text = `ck-eval smoke ${runId}: posted by persona rowan through the Mattermost REST API`;
+  const post = await rowan.mm.post(ch, text);
+  await sleep(3000);
+  const back = (await rowan.mm.allPosts(ch)).find((p) => p.id === post.id);
+  const evidence = { run_id: runId, switch_room: { id: r.id, name: r.name, bridge_id: r.bridge_id }, mattermost_channel: ch, post: { id: post.id, user_id: post.user_id, create_at: post.create_at }, read_back: !!back && back.message === text };
+  const json = JSON.stringify(evidence, null, 2);
+  assertNoSecrets(json, knownSecrets(ROOT), `build/eval/${runId}/smoke.json`);
+  writeFileSync(join(runDir, 'smoke.json'), json + '\n');
+  log(runDir, `smoke: ${json}`);
+  if (!evidence.read_back) throw new Error('smoke: the persona post was not read back');
+}
