@@ -169,7 +169,8 @@ cases:
       job: B
       verdict: decision
       sources: []
-    note: "Record it as a decision with owner, date and this message as the source, then ask Kash to confirm."
+      routing: owner_private_allowed  # agreed 3 Nov: a desk note goes only if the work has no owner or date
+    note: "Kash states it himself, so he's the approver: log it in the thread at once (no confirm request), with the date and this message as the source. Nobody is named to do the work, so it stays unassigned and the owner desk is asked (suggesting Priya from the roles)."
 
   # ── Ledgerly: stay quiet ──────────────────────────────────────────
   - id: T15
