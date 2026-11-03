@@ -1,4 +1,4 @@
-// main: the live Context Keeper for job A. Listens to every room it's in (untagged), batches each
+// main: the live Context Keeper (jobs A, B, C text, D). Listens to every room it's in (untagged), batches each
 // person's messages until they go quiet (CK_BURST_GAP_S, 90 s hard cap), runs the pipeline, and
 // saves its stream position so a restart resumes instead of dropping what came in meanwhile.
 //   npx tsx src/agent/main.ts
@@ -7,11 +7,18 @@
 // draft, but sends nothing. The owner desk gets posts only with CK_POST_OWNER=1.
 // Room record: until the seed lane's room documents land, the record is demo/<room> (chosen by
 // CK_ROOM_DEMO, or by "ledgerly"/"riverside" in the room name) plus every live message as it arrives.
+// Owner desk (state/owner.json, or CK_OWNER_SENDER / CK_OWNER_DESK_ROOM): its messages never go to
+// job A; the owner's text reply there confirms a decision (B) or rules on a clash (D). A room_join
+// (Switch sends it just before the person's first message) marks them for a catch-up brief (C).
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { SwitchEventStream, type AgentBridgeEvent, type MessagePayload } from '../../vendor/switch-agent-runtime/src/index.ts';
+import type { RoomJoinPayload } from '../../vendor/switch-agent-runtime/src/types.ts';
 import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
+import { briefTrigger, runBrief } from './jobs/brief.ts';
+import { handleOwnerDesk } from './owner-desk.ts';
+import { PendingStore } from './pending.ts';
 import { loadEnv } from './env.ts';
 import { modelConfigFromEnv, realClaude } from './model.ts';
 import { decideWithRetry, type Deps, type Input } from './pipeline.ts';
@@ -33,7 +40,8 @@ const connectionId = readJson<{ id?: string }>(idFile, {}).id ?? randomUUID();
 atomicWriteJson(idFile, { id: connectionId });
 const posFile = 'state/agent-position.json';
 const roomsFile = 'state/agent-rooms.json';
-const owner = readJson<{ owner_desk_room?: string }>('state/owner.json', {});
+const ownerFile = readJson<{ owner_desk_room?: string; owner_sender?: string }>('state/owner.json', {});
+const owner = { owner_desk_room: process.env.CK_OWNER_DESK_ROOM || ownerFile.owner_desk_room, owner_sender: process.env.CK_OWNER_SENDER || ownerFile.owner_sender };
 const postPrefixes = (process.env.CK_POST_ROOMS ?? 'ck-smoke-,ck-eval-').split(',').map((s) => s.trim()).filter(Boolean);
 const gapMs = Number(process.env.CK_BURST_GAP_S ?? 20) * 1000;
 const CAP_MS = 90_000;
@@ -81,6 +89,7 @@ let stopped = false;
 const deps: Deps = {
   claude: realClaude(), cfg: modelConfigFromEnv(), system: systemPrompt('.'), poster,
   state: new AgentState('state/agent-state.json'), selfSenders,
+  ownerSender: owner.owner_sender ?? null, ownerName: process.env.CK_OWNER_NAME || 'Kash', pending: new PendingStore('state/pending.json'),
   onFatal: (why) => { stopped = true; console.error('fatal, stopping:', why); setTimeout(() => process.exit(2), 2000); },
 };
 
@@ -125,15 +134,38 @@ async function run(roomId: string, inputs: Input[]) {
 }
 
 async function onEvent(ev: AgentBridgeEvent) {
+  if (ev.type.includes('join')) {
+    const j = ev.payload as RoomJoinPayload;
+    if (j.member && ev.room_id !== owner.owner_desk_room && j.member !== owner.owner_sender && !selfSenders.has(j.member)) deps.state.markJoined(ev.room_id, j.member);
+    return;
+  }
   if (ev.type !== 'message') return;
   const m = ev.payload as MessagePayload;
   if (ourEvents.has(m.message_id)) { selfSenders.add(m.sender); return; } // learn our own sender id from our own post
   if (selfSenders.has(m.sender)) return;
   const who = await displayName(m.sender, m.sender_name);
   const at = new Date(m.timestamp).toISOString();
-  recordFor(ev.room_id)?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
-  if (m.sender_kind && m.sender_kind !== 'user') return; // agents and the platform aren't asking us anything
-  enqueue(ev.room_id, { message_id: m.message_id, sender: m.sender, sender_name: who, body: m.body, received_at: at, thread_id: m.thread_id ?? null });
+  const input: Input = { message_id: m.message_id, sender: m.sender, sender_name: who, body: m.body, received_at: at, thread_id: m.thread_id ?? null };
+  if (ev.room_id === owner.owner_desk_room) {
+    if (stopped) return;
+    try {
+      const t = await handleOwnerDesk(deps, ev.room_id, 'owner desk', input);
+      if (t) console.log(`owner desk ${t.decision_id}: ${t.kind}${t.error ? ` (${t.error})` : ''}`);
+    } catch (e) { console.error('owner desk handler crashed:', (e as Error).message); }
+    return;
+  }
+  const rec = recordFor(ev.room_id);
+  if (m.sender_kind && m.sender_kind !== 'user') { rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null }); return; }
+  // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
+  const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
+  rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
+  if (trig && rec) {
+    try {
+      const t = await runBrief(deps, ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, buildRoomContext(rec), input, trig);
+      console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.error ? ` (${t.error})` : ''}`);
+    } catch (e) { console.error('brief crashed:', (e as Error).message); }
+  }
+  enqueue(ev.room_id, input);
 }
 
 async function joinRooms() {
