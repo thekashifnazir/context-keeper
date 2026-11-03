@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Dispatcher: git runs only a file named `pre-commit`, so this runs every check-*.sh
+# in this directory. First failure blocks the commit.
+set -u
+
+dir=$(dirname "$0")
+for check in "$dir"/check-*.sh; do
+  [ -f "$check" ] || continue
+  bash "$check" || exit 1
+done
+exit 0

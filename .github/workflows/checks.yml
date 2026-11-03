@@ -1,0 +1,74 @@
+# Stack-agnostic checks that are correct for every repo from day one — ONE job on
+# purpose: GitHub bills every job up to a whole minute, so two five-second scripts
+# as separate jobs bill two minutes.
+# - attribution: a squash merge's message is composed server-side from the PR title
+#   and body, so no local hook ever sees the one commit that reaches main. Needs
+#   `edited` — the fix for a finding is a description edit. Title/body reach the
+#   script via env, never interpolated into the run line: a PR body is
+#   attacker-controlled text and `${{ }}` inside a shell command is an injection.
+# - gitleaks runs on every push AND pull_request on purpose — a secret must be caught
+#   on the branch, before merge, not only once it reaches main — except `edited`,
+#   which changes no code.
+# The lint/test job is different: enable it EARLY (with squash-only merging the merged
+# main tree is one no branch ever tested — pre-push sees only the branch), but scope it
+# to `on: push: branches: [main]` so it runs ONCE PER MERGE, not once per PR push. Per-PR
+# test CI × PR volume is the cost blowout to avoid; the before-merge test gate is local
+# (pre-push). paths-ignore keeps state/ + changelog.d/ commits from triggering it at all.
+name: checks
+
+on:
+  push:
+  pull_request:
+    # the defaults, plus edited — a description edit is how an attribution finding
+    # gets fixed, and it must re-run the check
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+# gitleaks-action@v2 lists the PR's commits via the GitHub API on pull_request events.
+# Without an explicit grant the default GITHUB_TOKEN is denied ("Resource not accessible
+# by integration", HTTP 403). contents:read covers the checkout + push-event scan.
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No AI attribution in the PR title or body
+        if: github.event_name == 'pull_request'
+        run: bin/check-attribution.sh
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+      - name: gitleaks
+        if: github.event.action != 'edited'
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ARTIFACTS: a build output belongs in a RELEASE, not an artifact. Release assets are
+  # free; artifacts bill as gigabyte-hours against the account's Actions storage allowance
+  # (private repos only — public repos are not metered), and the allowance is a rate, not a
+  # ceiling: storage x time. A 20 MB APK uploaded on every merge exhausts a 0.5 GB monthly
+  # allowance several times over no matter how short the retention, because the upload RATE
+  # dominates. So: publish build outputs with `gh release create`, and if you do upload an
+  # artifact (test reports, screenshots, coverage) always set `retention-days:` explicitly —
+  # stamp.sh lowers the repo default from GitHub's 90 days to 30, but an explicit value
+  # documents the intent and survives a default change.
+  #
+  # Merged-tree check — uncomment once the stack is known. Note the SCOPED trigger:
+  # lint-and-test:
+  #   # runs once per merge to main, not per PR push:
+  #   #   on: { push: { branches: [main], paths-ignore: ['state/**', 'changelog.d/**'] } }
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     # python:
+  #     # - uses: astral-sh/setup-uv@v5
+  #     # - run: uv sync && uv run ruff check . && uv run pytest
+  #     # node:
+  #     # - uses: actions/setup-node@v4
+  #     # - run: npm ci && npm run lint && npm test

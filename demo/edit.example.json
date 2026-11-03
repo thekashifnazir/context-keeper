@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "max_seconds": 60,
+  "background": "#182A22",
+  "shots": [
+    {"id": "input", "source": "raw/ui/capture.mp4", "in": 2, "out": 6, "role": "actual UI", "note": "Establish the action"},
+    {"id": "result", "source": "raw/ui/capture.mp4", "in": 20, "out": 26, "role": "actual UI", "transition": "cut", "note": "Let the result settle before enlarging it",
+      "camera": {"end": [480, 270, 960, 540], "start_at": 1, "end_at": 3.5, "easing": "smooth"}},
+    {"id": "takeaway", "source": "assets/takeaway.png", "kind": "image", "duration": 3, "role": "editorial graphic",
+      "transition": {"type": "fade_color", "seconds": 0.267, "color": "#182A22"}}
+  ],
+  "audio": {"mode": "none"}
+}

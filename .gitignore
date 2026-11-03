@@ -1,0 +1,53 @@
+# Context Keeper: a Node agent with local state. Written at H0, before any npm command.
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+# dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+# local state: processed ids, cursor, open owner items, captured room text
+/state/
+# eval captures (build/eval/<runid>/), take backups, personas.json
+/build/
+captures/
+*.log
+# W5 padded archive (about 100k tokens, generated)
+demo/ledgerly/padding.yaml
+# raw screen recordings
+demo/raw/*
+!demo/raw/README.md
+submission/video/raw/
+# personal and machine files
+.DS_Store
+.claude/settings.local.json
+CLAUDE.local.md
+# spoken-prompt log (build-by-voice.md); copied to the prep repo nightly, never committed
+blog/prompts.jsonl
+
+# secrets — never committed (hackathon-kit)
+# kit build scratch
+demo/build/
+demo/raw/ui/
+demo/references/*
+!demo/references/README.md
+# self-hosted Switch server: fetched Compose file and its secrets (scripts/server-up.sh)
+/server/
+.env.local
+# public hygiene
+# --- secrets: never committed (in place from the first commit) ---
+# .env itself is deliberately NOT listed: app builders like Lovable commit it with
+# publishable values only, and .gitleaks.toml allows nothing else in it.
+# Real keys live in the hosting platform's secret store, or locally in .env.local.
+*.p12
+*.pfx
+# --- build output and dependencies ---
+dist-ssr/
+*.local
+supabase/.temp/
+.vercel/
+# --- personal and machine files ---

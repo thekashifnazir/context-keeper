@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "fonts": [
+    {"family": "Product Body", "file": "assets/body-regular.woff2", "weight": 400, "license": "assets/FONT-LICENSE.txt"},
+    {"family": "Product Body", "file": "assets/body-bold.woff2", "weight": 700, "license": "assets/FONT-LICENSE.txt"},
+    {"family": "Product Display", "file": "assets/display-bold.ttf", "weight": 700, "license": "assets/FONT-LICENSE.txt"}
+  ],
+  "body": "Product Body",
+  "display": "Product Display",
+  "caption": "Product Body",
+  "highlight": "#D8EB8F"
+}

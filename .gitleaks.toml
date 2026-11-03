@@ -1,0 +1,12 @@
+# Default gitleaks rules, plus one narrow allowance: some app builders (e.g. Lovable)
+# commit publishable Supabase values to .env on purpose. Only those exact variable
+# lines are allowed; any other secret in .env (or anywhere) is still caught.
+title = "public hackathon repo"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Publishable Supabase values committed by the app builder"
+regexTarget = "line"
+regexes = ['''^\s*"?VITE_SUPABASE_(URL|PUBLISHABLE_KEY|ANON_KEY|PROJECT_ID)"?\s*=''']

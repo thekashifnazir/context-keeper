@@ -1,0 +1,1 @@
+Optional reference videos or selected prior cuts. Record what each teaches in moves.md; popularity is not evidence that a treatment fits this brief. Media are ignored by git; keep sources and permissions in the project.

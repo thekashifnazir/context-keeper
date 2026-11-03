@@ -1,0 +1,45 @@
+# Draft config for the hackathon-kit (kit-preflight, kit-freeze, kit-posts, kit-video picks).
+event: {name: "Flip the Switch", date: 2026-11-07, timezone: Europe/London, track: "01 Best Business Workflow"}
+project:
+  name: "Context Keeper"
+  tagline: "[NEED Kash's words] An agent in your team chat that answers 'why don't we do X?' with the source"
+  hook: "[NEED] the returner-imposes-without-context problem, with a number"
+  result: "[from facts.md only]"
+  icon: archive
+team: {name: "[as registered]", members: ["Kashif Nazir"]}
+deadlines: {video_freeze: "17:59", code_freeze: "17:59"}   # 30 min before 18:29 UK, the stricter reading
+repo: {must_be_public: true, license: Apache-2.0}          # our code. The vendored switch-agent-runtime keeps Switch's licence: Apache 2.0 limited by a modified Commons Clause (repo LICENSE), stated in NOTICE and the README
+judging:
+  - {criterion: "Use of Switch", weight: 30}
+  - {criterion: "Technical execution", weight: 25}
+  - {criterion: "Creativity and impact", weight: 25}
+  - {criterion: "Presentation and docs", weight: 20}
+readme_sections:   # the final README's headings
+  - The problem
+  - What it does
+  - Where people decide
+  - Use of Switch (30%)
+  - How the channel is set up
+  - Run it (about 15 minutes)
+  - Results (technical execution, 25%)
+  - How it works
+  - Limits and what's next
+  - Notes for the Switch team
+  - Built with
+  - Licence
+video:
+  max_seconds: 180
+  target_seconds: 170
+  path: demo/demo.mp4
+  must_be_in_repo: false    # [NEED] the host; YouTube assumed
+  use_lfs: true
+  mode: screen              # a real signed-in browser, so record_live can't be used (video plan §2)
+  voiceover: own            # Kash dictates (the Wispr story); ElevenLabs is the fallback
+  captions: true
+  caption_band: true
+results: {enabled: false}   # the eval writes facts.md and a report, not per-case ANSWERS/
+social: {required: [x], must_link_repo: true, hashtags: ["#HowISwitch"]}
+submission_fields: [repo_url, team_name, track, members, freeze_commit, video_url, blog_url, wispr_screenshot]  # [NEED] the real form
+preflight:
+  judge_phrases_extra: []
+  judge_scan_exclude: ["testset/**"]   # attack text aimed at the agent; the README says so

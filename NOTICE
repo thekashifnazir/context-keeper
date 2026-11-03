@@ -1,0 +1,8 @@
+Context Keeper
+Copyright 2026 Kashif Nazir. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository includes vendor/switch-agent-runtime, copied unchanged (test files left out) from
+https://github.com/sandbox-quantum/switch, console/packages/switch-agent-runtime, commit 7e18c5e
+(runtime 0.8.0). Copyright (c) 2026 SB Technology, Inc. dba SandboxAQ. That code is licensed under
+the Apache License 2.0 as limited by the "Commons Clause" License Condition v1.0 (as modified);
+see vendor/switch-agent-runtime/LICENSE for the full terms, including the Commons Clause notice.
