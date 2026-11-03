@@ -4,7 +4,7 @@
   "description": "<!-- Skeleton for the public build repo's README. The headings mirror the judging criteria so a judge can score straight down the page.      Required by the submit list: which agents are connected, how the channel is set up, how to run it.      Prose goes in Kash's voice at the end; [NEED] marks gaps. Don't fill numbers until they're measured. -->",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
