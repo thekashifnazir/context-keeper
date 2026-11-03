@@ -1,6 +1,6 @@
 // state: what must survive a restart, keyed by room id: processed message ids, post idempotency
-// keys and the idea list. Written atomically (temp file, then rename), so a crash mid-write
-// leaves the old file intact. JSONL readers skip a torn last line.
+// keys, the idea list, and who joined or was briefed (job C). Written atomically (temp file, then
+// rename), so a crash mid-write leaves the old file intact. JSONL readers skip a torn last line.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -29,7 +29,7 @@ export const postKey = (roomId: string, threadId: string | null, body: string) =
 
 export interface Idea { message_id: string; by: string; text: string; at: string }
 
-interface RoomState { processed: string[]; posted: Record<string, string | null>; ideas: Idea[] }
+interface RoomState { processed: string[]; posted: Record<string, string | null>; ideas: Idea[]; briefed?: string[]; joined?: string[] }
 interface StateFile { rooms: Record<string, RoomState> }
 
 export class AgentState {
@@ -59,4 +59,18 @@ export class AgentState {
     this.save();
   }
   ideas(roomId: string) { return [...this.room(roomId).ideas]; }
+  /** Job C: a room_join seen for this sender (Switch sends it just before their first message). */
+  markJoined(roomId: string, sender: string) {
+    const r = this.room(roomId);
+    r.joined ??= [];
+    if (!r.joined.includes(sender)) { r.joined.push(sender); this.save(); }
+  }
+  hasJoined(roomId: string, sender: string) { return (this.room(roomId).joined ?? []).includes(sender); }
+  /** Job C: briefed once per person per room. */
+  isBriefed(roomId: string, sender: string) { return (this.room(roomId).briefed ?? []).includes(sender); }
+  markBriefed(roomId: string, sender: string) {
+    const r = this.room(roomId);
+    r.briefed ??= [];
+    if (!r.briefed.includes(sender)) { r.briefed.push(sender); this.save(); }
+  }
 }
