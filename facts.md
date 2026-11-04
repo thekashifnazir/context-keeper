@@ -83,3 +83,9 @@ the eval (`npm run eval`), one run at a time, failures included; nobody edits th
 | Eval citations verified, main set, r20261104-1300-3d3d (testset/results/2026-11-04-claude-opus-5-5-6.json) | 55/74 | `npm run eval --` | 15a6d66 | 2026-11-04T13:14:52.801Z |
 | Eval median seconds to a reply, main set, r20261104-1300-3d3d (testset/results/2026-11-04-claude-opus-5-5-6.json) | 33.2 (n=22) | `npm run eval --` | 15a6d66 | 2026-11-04T13:14:52.801Z |
 | Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261104-1300-3d3d (testset/results/2026-11-04-claude-opus-5-5-6.json) | 0.9981 | `npm run eval --` | 15a6d66 | 2026-11-04T13:14:52.801Z |
+| Eval overall, main set, r20261104-1358-797a (testset/results/2026-11-04-claude-opus-5-5-7.json) | 17/24 | `npm run eval --` | 96be554 | 2026-11-04T14:13:26.126Z |
+| Eval job A, main set, r20261104-1358-797a (testset/results/2026-11-04-claude-opus-5-5-7.json) | 12/17 | `npm run eval --` | 96be554 | 2026-11-04T14:13:26.126Z |
+| Eval confident wrong, main set, r20261104-1358-797a (testset/results/2026-11-04-claude-opus-5-5-7.json) | 0 | `npm run eval --` | 96be554 | 2026-11-04T14:13:26.126Z |
+| Eval citations verified, main set, r20261104-1358-797a (testset/results/2026-11-04-claude-opus-5-5-7.json) | 44/58 | `npm run eval --` | 96be554 | 2026-11-04T14:13:26.126Z |
+| Eval median seconds to a reply, main set, r20261104-1358-797a (testset/results/2026-11-04-claude-opus-5-5-7.json) | 34.7 (n=19) | `npm run eval --` | 96be554 | 2026-11-04T14:13:26.126Z |
+| Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261104-1358-797a (testset/results/2026-11-04-claude-opus-5-5-7.json) | 1.0413 | `npm run eval --` | 96be554 | 2026-11-04T14:13:26.126Z |
