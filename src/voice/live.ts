@@ -1,7 +1,12 @@
 // live: the voice half of job C inside the live listener (src/agent/main.ts).
 //   talkClosing()  just before the text brief: refresh the "talk it through" agent's prompt from the
 //                  room's record (refreshTalkAgent) and return the brief's closing line with a
-//                  per-person talk link (talkLink). Null → the brief keeps its usual closing.
+//                  per-person talk link (talkLink). Null → the brief keeps its usual closing. With a
+//                  public base URL (CK_PUBLIC_BASE_URL, the tool server through the tunnel) the link
+//                  is short, <base>/talk/<random id>, kept in the calls file and redirected by the tool
+//                  server (talkTarget) for the watch's 3 hours, then 404; and it's a named Markdown
+//                  link (Switch's Slack adapter turns [label](url) into <url|label>). Kash, 4 Nov
+//                  cloud call: "The link out to the voice shouldn't be a massive URL."
 //   afterBrief()   once the text brief has posted: the ~60 s audio clip (audioBrief) in the same
 //                  thread. Its post goes on the brief's own ck.trace/1 line. If the brief carried a
 //                  talk link, the call is watched for.
@@ -18,10 +23,18 @@
 //                  snapshot). No Claude call; the PATCH is free. Then a finished call by that person →
 //                  transcript summary (talk-summary.ts) posted in the brief's thread through
 //                  sendPublic (post.ts: idempotent, CK_POST_ROOMS guard, owner desk on failure),
-//                  one ck.trace/1 line per call.
+//                  one ck.trace/1 line per call. As soon as the call shows as ended ("processing"),
+//                  and before the summary, one "📞 Rowan just finished a call" line in the same
+//                  thread, once per call. The summary tags the people named in "needs confirming"
+//                  (@handle, from the caller's watch, the owner and peopleOf).
+//   quickTick()    every 10 s, but only while a watched call is in progress or ended and not yet
+//                  summarised: the same call check, so the "finished a call" line lands within
+//                  about 10 s of hanging up (polling; ElevenLabs' post-call webhook fires only once
+//                  the transcript is done, so it's no earlier than "processing", and needs an HMAC
+//                  route of its own).
 // Flags (src/agent/features.ts): CK_AUDIO_BRIEF, CK_TALK_LINK. No ELEVENLABS_API_KEY, no talk agent id
 // in state/voice-ids.json, or any ElevenLabs error → text only, never a crash (fail quiet).
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { atomicWriteJson, type AgentState } from '../agent/state.ts';
@@ -32,7 +45,7 @@ import { writeTrace, type TraceLine, type TracePost } from '../shared/trace.ts';
 import { audioBrief } from './audio-brief.ts';
 import type { Eleven } from './eleven.ts';
 import type { SwitchMedia } from './post-audio.ts';
-import { fetchCall, formatCallSummary, summariseCall } from './talk-summary.ts';
+import { callEndedLine, ENDED, fetchCall, FINISHED, formatCallSummary, listCalls, LIVE, mentionable, summariseCall, type Call, type Person } from './talk-summary.ts';
 import { attachTool, detachTool, probeTunnel, whatsNew, type ToolRequest, type WhatsNewAnswer } from './talk-tool.ts';
 import { IDS_FILE, ideasText, readIds, recordSignature, refreshTalkAgent, snapshotStamp, talkConfigFromEnv, talkLink } from './talk-agent.ts';
 import type { TalkIdea } from './talk-ideas.ts';
@@ -66,6 +79,14 @@ export interface VoiceLiveConfig {
    *  shared header value; probe: does the URL reach our server (default GET /health). Absent = no
    *  tool, refresh-on-change only. */
   tool?: { url: () => string | null; secret: string; probe?: (url: string) => Promise<boolean> };
+  /** Where the tool server is reachable from outside (CK_PUBLIC_BASE_URL, e.g. https://ck.example.com),
+   *  or null: then the brief carries the long ElevenLabs link. main.ts returns null until the server is up. */
+  publicBaseUrl?: () => string | null;
+  /** The talk line's link as a named Markdown link (default) or the bare URL (CK_TALK_LINK_STYLE=bare). */
+  namedLink?: boolean;
+  /** People who can be tagged in a call summary: display name → chat handle (main.ts: the owner and
+   *  everyone heard in the rooms). The caller comes from the watch. */
+  peopleOf?: (roomId: string) => Person[];
   now?: () => Date;
   log?: (s: string) => void;
 }
@@ -73,15 +94,20 @@ export interface VoiceLiveConfig {
 export interface Watch {
   room_id: string; room_name: string; thread_id: string; message_id: string;
   person: string; caller: string; agent_id: string; link_at: string;
+  handle?: string | null; // the caller's chat handle, to tag them in the summary
+  short_id?: string | null; // the brief's short link (links[])
 }
-interface CallsFile { watches: Watch[]; done: string[] }
+/** A short talk link: <base>/talk/<id> → url, while now - at is under the watch's lifetime. */
+export interface ShortLink { id: string; url: string; at: string }
+interface CallsFile { watches: Watch[]; done: string[]; ended?: string[]; links?: ShortLink[] }
 
 export interface BriefHookInput {
   roomId: string; roomName: string; threadId: string; messageId: string;
   person: string; // display name of the joiner or returner
+  handle?: string | null; // their chat handle (Switch's sender_name), to tag them in the summary
   since: string | null; // a returner's last message, ISO
   briefText: string; // the text brief as posted
-  talk: { agentId: string; caller: string; at: string } | null; // what talkClosing() put in the brief
+  talk: { agentId: string; caller: string; at: string; shortId?: string | null } | null; // what talkClosing() put in the brief
 }
 
 export interface VoiceResult { posts: TracePost[]; events: string[]; usage: Usage[] }
@@ -94,9 +120,16 @@ export function roomLabel(roomName: string): string {
   return /riverside/i.test(roomName) ? 'Riverside build night' : 'Ledgerly pilot';
 }
 
-/** The brief's closing line when it carries a talk link. */
-export const talkLine = (link: string) =>
-  `Want to talk it through? A voice catch-up on this room with Context Keeper, up to 10 minutes: ${link}\nI'll post a short summary of the call here afterwards.`;
+export const TALK_LABEL = 'Start a voice catch-up';
+
+/** The brief's closing line when it carries a talk link: one bold-labelled line like the rest of the
+ *  agent's posts. `named`: the link as [label](url), which Switch's Slack adapter posts as <url|label>
+ *  (Mattermost and Discord read Markdown links themselves). */
+export const talkLine = (link: string, named = true) =>
+  `🎧 **Talk it through** · ${named ? `[${TALK_LABEL}](${link})` : link} (up to 10 min). I'll post a summary here after.`;
+
+/** 9 random bytes → 12 URL-safe characters: unguessable, and says nothing about the room or person. */
+export const newShortId = () => randomBytes(9).toString('base64url');
 
 const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) =>
   Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`${what}: timed out after ${ms} ms`)), ms).unref?.())]);
@@ -106,11 +139,16 @@ export class VoiceLive {
   /** What the talk agent's prompt was last built from (in memory: after a restart the first tick refreshes). */
   private lastRefresh: { agentId: string; room: string; sig: string; at: number; live: boolean } | null = null;
   private toolMode: 'unknown' | 'live' | 'off' = 'unknown';
+  /** A watched call is in progress, or ended and not yet summarised: quickTick() polls. */
+  private following = false;
+  private checking = false;
+  private callers = new Map<string, string | null>(); // conversation id → caller_name (detail fetched once)
   private toolUrl: string | null = null;
   constructor(private c: VoiceLiveConfig) {
     if (c.callsFile && existsSync(c.callsFile)) {
       try { this.calls = { ...this.calls, ...(JSON.parse(readFileSync(c.callsFile, 'utf8')) as CallsFile) }; } catch { /* unreadable: start clean */ }
     }
+    this.following = this.calls.watches.length > 0; // after a restart, the first quick tick looks straight away
   }
   private now() { return (this.c.now ?? (() => new Date()))(); }
   private ideas(roomId: string): TalkIdea[] | null {
@@ -120,6 +158,14 @@ export class VoiceLive {
   private log(s: string) { (this.c.log ?? (() => {}))(`[voice] ${s}`); }
   private save() { if (this.c.callsFile) atomicWriteJson(this.c.callsFile, this.calls); }
   get watches(): readonly Watch[] { return this.calls.watches; }
+  private get ttlMs() { return (this.c.watchHours ?? 3) * 3_600_000; }
+
+  /** The full talk URL for a short id while its link is open (the watch's lifetime), else null. */
+  talkTarget(id: string): string | null {
+    const l = (this.calls.links ?? []).find((x) => x.id === id);
+    if (!l || this.now().getTime() - Date.parse(l.at) >= this.ttlMs) return null;
+    return l.url;
+  }
 
   /** The agent id the talk link points at, or null (voice off, or no agent made yet: `npx tsx src/voice/cli.ts agent-setup`). */
   talkAgentId(): string | null {
@@ -146,14 +192,24 @@ export class VoiceLive {
     // room_id and since ride in the link (dynamic variables) for whats_new, whichever mode is on now:
     // a tunnel that comes up later still serves this link.
     const link = talkLink(agentId, caller, at, roomId ? { roomId, since: this.now().toISOString() } : undefined);
-    return { closing: talkLine(link), talk: { agentId, caller, at: this.now().toISOString() } };
+    let base: string | null = null;
+    try { base = this.c.publicBaseUrl?.()?.trim().replace(/\/+$/, '') || null; } catch { base = null; }
+    let shortId: string | null = null;
+    if (base) {
+      shortId = newShortId();
+      const nowMs = this.now().getTime();
+      this.calls.links = [...(this.calls.links ?? []).filter((l) => nowMs - Date.parse(l.at) < this.ttlMs), { id: shortId, url: link, at: this.now().toISOString() }].slice(-200);
+      this.save();
+    }
+    const shown = shortId ? `${base}/talk/${shortId}` : link;
+    return { closing: talkLine(shown, this.c.namedLink ?? true), talk: { agentId, caller, at: this.now().toISOString(), shortId } };
   }
 
   /** After the text brief posted: the audio clip in its thread; start watching for a call. */
   async afterBrief(b: BriefHookInput): Promise<VoiceResult> {
     const out: VoiceResult = { posts: [], events: [], usage: [] };
     if (b.talk) {
-      this.calls.watches.push({ room_id: b.roomId, room_name: b.roomName, thread_id: b.threadId, message_id: b.messageId, person: b.person, caller: b.talk.caller, agent_id: b.talk.agentId, link_at: b.talk.at });
+      this.calls.watches.push({ room_id: b.roomId, room_name: b.roomName, thread_id: b.threadId, message_id: b.messageId, person: b.person, caller: b.talk.caller, agent_id: b.talk.agentId, link_at: b.talk.at, handle: b.handle ?? null, short_id: b.talk.shortId ?? null });
       this.save();
       out.events.push(`talk link for ${b.talk.caller}`);
     }
@@ -187,27 +243,91 @@ export class VoiceLive {
    *  nothing (no network) while no link is open. */
   async tick(): Promise<TraceLine[]> {
     await this.syncTool();
-    const now = this.now().getTime();
-    const ttl = (this.c.watchHours ?? 3) * 3_600_000;
-    const open = this.calls.watches.filter((w) => now - Date.parse(w.link_at) < ttl);
-    if (open.length !== this.calls.watches.length) { this.calls.watches = open; this.save(); }
-    if (!open.length || !this.c.el) return [];
+    const open = this.openWatches();
+    if (!open.length || !this.c.el) { this.following = false; return []; }
     await this.refreshOpen(open);
-    const lines: TraceLine[] = [];
-    for (const agentId of [...new Set(open.map((w) => w.agent_id))]) {
-      let call;
-      try { call = await fetchCall(this.c.el, agentId); } catch (e) { this.log(`call check failed: ${(e as Error).message}`); continue; }
-      if (!call || this.calls.done.includes(call.id)) continue;
-      const startMs = call.startUnix * 1000;
-      const w = open.filter((x) => x.agent_id === agentId && startMs >= Date.parse(x.link_at) - 60_000
-        && (!call.callerName || call.callerName.toLowerCase() === x.caller.toLowerCase()))
-        .sort((a, b) => b.link_at.localeCompare(a.link_at))[0];
-      if (!w) continue;
-      // One attempt per call: marked before the model call, so an error never becomes a retry storm.
-      this.calls.done = [...this.calls.done, call.id].slice(-500);
-      this.calls.watches = this.calls.watches.filter((x) => x !== w);
+    return this.checkCalls(open);
+  }
+
+  /** Every ~10 s from main.ts: a call check only while a watched call is in progress or ended and not
+   *  yet summarised (seen by the last check), so "just finished a call" lands soon after hanging up.
+   *  Otherwise no network. */
+  async quickTick(): Promise<TraceLine[]> {
+    if (!this.following || !this.c.el) return [];
+    const open = this.openWatches();
+    if (!open.length) { this.following = false; return []; }
+    return this.checkCalls(open);
+  }
+
+  /** Watches still inside their lifetime (expired ones and their short links are dropped). */
+  private openWatches(): Watch[] {
+    const now = this.now().getTime();
+    const open = this.calls.watches.filter((w) => now - Date.parse(w.link_at) < this.ttlMs);
+    const links = (this.calls.links ?? []).filter((l) => now - Date.parse(l.at) < this.ttlMs);
+    if (open.length !== this.calls.watches.length || links.length !== (this.calls.links ?? []).length) {
+      this.calls.watches = open;
+      if (this.calls.links) this.calls.links = links;
       this.save();
-      lines.push(await this.postSummary(w, call));
+    }
+    return open;
+  }
+
+  /** The newest open watch a call belongs to: same agent, started after its link (a minute's slack),
+   *  and the caller's name when the call has one. */
+  private watchFor(open: Watch[], agentId: string, startUnix: number, callerName: string | null): Watch | undefined {
+    const startMs = startUnix * 1000;
+    return open.filter((x) => x.agent_id === agentId && startMs >= Date.parse(x.link_at) - 60_000
+      && (!callerName || callerName.toLowerCase() === x.caller.toLowerCase()))
+      .sort((a, b) => b.link_at.localeCompare(a.link_at))[0];
+  }
+
+  /** One pass over each watched agent's latest calls: a call that has ended gets the "just finished"
+   *  line (once per call), and a finished one its summary (once per call, after that line). */
+  private async checkCalls(open: Watch[]): Promise<TraceLine[]> {
+    if (this.checking || !this.c.el) return [];
+    this.checking = true;
+    const lines: TraceLine[] = [];
+    let following = false;
+    try {
+      for (const agentId of [...new Set(open.map((w) => w.agent_id))]) {
+        let list;
+        try { list = await listCalls(this.c.el, agentId); } catch (e) { this.log(`call check failed: ${(e as Error).message}`); following = true; continue; }
+        const earliest = Math.min(...open.filter((w) => w.agent_id === agentId).map((w) => Date.parse(w.link_at))) - 60_000;
+        // Oldest first, so two calls in one pass are posted in the order they happened.
+        for (const c of [...list].reverse()) {
+          if (c.startUnix * 1000 < earliest || this.calls.done.includes(c.id)) continue;
+          if (LIVE.has(c.status)) { if (this.watchFor(open, agentId, c.startUnix, null)) following = true; continue; }
+          if (!ENDED.has(c.status)) continue;
+          // Who called: from the call itself (fetched once per call; a call whose detail can't be read
+          // yet is matched on time alone).
+          let call: Call | null = null;
+          const known = this.callers.has(c.id);
+          if (known && !this.watchFor(open, agentId, c.startUnix, this.callers.get(c.id) ?? null)) continue; // someone else's call
+          if (FINISHED.has(c.status) || !known) {
+            try {
+              call = await fetchCall(this.c.el, agentId, c.id);
+              this.callers.set(c.id, call?.callerName ?? null);
+            } catch (e) { this.log(`call ${c.id}: details not readable yet (${(e as Error).message})`); }
+          }
+          const w = this.watchFor(open, agentId, c.startUnix, this.callers.get(c.id) ?? null);
+          if (!w) continue;
+          if (!(this.calls.ended ?? []).includes(c.id)) {
+            this.calls.ended = [...(this.calls.ended ?? []), c.id].slice(-500);
+            this.save();
+            lines.push(await this.postEnded(w, c.id));
+          }
+          if (!FINISHED.has(c.status) || !call) { following = true; continue; }
+          // One attempt per call: marked before the model call, so an error never becomes a retry storm.
+          this.calls.done = [...this.calls.done, c.id].slice(-500);
+          this.calls.watches = this.calls.watches.filter((x) => x !== w);
+          open = open.filter((x) => x !== w);
+          this.save();
+          lines.push(await this.postSummary(w, call));
+        }
+      }
+    } finally {
+      this.checking = false;
+      this.following = following;
     }
     return lines;
   }
@@ -287,20 +407,30 @@ export class VoiceLive {
     return whatsNew(record, roomId ? this.ideas(roomId) : null, sinceMs, nowMs);
   }
 
-  private async postSummary(w: Watch, call: NonNullable<Awaited<ReturnType<typeof fetchCall>>>): Promise<TraceLine> {
+  /** "📞 Rowan just finished a call with Context Keeper" in the brief's thread, its own trace line. */
+  private async postEnded(w: Watch, callId: string): Promise<TraceLine> {
     const events: string[] = [];
     let posts: TracePost[] = [];
     let error: string | null = null;
-    let usage: Usage | null = null;
     try {
-      const s = await summariseCall(this.c.claude, call, w.caller);
-      usage = s.usage;
-      const r = await sendPublic({ poster: this.c.poster, state: this.c.state }, w.room_id, w.room_name, w.thread_id, formatCallSummary(w.caller, call, s.summary), events);
+      const r = await sendPublic({ poster: this.c.poster, state: this.c.state }, w.room_id, w.room_name, w.thread_id, callEndedLine(w.caller), events);
       posts = r.posts;
       error = r.error;
-    } catch (e) {
-      error = `call_summary_failed: ${(e as Error).message}`;
-    }
+    } catch (e) { error = `call_ended_failed: ${(e as Error).message}`; }
+    this.log(`call ${callId} by ${w.caller} ended: ${posts.length ? 'said so in the thread' : 'not posted'}${error ? ` (${error})` : ''}`);
+    return this.traceLine(w, posts, null, [error, `talk_call_ended ${callId}`, ...events]);
+  }
+
+  /** Who can be tagged in this watch's summary: the caller (their handle from the brief), then
+   *  peopleOf (the owner, everyone heard in the room). Only real handles. */
+  private people(w: Watch): Person[] {
+    const out: Person[] = [];
+    if (mentionable(w.handle)) out.push({ name: w.person, handle: w.handle }, { name: w.caller, handle: w.handle });
+    try { out.push(...(this.c.peopleOf?.(w.room_id) ?? [])); } catch { /* no tags beyond the caller */ }
+    return out.filter((p) => mentionable(p.handle));
+  }
+
+  private traceLine(w: Watch, posts: TracePost[], usage: Usage | null, notes: (string | null)[]): TraceLine {
     const line: TraceLine = {
       schema: 'ck.trace/1', ts: this.now().toISOString(), decision_id: randomUUID(), room_id: w.room_id, room_name: w.room_name,
       kind: posts.some((p) => p.route !== 'owner_private') ? 'reply' : posts.length ? 'owner_note' : 'silence',
@@ -308,10 +438,27 @@ export class VoiceLive {
       items: [{ message_id: w.message_id, job: 'none', verdict: null, restriction: null, clashes_with: null, sources: [], decision_record: null, brief_for: w.person }],
       posts,
       model: usage ? { id: usage.model, calls: 1, input_tokens: usage.input, cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite, output_tokens: usage.output, latency_ms: usage.ms } : null,
-      error: [error, `talk_call ${call.id} (${Math.round(call.durationS)} s)`, ...events].filter(Boolean).join('; '),
+      error: notes.filter(Boolean).join('; '),
     };
     writeTrace(line, this.c.traceFile);
-    this.log(`call ${call.id} by ${w.caller}: summary ${posts.length ? 'posted' : 'not posted'}${error ? ` (${error})` : ''}`);
     return line;
+  }
+
+  private async postSummary(w: Watch, call: Call): Promise<TraceLine> {
+    const events: string[] = [];
+    let posts: TracePost[] = [];
+    let error: string | null = null;
+    let usage: Usage | null = null;
+    try {
+      const s = await summariseCall(this.c.claude, call, w.caller);
+      usage = s.usage;
+      const r = await sendPublic({ poster: this.c.poster, state: this.c.state }, w.room_id, w.room_name, w.thread_id, formatCallSummary(w.caller, call, s.summary, this.people(w)), events);
+      posts = r.posts;
+      error = r.error;
+    } catch (e) {
+      error = `call_summary_failed: ${(e as Error).message}`;
+    }
+    this.log(`call ${call.id} by ${w.caller}: summary ${posts.length ? 'posted' : 'not posted'}${error ? ` (${error})` : ''}`);
+    return this.traceLine(w, posts, usage, [error, `talk_call ${call.id} (${Math.round(call.durationS)} s)`, ...events]);
   }
 }

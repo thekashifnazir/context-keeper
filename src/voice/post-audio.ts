@@ -40,9 +40,10 @@ export function realSwitchMedia(opts: { endpoint: string; agentId: string; token
 
 export const postPrefixes = () => (process.env.CK_POST_ROOMS ?? 'ck-smoke-,ck-eval-').split(',').map((s) => s.trim()).filter(Boolean);
 
-/** Caption for the clip: the D3-3 wording, with who it's for and its length. */
+/** Caption for the clip: the D3-3 wording, with who it's for and its length. No "Context Keeper ·" in
+ *  front: Switch's media route already posts it as "context-keeper: …" (4 Nov cloud call shot). */
 export const audioCaption = (person: string, seconds: number) =>
-  `Context Keeper · 60-second audio brief for ${person} (${Math.round(seconds)} s). The written brief above is the record.`;
+  `🎧 60-second audio brief for ${person} (${Math.round(seconds)} s). The written brief above is the record.`;
 
 /** A safe file name, e.g. "catch-up-rowan.mp3" (Slack needs the .mp3 extension to play it). */
 export const audioFilename = (person: string) => `catch-up-${person.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'brief'}.mp3`;

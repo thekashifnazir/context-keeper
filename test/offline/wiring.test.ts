@@ -415,10 +415,12 @@ describe('voice wired: talk link in the brief, audio clip on its trace line, cal
 
     const text = s.poster.pub()[0];
     expect(text.thread).toBe('a1');
-    const link = new URL(text.body.match(/https:\/\/elevenlabs\.io\/\S+/)![0]);
+    // No public base URL: the long ElevenLabs link, but as a named link, so Slack shows the label
+    const named = text.body.match(/\[Start a voice catch-up\]\((https:\/\/elevenlabs\.io\/[^\s)]+)\)/)!;
+    const link = new URL(named[1]);
     expect(link.searchParams.get('agent_id')).toBe('agent_test');
     expect(link.searchParams.get('var_caller_name')).toBe('Alex');
-    expect(text.body).toMatch(/Want to talk it through\?/);
+    expect(text.body.split('\n').at(-1)).toMatch(/^🎧 \*\*Talk it through\*\* · \[Start a voice catch-up\]\(https:\/\/elevenlabs\.io\/[^\s)]+\) \(up to 10 min\)\. I'll post a summary here after\.$/);
     expect(text.body).not.toMatch(/will be offered here soon/);
 
     expect(s.media.uploads).toHaveLength(1);
@@ -442,9 +444,12 @@ describe('voice wired: talk link in the brief, audio clip on its trace line, cal
     await brief(v, deps);
     expect(await v.tick()).toEqual([]); // no call yet
     s.el.callStart = clock.getTime() / 1000 + 120;
-    const [line] = await v.tick();
+    const [ended, line] = await v.tick();
     claude.done();
-    const post = s.poster.pub().at(-1)!;
+    // a finished call first seen as done: the "just finished" line still goes first, then the summary
+    const [endedPost, post] = s.poster.pub().slice(-2);
+    expect(endedPost).toMatchObject({ thread: 'a1', body: "📞 **Alex just finished a call with Context Keeper** · I'll post the summary here in a minute or two." });
+    expect(ended.error).toMatch(/talk_call_ended conv_1/);
     expect(post.thread).toBe('a1');
     expect(post.body).toMatch(/Alex talked it through \(2 min call\)/);
     expect(post.body).toMatch(/The pilot size\./);
@@ -452,6 +457,7 @@ describe('voice wired: talk link in the brief, audio clip on its trace line, cal
     expect(line.items[0]).toMatchObject({ message_id: 'a1', job: 'none', brief_for: 'Alex' });
     expect(line.error).toMatch(/talk_call conv_1/);
     expect(await v.tick()).toEqual([]); // summarised once; the watch is closed
+    expect(await v.quickTick()).toEqual([]);
     expect(s.media.uploads).toHaveLength(0); // CK_AUDIO_BRIEF off: no clip
   });
 

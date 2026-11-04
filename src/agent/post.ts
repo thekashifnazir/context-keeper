@@ -347,7 +347,15 @@ export async function postBrief(
     events.push('brief_gate_blocked: no line survived the gate and the reviewer');
     return { posts: [], sources: [], events, usage, error: null, kept: 0 };
   }
-  const body = [draft.opening, ...kept.slice(0, 5).map((k) => `• ${k.line.text} (${k.ref})`), draft.closing].filter(Boolean).join('\n');
+  // Each source at the end of its line, compact: the record ref ("led-015", "pilot-plan.md §2"), or for a
+  // message from the room's own history (a raw sw_ id) who said it and when, as job A's lines do.
+  const refLabel = (k: Kept) => {
+    if (!isRawMessageId(k.ref)) return k.ref;
+    const b = blocks.get(k.line.block) ?? ctx.table.flat().find((x) => x.ref === k.ref);
+    const day = fmtDay(b?.at ?? null);
+    return b?.author ? `${b.author}${day ? `, ${day}` : ''}` : `an earlier message${day ? `, ${day}` : ''}`;
+  };
+  const body = [draft.opening, ...kept.slice(0, 5).map((k) => `• ${k.line.text.trim()} (${refLabel(k)})`), draft.closing].filter(Boolean).join('\n');
   const { posts, error } = await sendPublic(deps, draft.roomId, draft.roomName, draft.threadId, body, events);
   return { posts, sources: kept.slice(0, 5).map((k) => ({ ref: k.ref, quote: k.quote })), events, usage, error, kept: Math.min(kept.length, 5) };
 }

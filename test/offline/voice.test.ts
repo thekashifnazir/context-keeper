@@ -117,7 +117,9 @@ describe('audioBrief', () => {
     expect(r.ttsCharacters).toBe(450);
     expect(media.uploads).toHaveLength(1);
     expect(media.uploads[0]).toMatchObject({ roomId: '!r1', filename: 'catch-up-rowan.mp3', threadId: '$brief' });
-    expect(media.uploads[0].caption).toMatch(/^Context Keeper · 60-second audio brief for Rowan \(60 s\)/);
+    // Switch's media route posts it as "context-keeper: …", so the caption doesn't name the agent again
+    expect(media.uploads[0].caption).toMatch(/^🎧 60-second audio brief for Rowan \(60 s\)/);
+    expect(media.uploads[0].caption).not.toMatch(/Context Keeper/);
     expect(r.post).toMatchObject({ route: 'public_thread', event_id: 'ev1', room_name: 'ck-smoke-voice-1' });
   });
 

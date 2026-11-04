@@ -40,7 +40,13 @@ export function briefTrigger(deps: Pick<Deps, 'state' | 'ownerSender' | 'selfSen
   return null;
 }
 
-export const TALK_IT_THROUGH = 'Want to talk it through? A short voice catch-up will be offered here soon.';
+export const TALK_IT_THROUGH = '🎧 **Talk it through** · a short voice catch-up will be offered here soon.';
+
+/** The brief's first line, bold-labelled like the agent's other posts (Kash, 4 Nov cloud call: "that
+ *  whole text block is very difficult to read"). */
+export const briefOpening = (kind: BriefTrigger['kind'], name: string) => kind === 'returner'
+  ? `👋 **Welcome back, ${name}** · here's what changed while you were away`
+  : `👋 **Welcome, ${name}** · a quick catch-up on where things stand`;
 
 /** Optional extras from the live listener (src/voice/live.ts): a closing line with the talk link, and a
  *  step run once the text brief has posted (the audio clip), whose posts go on this brief's trace line. */
@@ -60,7 +66,7 @@ export async function runBrief(deps: Deps, roomId: string, roomName: string, ctx
   try {
     const { lines, usage } = await callBrief(deps.claude, deps.cfg, deps.system, ctx, { name: input.sender_name, kind: trigger.kind, since: trigger.since, first_message: input.body });
     usages.push(usage);
-    const opening = trigger.kind === 'returner' ? `Welcome back, ${name}. Here's what changed while you were away:` : `Welcome, ${name}. A quick catch-up on where things stand:`;
+    const opening = briefOpening(trigger.kind, name);
     const r = await postBrief(deps, ctx, { roomId, roomName, threadId, opening, closing: opts.closing ?? TALK_IT_THROUGH, lines });
     if (r.usage) usages.push(r.usage);
     posts = r.posts;

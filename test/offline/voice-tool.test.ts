@@ -167,7 +167,7 @@ describe('VoiceLive: the live tool when the tunnel answers, refresh-on-change wh
     expect(s.v.live).toBe(true);
     expect(s.el.calls.find((c) => c.body?.conversation_config?.agent?.prompt?.tool_ids)?.body.conversation_config.agent.prompt.tool_ids).toEqual(['tool_1']);
     const t = await post(s.v);
-    const link = new URL(t.closing.match(/https:\/\/elevenlabs\.io\/\S+/)![0]);
+    const link = new URL(t.closing.match(/https:\/\/elevenlabs\.io\/[^\s)]+/)![0]);
     expect(link.searchParams.get('var_room_id')).toBe('room1');
     expect(link.searchParams.get('var_since')).toBe('2026-11-04T12:05:00.000Z');
     const p = s.patches()[0].body.conversation_config.agent.prompt.prompt;
