@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioBrief, resetAudio } from '../../src/voice/audio-brief.ts';
 import { ElevenError, type Eleven, type ElevenResponse } from '../../src/voice/eleven.ts';
 import { audioFilename, postAudio, realSwitchMedia, type MediaUpload, type SwitchMedia } from '../../src/voice/post-audio.ts';
-import { SPOKEN_SYSTEM, spokenClean, wordCount, writeSpokenScript } from '../../src/voice/script.ts';
+import { SPOKEN_SYSTEM, spokenClean, userPrompt, wordCount, writeSpokenScript } from '../../src/voice/script.ts';
 import { FINLEY, mp3Duration } from '../../src/voice/tts.ts';
 import { FakeClaude, message } from '../fake-claude.ts';
 
@@ -52,6 +52,14 @@ describe('spoken script clean-up', () => {
   });
   it('counts words, not punctuation', () => {
     expect(wordCount('Hi Rowan — welcome back, so, three things.')).toBe(7);
+  });
+});
+
+describe('the script writer gets source names, not link URLs', () => {
+  it('a Markdown source link in the brief is reduced to its name', () => {
+    const p = userPrompt({ person: 'Rowan', briefText: '• **Open** · Nobody has the template. — [Ledgerly pilot plan › Open asks](https://github.com/o/r/blob/main/demo/ledgerly/docs/pilot-plan.md#4-open-asks-help-wanted) (30 Oct)' });
+    expect(p).toContain('— Ledgerly pilot plan › Open asks (30 Oct)');
+    expect(p).not.toContain('https://');
   });
 });
 
