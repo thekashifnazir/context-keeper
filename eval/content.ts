@@ -1,6 +1,9 @@
 // content: the test set and the demo content the scorer checks citations against.
 // A source resolves when it's a message id in the room's chat-history.yaml, or "<doc>.md §<n>"
 // for a doc in demo/<room>/docs/ with a "## §<n>" heading. Section text runs to the next "## ".
+// The agent's own Decision log is written during the run, so it isn't in demo/: the harness reads
+// it back from Switch when the run ends (<run dir>/switch-docs/<room>/decision-log.md) and its
+// sections resolve too ("decision-log.md §1"), checked against what the room actually held.
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -66,7 +69,7 @@ export function docSections(doc: string, text: string): Map<string, string> {
   return out;
 }
 
-export function loadRoomContent(root: string, room: string): RoomContent {
+export function loadRoomContent(root: string, room: string, runDocsDir?: string): RoomContent {
   const dir = join(root, 'demo', ROOM_DIRS[room] ?? room);
   const hist = loadYaml<{ messages: { id: string; text: string }[] }>(join(dir, 'chat-history.yaml'));
   const messages = new Map(hist.messages.map((m) => [m.id, m.text]));
@@ -77,17 +80,25 @@ export function loadRoomContent(root: string, room: string): RoomContent {
       for (const [k, v] of docSections(f, readFileSync(join(docs, f), 'utf8'))) sections.set(k, v);
     }
   }
+  // Documents the agent wrote into the room during the run (captured from Switch): never override a seeded one.
+  if (runDocsDir && existsSync(runDocsDir)) {
+    for (const f of readdirSync(runDocsDir).filter((f) => f.endsWith('.md')).sort()) {
+      for (const [k, v] of docSections(f, readFileSync(join(runDocsDir, f), 'utf8'))) if (!sections.has(k)) sections.set(k, v);
+    }
+  }
   return { messages, sections };
 }
 
 /** Hash of every file the scorer reads for a room, so a result says which content it was scored against. */
-export function contentSha256(root: string, rooms: string[]): string {
+export function contentSha256(root: string, rooms: string[], runDocsDir?: (room: string) => string): string {
   const h = createHash('sha256');
   for (const room of [...rooms].sort()) {
     const dir = join(root, 'demo', ROOM_DIRS[room] ?? room);
     h.update(readFileSync(join(dir, 'chat-history.yaml')));
     const docs = join(dir, 'docs');
     if (existsSync(docs)) for (const f of readdirSync(docs).filter((f) => f.endsWith('.md')).sort()) h.update(f).update(readFileSync(join(docs, f)));
+    const run = runDocsDir?.(room);
+    if (run && existsSync(run)) for (const f of readdirSync(run).filter((f) => f.endsWith('.md')).sort()) h.update(`run:${f}`).update(readFileSync(join(run, f)));
   }
   return h.digest('hex');
 }
