@@ -107,5 +107,10 @@ export function readReport(body: string): { outcome: 'done' | 'not_done'; links:
   const summary = body.replace(/^\s*(not )?done\s*(I\d+)?\s*[:—–-]?\s*/i, '').trim();
   return { outcome: notDone ? 'not_done' : 'done', links, summary };
 }
-export const looksFinal = (body: string) => /^\s*(not )?done\b/i.test(body) || /https?:\/\/github\.com\//.test(body);
+/** A report starts "Done"/"Not done" (after any @-mentions) or carries a GitHub link. Anything else from
+ *  Claude Code, threaded or top-level (its "Hi! Mention @claude-code" greeting, "On it: …"), is not one. */
+export const looksFinal = (body: string) => {
+  const b = body.replace(/^\s*(@\S+\s*)+/, '');
+  return /^\s*(not )?done\b/i.test(b) || /https?:\/\/github\.com\//.test(b);
+};
 export const refIn = (body: string) => body.match(/\b(I\d+)\b/)?.[1] ?? null;

@@ -332,7 +332,8 @@ export class HandoffChain {
       this.trace('build_room_chat', null, room, [msg], [], null); // people talking in the work room: not ours
       return true;
     }
-    if (isProgress(msg.body) || (msg.thread_id && !looksFinal(msg.body))) {
+    // Live 4 Nov: Claude Code's top-level greeting was taken as the report. Only a final-looking post counts.
+    if (isProgress(msg.body) || !looksFinal(msg.body)) {
       this.trace('progress', null, room, [msg], []);
       return true;
     }

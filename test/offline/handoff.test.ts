@@ -222,6 +222,21 @@ describe('job E: the full chain', () => {
     expect(sw.created).toHaveLength(1);
   });
 
+  it("Claude Code's greeting and \"On it\" lines are not the report (live run, 4 Nov)", async () => {
+    const e = chain();
+    await e.noteIdea(idea, sources);
+    await e.onMessage(desk('approve I1'));
+    for (const body of ['Hi! Mention @claude-code to get my attention.', '@context-keeper Starting a session to handle this — one moment.',
+      'On it: I1 (dark mode). The repo has no dashboard code yet, so this will be an issue rather than a PR.']) {
+      expect(await e.onMessage(cc.say(body))).toBe(true);
+      expect(e.store.byRef('I1')!.status).toBe('handed_off');
+    }
+    await e.onMessage(cc.say('@context-keeper Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/2'));
+    expect(e.store.byRef('I1')!.status).toBe('awaiting_signoff');
+    expect(sw.posts.at(-1)!.body).toContain('issues/2');
+    expect(sw.posts.at(-1)!.body).not.toContain('Mention');
+  });
+
   it('timeout: says so in the original thread; a late report still asks for sign-off', async () => {
     const e = chain();
     await e.noteIdea(idea, sources);
