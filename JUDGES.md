@@ -5,7 +5,7 @@ The [README](README.md) is the short version. This page has a five-minute tour, 
 ## Five-minute tour
 
 1. **Try it (1 min).** Join the [Discord demo](https://discord.gg/ygPnp7bj5) and ask "Why don't we run the pilot with five agencies instead of three?". The reply quotes the decision, who made it and when. Small talk gets no reply, on purpose. The Discord room is a simplified demo: builds and sign-offs run in Slack ([what is switched off](#try-it)).
-2. **Watch the full version (3 min).** The demo video ([NEED demo video URL]) shows the Slack team room: a cited answer, a catch-up brief with a voice call, and idea I4 going from `approve I4` to Claude Code's GitHub issue to Rowan's sign-off.
+2. **Watch the full version (3 min).** The demo video (https://youtu.be/7x0Uy3UgCZQ) shows the Slack team room: a cited answer, a catch-up brief with a voice call, and idea I4 going from `approve I4` to Claude Code's GitHub issue to Rowan's sign-off.
 3. **Check it is running (30 s).** The [live status page](https://ck.kashifnazir.com/status) shows today's replies and silences, where each idea is, and spend against the cap.
 4. **Check the numbers (30 s).** [docs/results.md](docs/results.md) and [facts.md](facts.md): 23/24 on the latest full run, 0 confident wrong in every logged run.
 5. **Known limits.** [Limits and what's next](#limits-and-whats-next), below.
