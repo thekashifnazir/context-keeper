@@ -1,6 +1,8 @@
 // main: the live Context Keeper (jobs A, B, C text, D). Listens to every room it's in (untagged), batches each
 // person's messages until they go quiet (CK_BURST_GAP_S, 90 s hard cap), runs the pipeline, and
-// saves its stream position so a restart resumes instead of dropping what came in meanwhile.
+// saves its stream position so a restart resumes instead of dropping what came in meanwhile. The
+// unsent burst queue and the room's live messages are saved as well (CK_STATE_DIR/agent-buffer.json,
+// live/<room>.jsonl), so a restart neither loses a queued message nor forgets what was said earlier.
 //   npx tsx src/agent/main.ts
 // Safety while other lanes are live: it only posts into rooms whose name starts with one of
 // CK_POST_ROOMS (default "ck-smoke-,ck-eval-"); everywhere else it decides, traces and logs the
@@ -20,7 +22,7 @@
 //   CK_AUDIO_BRIEF  job C's audio clip under the text brief; CK_TALK_LINK its "talk it through" link and
 //                   the call summary afterwards (src/voice/live.ts; need ELEVENLABS_API_KEY)
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { SwitchEventStream, type AgentBridgeEvent, type MessagePayload } from '../../vendor/switch-agent-runtime/src/index.ts';
 import type { RoomJoinPayload } from '../../vendor/switch-agent-runtime/src/types.ts';
 import { displayName } from '../names.ts';
@@ -36,8 +38,8 @@ import { modelConfigFromEnv, realClaude } from './model.ts';
 import { decideWithRetry, type Deps, type Input } from './pipeline.ts';
 import type { Poster } from './post.ts';
 import { systemPrompt } from './prompt.ts';
-import { loadDemoRoom, type RoomRecord } from './room.ts';
-import { AgentState, atomicWriteJson } from './state.ts';
+import { loadDemoRoom, type ArchiveMessage, type RoomRecord } from './room.ts';
+import { AgentState, atomicWriteJson, readJsonl } from './state.ts';
 import { realEleven } from '../voice/eleven.ts';
 import { VoiceLive } from '../voice/live.ts';
 import { realSwitchMedia } from '../voice/post-audio.ts';
@@ -162,21 +164,39 @@ function recordFor(roomId: string): RoomRecord | null {
     || (seeded === 'ledgerly' ? 'ledgerly-pilot' : seeded === 'riverside' ? 'riverside-build-night' : '');
   if (!demo) return null;
   const rec = { ...loadDemoRoom('.', demo), name };
+  // Live messages from before a restart (state/live/<room>.jsonl), so the record doesn't lose them.
+  const live = existsSync(liveFile(roomId)) ? readJsonl<ArchiveMessage>(readFileSync(liveFile(roomId), 'utf8')) : [];
+  for (const m of live) if (!rec.messages.some((x) => x.id === m.id)) rec.messages.push(m);
   records.set(roomId, rec);
   return rec;
 }
+const liveFile = (roomId: string) => `${SD}/live/${roomId}.jsonl`;
+function remember(roomId: string, rec: RoomRecord | null, m: ArchiveMessage) {
+  if (!rec || rec.messages.some((x) => x.id === m.id)) return;
+  rec.messages.push(m);
+  mkdirSync(`${SD}/live`, { recursive: true });
+  appendFileSync(liveFile(roomId), JSON.stringify(m) + '\n');
+}
 
 // Per-author quiet gap: one decision per person's burst, never per thread.
+// The stream position moves past a message as soon as it's queued, so the queue is saved too
+// (state/agent-buffer.json): a restart inside the quiet gap re-queues it instead of dropping it.
 const buffers = new Map<string, { inputs: Input[]; timer: NodeJS.Timeout; first: number }>();
+const bufFile = `${SD}/agent-buffer.json`;
+// Read now, not once the rooms are joined: catch-up events arrive first and would overwrite the file.
+let carried = readJson<{ room: string; inputs: Input[] }[]>(bufFile, []);
+const saveBuffers = () => atomicWriteJson(bufFile, [...carried, ...[...buffers.entries()].map(([k, b]) => ({ room: k.slice(0, k.indexOf('|')), inputs: b.inputs }))]);
 function enqueue(roomId: string, input: Input) {
   const key = `${roomId}|${input.sender}`;
   const b = buffers.get(key);
+  if (b?.inputs.some((i) => i.message_id === input.message_id)) return;
   if (b) clearTimeout(b.timer);
   const entry = b ?? { inputs: [], timer: undefined as unknown as NodeJS.Timeout, first: Date.now() };
   entry.inputs.push(input);
   const wait = Math.max(0, Math.min(gapMs, entry.first + CAP_MS - Date.now()));
-  entry.timer = setTimeout(() => { buffers.delete(key); void run(roomId, entry.inputs); }, wait);
+  entry.timer = setTimeout(() => { buffers.delete(key); saveBuffers(); void run(roomId, entry.inputs); }, wait);
   buffers.set(key, entry);
+  saveBuffers();
 }
 
 async function run(roomId: string, inputs: Input[]) {
@@ -210,6 +230,7 @@ async function onEvent(ev: AgentBridgeEvent) {
   const m = ev.payload as MessagePayload;
   if (ourEvents.has(m.message_id)) { selfSenders.add(m.sender); return; } // learn our own sender id from our own post
   if (selfSenders.has(m.sender)) return;
+  if (deps.state.isProcessed(ev.room_id, m.message_id)) return; // a resumed stream can redeliver the last message
   const who = await displayName(m.sender, m.sender_name);
   const at = new Date(m.timestamp).toISOString();
   const input: Input = { message_id: m.message_id, sender: m.sender, sender_name: who, body: m.body, received_at: at, thread_id: m.thread_id ?? null };
@@ -231,10 +252,10 @@ async function onEvent(ev: AgentBridgeEvent) {
   }
   const rec = recordFor(ev.room_id);
   // Another agent's post (Claude Code's, say) is room context, never a proposal (PR11).
-  if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null }); return; }
+  if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { remember(ev.room_id, rec, { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null }); return; }
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
   const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
-  rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
+  remember(ev.room_id, rec, { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
   if (trig && rec) {
     const roomName = roomNames.get(ev.room_id) ?? ev.room_id;
     // The text brief goes first and job A waits for it; the audio clip follows in the background, and
@@ -269,7 +290,22 @@ async function joinRooms() {
     roomNames.set(r.room_id, r.name);
     await op(r.room_id, 'connect_to_room', { room_id: r.room_id });
     console.log(`listening in ${r.name}${allowed(r.room_id) ? ' (posting on)' : ' (dry-run)'}`);
+    await joinEventsOn(r.room_id, r.name);
   }
+}
+
+// No room_join events (job C's trigger) until the agent asks, even in a room it's already in; the
+// seed and the eval ask at create time, this covers rooms that someone else made.
+let myName: string | null = null;
+async function joinEventsOn(roomId: string, name: string) {
+  try {
+    myName ??= ((r) => r?.result?.you?.name ?? r?.you?.name ?? null)(await op(null, 'get_my_context', {}));
+    if (!myName) return;
+    const d = await op(null, 'get_room_detail', { room_id: roomId });
+    if (((d?.result ?? d)?.join_event_listeners ?? []).includes(myName)) return;
+    await op(roomId, 'update_room', { room_id: roomId, join_event_listeners: { [myName]: true } }); // a map here, a list in create_room
+    console.log(`join events on in ${name}`);
+  } catch (e) { console.warn(`join events in ${name}: ${(e as Error).message}`); }
 }
 
 let resumed = false;
@@ -287,11 +323,16 @@ const stream = new SwitchEventStream({
     console.log('connected');
     joinRooms()
       .then(() => {
-        // Once per process, after the rooms are joined: finish a hand-off a restart interrupted (a step
-        // caught mid-send is never re-sent). Not on a reconnect: a step in flight in this process isn't torn.
-        if (!handoff || resumed) return;
+        // Once per process, after the rooms are joined: re-queue what a restart caught inside the quiet
+        // gap (already-decided ids are skipped by the pipeline), then finish a hand-off a restart
+        // interrupted (a step caught mid-send is never re-sent). Not on a reconnect.
+        if (resumed) return;
         resumed = true;
-        return handoff.resume();
+        const queued = carried;
+        carried = [];
+        for (const q of queued) for (const i of q.inputs) enqueue(q.room, i);
+        if (queued.length) console.log(`re-queued ${queued.reduce((n, q) => n + q.inputs.length, 0)} message(s) from before the restart`);
+        return handoff?.resume();
       })
       .catch((e) => console.error('joining rooms failed:', e.message));
   },
