@@ -1,0 +1,39 @@
+{
+  "schema": "ck.robustness/1",
+  "run_id": "r20261104-1959-990f",
+  "model": "claude-opus-5-5",
+  "reviewer_model": "claude-opus-5-5",
+  "started_at": "2026-11-04T19:59:37.263Z",
+  "ended_at": "2026-11-04T20:01:21.442Z",
+  "results": [
+    {
+      "id": "R2",
+      "title": "Restart mid-burst",
+      "how": "post burst B1 (T01, T02, T03); SIGKILL the agent once T01 is in its saved burst queue; restart it at once; the rest of B1 is posted on schedule",
+      "pass_when": "exactly one combined reply; no duplicate posts; the returner brief appears once",
+      "adapted": null,
+      "status": "pass",
+      "evidence": [
+        "ok: 1 decision line(s) with a public post for B1; one covering all 3 (A/covered,A/covered,A/covered)",
+        "ok: 1 agent reply post(s) in B1's threads (landed in T01's thread)",
+        "ok: no duplicate agent posts (10 in all)",
+        "ok: returner brief: 1 post(s) in the channel, 1 brief trace line(s)",
+        "queued 20:00:18, killed 20:00:18, restarted 20:00:19, connected 20:00:21",
+        "agent log: \"re-queued 1 message(s) from before the restart\""
+      ]
+    }
+  ],
+  "cost": {
+    "trace_usd": 0.1678,
+    "trace_calls": 4,
+    "metered_usd": 0.3019,
+    "metered_calls": 6,
+    "note": "Metered = the agent's own spend meter (every answered model call, priced by src/agent/model.ts); the trace figure misses calls that never reached a trace line (killed mid-flight, replaced prefetches, the cap-crossing call)."
+  },
+  "incidents": [],
+  "versions": {
+    "sha": "c9998952cb4eca28e55261c94ee3516dedbc4e87",
+    "switch": "ok",
+    "mattermost": "11.9.0.28847360617.c473b66b835687963ea56067351ebc1fa6ee1bcfeab088033350f370a34020a5.false"
+  }
+}
