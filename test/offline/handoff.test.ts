@@ -127,9 +127,9 @@ describe('job E: the full chain', () => {
     const brief = sw.posts.find((p) => p.room === buildRoom().id)!;
     expect(brief.thread).toBeNull();
     expect(brief.body.split('\n')).toEqual([
-      "🛠️ **I1 · Approved** · Rowan's idea from #ledgerly-pilot, approved by Kash",
-      '> What if the reminder emails showed a pay-now link for GoCardless?',
-      "📬 Result goes back to Rowan's thread for sign-off. Claude Code's brief is in the thread.",
+      "🛠️ **I1 · Approved by Kash** · Rowan's idea from #ledgerly-pilot",
+      '**Idea:** _“What if the reminder emails showed a pay-now link for GoCardless?”_',
+      '**Next:** Claude Code builds it (its brief is in the thread); the result goes back to Rowan to sign off.',
     ]);
     // the long hand-off is a reply in that post's thread, not a second top-level post
     expect(sw.targeted[0].thread).toBe(brief.id);
@@ -145,12 +145,12 @@ describe('job E: the full chain', () => {
     // stage 1 in the original thread: approved, waiting for Claude Code to start
     const announce = sw.posts.find((p) => p.room === PILOT.id)!;
     expect(announce.thread).toBe('m-idea');
-    expect(announce.body).toBe("✅ **Approved** by Kash · waiting for Claude Code to start building it in #ledgerly-build. I'll post each step here for Rowan.");
+    expect(announce.body).toBe("✅ **Approved by Kash** · Claude Code will build it in #ledgerly-build. I'll post each step here, Rowan.");
 
     // stage 2: progress in Claude Code's thread is not a report, but it is the start of the build
     expect(await e.onMessage(cc.say('Working… Last: mcp__switch__connect_to_room', sw.targeted[0].id))).toBe(true);
     expect(e.store.byRef('I1')!.status).toBe('handed_off');
-    expect(sw.posts.at(-1)).toMatchObject({ room: PILOT.id, thread: 'm-idea', body: '🔨 **Building** · Claude Code has started on it in #ledgerly-build.' });
+    expect(sw.posts.at(-1)).toMatchObject({ room: PILOT.id, thread: 'm-idea', body: '🔨 **Building** · Claude Code has started, in #ledgerly-build.' });
 
     // the report (top-level, as the live run showed)
     expect(await e.onMessage(cc.say('Done I1: opened https://github.com/thekashifnazir/ledgerly-demo/issues/2'))).toBe(true);
@@ -158,8 +158,8 @@ describe('job E: the full chain', () => {
     expect(ask).toMatchObject({ room: PILOT.id, thread: 'm-idea' });
     expect(ask.body).toContain('https://github.com/thekashifnazir/ledgerly-demo/issues/2');
     expect(ask.body.split('\n')).toEqual([
-      '📦 **Done** · Claude Code\'s result: https://github.com/thekashifnazir/ledgerly-demo/issues/2',
-      '**Rowan**, you raised it, so it\'s yours to sign off: just reply here — say if it\'s right, or what\'s missing.',
+      '📦 **Done** · [ledgerly-demo issue #2](https://github.com/thekashifnazir/ledgerly-demo/issues/2)',
+      '**Rowan**, does it do what you wanted? Reply here: say it\'s right, or what\'s missing.',
     ]);
     expect(e.store.byRef('I1')!.status).toBe('awaiting_signoff');
     const postsBefore = sw.posts.length;
@@ -179,7 +179,7 @@ describe('job E: the full chain', () => {
     // the raiser's text reply closes it
     expect(await e.onMessage(reply('Looks right, thanks!', ROWAN, 'Rowan', 'r-rowan'))).toBe(true);
     expect(e.store.byRef('I1')!.status).toBe('signed_off');
-    expect(sw.posts.at(-1)).toMatchObject({ room: PILOT.id, thread: 'm-idea', body: '✅ **Signed off** by Rowan. Closed.' });
+    expect(sw.posts.at(-1)).toMatchObject({ room: PILOT.id, thread: 'm-idea', body: '✅ **Signed off** by Rowan · closed.' });
 
     // every step traced as ck.trace/1, in order
     expect(steps()).toEqual(['noted', 'approved', 'build_room_created', 'context_posted', 'handed_off', 'announced', 'building', 'signoff_requested', 'signoff_ignored', 'signoff_not_theirs', 'signoff_ignored', 'signed_off']);
@@ -287,7 +287,7 @@ describe('job E: the full chain', () => {
     await e.onMessage(desk('approve I1'));
     await e.onMessage(cc.say('Not done I1: the GitHub action was declined at the approval prompt.'));
     expect(e.store.byRef('I1')!.status).toBe('not_done');
-    expect(sw.posts.at(-1)!.body).toContain("Claude Code couldn't finish I1");
+    expect(sw.posts.at(-1)!.body).toBe("⚠️ **Not done** · Claude Code couldn't finish it: the GitHub action was declined at the approval prompt. It stays open.");
     expect(sw.posts.at(-1)!.body).not.toContain('sign off');
     expect(sw.ownerPosts.at(-1)).toContain('approve I1 again');
   });
@@ -299,10 +299,10 @@ describe('job E: the full chain', () => {
     await e.onMessage(cc.say('Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/2'));
     expect(await e.onMessage(reply('hmm, let me look later', ROWAN, 'Rowan', 'r1'))).toBe(true);
     expect(e.store.byRef('I1')!.status).toBe('awaiting_signoff');
-    expect(sw.posts.at(-1)!.body).toBe('**Rowan**, is that a sign-off? Reply "looks right", or say what\'s missing.');
+    expect(sw.posts.at(-1)!.body).toBe('**Rowan**, is that a sign-off? Say it\'s right, or what\'s missing.');
     await e.onMessage(reply('Not quite, it should mention the 3/7/14 day reminders too', ROWAN, 'Rowan', 'r2'));
     expect(e.store.byRef('I1')!.status).toBe('reopened');
-    expect(sw.posts.at(-1)!.body).toBe('↩️ **Reopened** by Rowan: it should mention the 3/7/14 day reminders too.');
+    expect(sw.posts.at(-1)!.body).toBe('↩️ **Reopened** by Rowan · it should mention the 3/7/14 day reminders too');
     expect(sw.posts.at(-1)!.body).not.toMatch(/Kash|owner/); // never say in public it went to the owner
 
     // a second idea, signed off by the owner
@@ -339,12 +339,12 @@ describe('job E: the full chain', () => {
 });
 
 describe("job E: the raiser sees each stage once (Kash, 4 Nov: \"so we can see where there are blockers\")", () => {
-  const APPROVED = "✅ **Approved** by Kash · waiting for Claude Code to start building it in #ledgerly-build. I'll post each step here for Rowan.";
-  const BUILDING = '🔨 **Building** · Claude Code has started on it in #ledgerly-build.';
-  const BLOCKED = "⏸️ **Waiting for Kash** · Claude Code needs Kash's OK for a step before it can go on.";
-  const AGAIN = '🔨 **Building again** · Claude Code is working on it again.';
-  const CARD_NUDGE = '**I1 · Needs your OK** · Claude Code is waiting: open the I1 thread in #ledgerly-build and click Allow once.';
-  const TIMER_NUDGE = '**I1 · May need your OK** · no result from Claude Code after 2 min. If a card is waiting, open the I1 thread in #ledgerly-build and click Allow once.';
+  const APPROVED = "✅ **Approved by Kash** · Claude Code will build it in #ledgerly-build. I'll post each step here, Rowan.";
+  const BUILDING = '🔨 **Building** · Claude Code has started, in #ledgerly-build.';
+  const BLOCKED = "⏸️ **Waiting for Kash** · Claude Code needs Kash's OK for one step.";
+  const AGAIN = '🔨 **Building again** · Claude Code is back at work.';
+  const CARD_NUDGE = '⏸️ **I1 · Needs your OK** · Claude Code is waiting.\n**To do:** open the I1 thread in #ledgerly-build and click **Allow once**.';
+  const TIMER_NUDGE = '⏸️ **I1 · May need your OK** · no result from Claude Code after 2 min.\n**To do:** if a card is waiting in the I1 thread in #ledgerly-build, click **Allow once**.';
   const timed = () => chain({ nudgeMs: 2 * 60_000 });
   const later = (min: number) => { clock = new Date(clock.getTime() + min * 60_000); };
   const thread = () => sw.posts.filter((p) => p.room === PILOT.id && p.thread === 'm-idea').map((p) => p.body);
@@ -377,7 +377,7 @@ describe("job E: the raiser sees each stage once (Kash, 4 Nov: \"so we can see w
     expect(sw.ownerPosts.filter((b) => b.includes('your OK'))).toEqual([CARD_NUDGE]);
     await e.onMessage(cc.say('Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/4'));
     expect(thread()).toHaveLength(5);
-    expect(thread()[4]).toMatch(/^📦 \*\*Done\*\* · Claude Code's result: https:\/\/github\.com\/thekashifnazir\/ledgerly-demo\/issues\/4\n\*\*Rowan\*\*, you raised it/);
+    expect(thread()[4]).toMatch(/^📦 \*\*Done\*\* · \[ledgerly-demo issue #4\]\(https:\/\/github\.com\/thekashifnazir\/ledgerly-demo\/issues\/4\)\n\*\*Rowan\*\*, does it do what you wanted\?/);
     expect(stageSteps()).toEqual(['announced', 'building', 'nudged', 'blocked', 'unblocked', 'signoff_requested']);
     // every stage line is short: one line, no context block
     for (const b of thread().slice(0, 4)) { expect(b.split('\n')).toHaveLength(1); expect(b.length).toBeLessThan(140); }
@@ -493,20 +493,23 @@ describe("job E: the raiser sees each stage once (Kash, 4 Nov: \"so we can see w
 describe('job E: an idea that builds on the record (Kash, 4 Nov)', () => {
   it('with job A\'s new part: the desk note names it after the ref; the hand-off quotes it above the cited context', async () => {
     const e = chain();
-    const cited = [{ ref: 'product.md §2', quote: 'Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).' }];
+    // job A's name for the source, linked (Kash, 4 Nov, I9: "what do those squiggles mean … links out")
+    const PR = '[Product overview › Payment reminders](https://example.test/blob/main/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)';
+    const cited = [{ ref: 'product.md §2', quote: 'Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).', source: PR }];
     await e.noteIdea(idea, cited, { buildsOn: ['product.md §2'], newPart: 'a pay-now link in the overdue reminder emails' });
-    // bold summary first, then the idea quoted, then what it builds on, then the one action
+    // bold summary first, then the idea as one italic line, one labelled line each, then the one action
     expect(sw.ownerPosts[0].split('\n')).toEqual([
-      '**I1 · New idea from Rowan** · #ledgerly-pilot, 4 Nov',
-      '> What if the reminder emails showed a pay-now link for GoCardless?',
-      'Builds on product.md §2. New part: a pay-now link in the overdue reminder emails',
-      'Reply **approve I1** to hand it to Claude Code. Nothing happens until you do.',
+      '💡 **I1 · New idea from Rowan** · #ledgerly-pilot, 4 Nov',
+      '_“What if the reminder emails showed a pay-now link for GoCardless?”_',
+      `**Builds on:** ${PR}`,
+      '**New part:** a pay-now link in the overdue reminder emails',
+      '**To build it:** reply **approve I1** and Claude Code takes it. Nothing happens until you do.',
     ]);
     await e.onMessage(desk('approve I1'));
-    expect(cc.asked[0]).toContain('**New part** (the record already has product.md §2):\n> a pay-now link in the overdue reminder emails\n**Context from the record:**\nproduct.md §2:\n> Automatic reminders at 3, 7 and 14 days overdue');
+    expect(cc.asked[0]).toContain(`**New part** (the record already has ${PR}):\n> a pay-now link in the overdue reminder emails\n**Context from the record:**\n${PR}:\n> Automatic reminders at 3, 7 and 14 days overdue`);
     // the build-room summary names the new part in one line, without the context block
     const summary = sw.posts.find((p) => p.room === buildRoom().id)!.body;
-    expect(summary).toContain('New part: a pay-now link in the overdue reminder emails');
+    expect(summary).toContain('**New part:** a pay-now link in the overdue reminder emails');
     expect(summary).not.toContain('Automatic reminders');
   });
 
@@ -520,15 +523,16 @@ describe('job E: an idea that builds on the record (Kash, 4 Nov)', () => {
     const e = chain();
     const cited = [{ ref: 'product.md §4', quote: 'Reminders go out automatically at 3, 7 and 14 days overdue.' }];
     await e.noteIdea(idea, cited, { buildsOn: ['product.md §4'] });
-    expect(sw.ownerPosts[0].split('\n')[2]).toBe('Builds on product.md §4.');
-    expect(sw.ownerPosts[0]).toContain('Reply **approve I1**');
+    // an idea noted before sources carried their names: the ref, as before
+    expect(sw.ownerPosts[0].split('\n')[2]).toBe('**Builds on:** product.md §4');
+    expect(sw.ownerPosts[0]).toContain('reply **approve I1**');
     await e.onMessage(desk('approve I1'));
     expect(cc.asked[0]).toContain('**Builds on** what the record already has (product.md §4)');
     expect(cc.asked[0]).toContain('**Context from the record:**');
     expect(cc.asked[0]).toContain('> Reminders go out automatically at 3, 7 and 14 days overdue.');
     // a plain new idea: no "builds on" line
     await e.noteIdea({ ...idea, message_id: 'm-2' }, []);
-    expect(sw.ownerPosts.at(-1)!.split('\n')).toEqual(['**I2 · New idea from Rowan** · #ledgerly-pilot, 4 Nov', '> What if the reminder emails showed a pay-now link for GoCardless?', 'Reply **approve I2** to hand it to Claude Code. Nothing happens until you do.']);
+    expect(sw.ownerPosts.at(-1)!.split('\n')).toEqual(['💡 **I2 · New idea from Rowan** · #ledgerly-pilot, 4 Nov', '_“What if the reminder emails showed a pay-now link for GoCardless?”_', '**To build it:** reply **approve I2** and Claude Code takes it. Nothing happens until you do.']);
   });
 });
 
@@ -548,7 +552,7 @@ describe('job E: formatting (Kash, 4 Nov: "quite difficult to read")', () => {
     await e.onMessage(reply('looks right', ROWAN, 'Rowan', 'r-ok'));
     const people = [...sw.ownerPosts, ...sw.posts.map((p) => p.body), ...sw.targeted.map((t) => t.body)];
     for (const b of people) expect(rawIdsIn(b)).toEqual([]);
-    expect(sw.ownerPosts[0]).toContain('Builds on product.md §2, an earlier message. New part:');
+    expect(sw.ownerPosts[0]).toContain('**Builds on:** product.md §2, an earlier message\n**New part:**');
     // one header per source, its quotes under it (not "- product.md §2:" before every quote)
     expect(cc.asked[0]).toContain('product.md §2:\n> Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).\n> Three tone presets: friendly, neutral and firm.\nan earlier message:\n> Could the reminders link straight to payment?');
     expect(cc.asked[0].match(/product\.md §2:/g)).toHaveLength(1);
@@ -743,7 +747,7 @@ describe('job E: sign-off in the raiser\'s own words', () => {
     expect(await e.onMessage(reply("Yep that's what I meant, thanks!", ROWAN, 'Rowan', 'r1'))).toBe(true);
     fake.done();
     expect(e.store.byRef('I1')!.status).toBe('signed_off');
-    expect(thread().at(-1)).toBe('✅ **Signed off** by Rowan. Closed.');
+    expect(thread().at(-1)).toBe('✅ **Signed off** by Rowan · closed.');
     expect(sw.ownerPosts.at(-1)).toBe('I1 signed off by Rowan.');
     // one structured call to the sign-off model; the reply is a JSON field in the user turn, never the system text
     const params = fake.calls[0].params;
@@ -763,7 +767,7 @@ describe('job E: sign-off in the raiser\'s own words', () => {
     const rec = e.store.byRef('I1')!;
     expect(rec.status).toBe('signed_off');
     expect(rec.signoff).toMatchObject({ verdict: 'signed_off', note: "also list the client's phone number in the email" });
-    expect(thread().at(-1)).toBe("✅ **Signed off** by Rowan, with a note: also list the client's phone number in the email. Closed.");
+    expect(thread().at(-1)).toBe("✅ **Signed off** by Rowan · closed. **Note:** also list the client's phone number in the email");
     expect(sw.ownerPosts.filter((b) => b.includes('with a note'))).toEqual(["I1 signed off by Rowan, with a note: also list the client's phone number in the email."]);
     expect(steps().at(-1)).toBe('signed_off_with_note');
     // it's closed: a later reply isn't job E's, and nothing is said or sent again
@@ -777,12 +781,13 @@ describe('job E: sign-off in the raiser\'s own words', () => {
     const e = await done([{ model: SONNET, respond: reading('reopened', { reason: 'wanted it per client, not per partner' }) }]);
     await e.onMessage(reply('Not really, I wanted it per client not per partner', ROWAN, 'Rowan', 'r1'));
     expect(e.store.byRef('I1')!.status).toBe('reopened');
-    expect(thread().at(-1)).toBe('↩️ **Reopened** by Rowan: wanted it per client, not per partner.');
+    expect(thread().at(-1)).toBe('↩️ **Reopened** by Rowan · wanted it per client, not per partner');
     expect(sw.ownerPosts.at(-1)).toBe('I1 reopened by Rowan: wanted it per client, not per partner. Reply "approve I1 again" to send it back to Claude Code.');
   });
 
-  it('unclear → asked once per idea, never again (not even after a restart); a plain "looks right" then closes it', async () => {
-    const ASK = '**Rowan**, is that a sign-off? Reply "looks right", or say what\'s missing.';
+  it('unclear → asked once per idea; a second unclear reply gets one short "just say so" line, not silence (Kash, 4 Nov, I9); then quiet, even after a restart; a plain "looks right" then closes it', async () => {
+    const ASK = '**Rowan**, is that a sign-off? Say it\'s right, or what\'s missing.';
+    const REMIND = "Got it, Rowan. When you're happy with it, just say so and I'll close it.";
     const e = await done([{ model: SONNET, respond: reading('unclear') }, { model: SONNET, respond: reading('unclear') }, { model: SONNET, respond: reading('unclear') }]);
     expect(await e.onMessage(reply('hmm not sure', ROWAN, 'Rowan', 'r1'))).toBe(true);
     expect(thread().at(-1)).toBe(ASK);
@@ -790,9 +795,10 @@ describe('job E: sign-off in the raiser\'s own words', () => {
     const again = chain({ readSignoff: (i) => callSignoff(fake, cfg, i) }); // a new process, same state file
     expect(await again.onMessage(reply('maybe?', OWNER, 'Kash', 'k1'))).toBe(true); // the owner's unclear reply: still once per idea
     fake.done();
-    expect(thread().filter((b) => b.includes('is that a sign-off?'))).toEqual([ASK]);
+    expect(thread().filter((b) => b.includes('is that a sign-off?') || b.includes('just say so'))).toEqual([ASK, REMIND]);
     expect(steps().filter((s) => s === 'signoff_asked')).toHaveLength(1);
-    expect(steps().filter((s) => s === 'signoff_unclear')).toHaveLength(2);
+    expect(steps().filter((s) => s === 'signoff_reminded')).toHaveLength(1);
+    expect(steps().filter((s) => s === 'signoff_unclear')).toHaveLength(1);
     expect(again.store.byRef('I1')!.status).toBe('awaiting_signoff');
     await again.onMessage(reply('looks right', ROWAN, 'Rowan', 'r3'));
     expect(again.store.byRef('I1')!.status).toBe('signed_off');
@@ -889,7 +895,7 @@ describe('5 Nov polish: copy-pasted commands, a scannable build room, and Sam al
   it('the desk note shows the command in bold, not as inline code; a pasted code copy still approves', async () => {
     const e = chain();
     await e.noteIdea(idea, sources);
-    expect(sw.ownerPosts[0]).toContain('Reply **approve I1** to hand it to Claude Code.');
+    expect(sw.ownerPosts[0]).toContain('**To build it:** reply **approve I1** and Claude Code takes it.');
     expect(sw.ownerPosts[0]).not.toContain('`');
     expect(await e.onMessage(desk('`approve I1`'))).toBe(true);
     expect(e.store.byRef('I1')!.status).toBe('handed_off');
@@ -905,8 +911,8 @@ describe('5 Nov polish: copy-pasted commands, a scannable build room, and Sam al
     const lines = top[0].body.split('\n');
     expect(lines.length).toBeGreaterThanOrEqual(3);
     expect(lines.length).toBeLessThanOrEqual(5);
-    expect(lines[0]).toBe("🛠️ **I1 · Approved** · Rowan's idea from #ledgerly-pilot, approved by Kash");
-    expect(lines).toContain('New part: a pay-now link in the reminder emails');
+    expect(lines[0]).toBe("🛠️ **I1 · Approved by Kash** · Rowan's idea from #ledgerly-pilot");
+    expect(lines).toContain('**New part:** a pay-now link in the reminder emails');
     expect(top[0].body).not.toContain('Context from the record');
     // the long context Claude Code needs: in the thread, with the injection-safety wording kept
     expect(sw.targeted[0].thread).toBe(top[0].id);
@@ -920,8 +926,8 @@ describe('5 Nov polish: copy-pasted commands, a scannable build room, and Sam al
     await e.onMessage(cc.say('Working… 12s · Running: git fetch', root));
     await e.onMessage(cc.say('Waiting for OK: create the GitHub issue', root));
     const raiser = sw.posts.filter((p) => p.room === PILOT.id && p.thread === 'm-idea').map((p) => p.body);
-    expect(raiser.slice(1)).toEqual(['🔨 **Building** · Claude Code has started on it in #ledgerly-build.', "⏸️ **Waiting for Kash** · Claude Code needs Kash's OK for a step before it can go on."]);
-    expect(sw.ownerPosts.at(-1)).toBe('**I1 · Needs your OK** · Claude Code is waiting: open the I1 thread in #ledgerly-build and click Allow once.');
+    expect(raiser.slice(1)).toEqual(['🔨 **Building** · Claude Code has started, in #ledgerly-build.', "⏸️ **Waiting for Kash** · Claude Code needs Kash's OK for one step."]);
+    expect(sw.ownerPosts.at(-1)).toBe('⏸️ **I1 · Needs your OK** · Claude Code is waiting.\n**To do:** open the I1 thread in #ledgerly-build and click **Allow once**.');
     await e.onMessage(cc.say('Done: https://github.com/thekashifnazir/ledgerly-demo/issues/9', root));
     expect(e.store.byRef('I1')!.status).toBe('awaiting_signoff');
   });
@@ -931,7 +937,7 @@ describe('5 Nov polish: copy-pasted commands, a scannable build room, and Sam al
     await e.noteIdea(idea, sources);
     await e.onMessage(desk('approve I1'));
     expect(sw.targeted[0].thread).toBeNull();
-    expect(sw.posts.find((p) => p.room === buildRoom().id)!.body).toContain("Claude Code's hand-off below has the cited context.");
+    expect(sw.posts.find((p) => p.room === buildRoom().id)!.body).toContain('**Next:** Claude Code builds it (its brief is below)');
   });
 
   it('no context post id (a restart caught it mid-send): the hand-off still goes, top-level', async () => {
@@ -976,6 +982,21 @@ describe('5 Nov polish: copy-pasted commands, a scannable build room, and Sam al
       fake.done();
       expect(steps()).toContain('heard');
       expect(traces().find((t) => handoffStep(t) === 'heard')!.kind).toBe('reply');
+    });
+
+    it('any wording from someone else gets the line, whatever the reader makes of it (Kash, 4 Nov, I9: "we don\'t want to do it just on hard coding")', async () => {
+      // the reader's verdict, not a word list, decides whether it's a sign-off attempt; anything that
+      // isn't one goes to job A, and job A's silence is what earns the "noted" line
+      const people = [['brilliant idea', 'chat'], ["can't wait to use this", 'unclear'], ['🔥🔥', 'chat'], ['wow, nice work everyone', 'chat']] as const;
+      const { e, fake } = await awaiting(people.map(([, v]) => ({ model: SONNET, respond: reading(v) })));
+      for (const [i, [body]] of people.entries()) {
+        const who = `@switch-slack-b1-p${i}_demo:localhost`;
+        const m = reply(body, who, `P${i}`, `p${i}`);
+        expect(await e.onMessage(m)).toBe(false); // not a sign-off attempt: job A's
+        expect(await e.heard(m, false)).toBe(true);
+        expect(thread().at(-1)).toBe(`Thanks, P${i}, noted. Rowan signs this one off.`);
+      }
+      fake.done();
     });
 
     it('no line when job A answered him, for the raiser or the owner, or after the "only Rowan can sign this off" reply; survives a restart', async () => {

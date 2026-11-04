@@ -7,7 +7,9 @@ import { z } from 'zod';
 export const VERDICTS = ['covered', 'might-be-related', 'parked', 'new', 'contradicts-record', 'decision', 'reopen', 'parked-recall'] as const;
 
 const Iso = z.string();
-const Source = z.object({ ref: z.string(), quote: z.string() });
+// source: the source as the post named it for people ("Product overview › Client portal (20 Oct)"); ref
+// stays the raw record ref the eval scores. Absent on lines before 5 Nov.
+const Source = z.object({ ref: z.string(), quote: z.string(), source: z.string().optional() });
 // Job B's record (agreed with Kash, 3 Nov): who decided is kept apart from who does the work.
 // action_owner null = unassigned (never quietly the room owner); due = when the work is due
 // (YYYY-MM-DD) or null; reopen_if = what would make it worth revisiting, or null; date = the day it
@@ -68,6 +70,8 @@ export const HANDOFF_STEPS = [
   'signed_off_with_note', 'signoff_asked',
   // someone else's chatter in a sign-off thread that job A stayed quiet on: one "noted" line (5 Nov)
   'heard',
+  // a second unclear reply after the one ask: one "just say so when you're happy" line (5 Nov)
+  'signoff_reminded',
 ] as const;
 export type HandoffStep = (typeof HANDOFF_STEPS)[number];
 const Handoff = z.object({

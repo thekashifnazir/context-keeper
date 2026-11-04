@@ -210,7 +210,13 @@ export function score(input: ScoreInput) {
     const resolves = text !== null;
     const qv = resolves && quoteVerified(s.quote, text!);
     const q = normalise(s.quote);
-    const shown = shownIn.some((p) => normalise(p.message).includes(normalise(s.ref)) || (q.length >= MIN_QUOTE_CHARS && normalise(p.message).includes(q)));
+    // Shown: the ref as written ("product.md §5"), the name a post gives it for people ("Product overview ›
+    // Client portal", "Rowan, 4 Nov": content.ts labels, the agent's own rule), or the quote itself.
+    const label = input.content[room].labels?.get(s.ref);
+    const shown = shownIn.some((p) => {
+      const m = normalise(p.message);
+      return m.includes(normalise(s.ref)) || (!!label && m.includes(normalise(label))) || (q.length >= MIN_QUOTE_CHARS && m.includes(q));
+    });
     return { resolves, quote_verified: qv, shown, verified: resolves && qv && shown };
   };
 

@@ -106,6 +106,16 @@ describe('agent config', () => {
   });
 });
 
+describe('opinions: marked once, then varied (Kash, 4 Nov: "Just my read, not the record"… "a bit grating")', () => {
+  it('the prompt asks to mark an opinion once and vary the phrasing after; it prescribes no fixed caveat', () => {
+    const p = talkPrompt(room, 'Wednesday 4 November, 13:51', 'Test', []);
+    expect(p).not.toMatch(/my read, not the record/i);
+    expect(p).toMatch(/The first time in the call, say plainly that it's your view/);
+    expect(p).toMatch(/vary how you mark a suggestion/);
+    expect(p).toMatch(/never use the same caveat twice in a row/);
+  });
+});
+
 describe('VoiceLive keeps the talk agent on the live record while a link is open (4 Nov: a call 1 h 45 min after the brief got the 12:05 snapshot)', () => {
   const live: RoomRecord = { name: 'ck-smoke', docs: room.docs, messages: [...room.messages] };
   function make(opts: { recordOf?: boolean } = {}) {
@@ -318,21 +328,37 @@ describe('after the call', () => {
     expect(claude.calls[0].params.messages[0].content).not.toContain('<b>');
     expect(summary.new_ideas).toEqual(['Rowan wants Sam on the case-study template']);
     const post = formatCallSummary('Rowan', call, summary);
-    expect(post).toMatch(/^📝 \*\*Call summary\*\* · Rowan talked it through \(4 min call\)/);
-    expect(post).toMatch(/needs confirming/);
+    expect(post).toMatch(/^📝 \*\*Call summary\*\* · Rowan talked it through \(4 min call\) · 1 to confirm, 1 to follow up\n/);
     expect(post).toMatch(/Nothing above is agreed until someone confirms it here/);
     // headings in Markdown bold (**…**): bold in Mattermost, and Switch's Slack adapter makes it Slack bold;
     // a single *…* is italic in Mattermost
-    expect(post).toContain("**Asked about**\n• Northbank's view on Xero");
-    expect(post).toContain("**The record didn't say (to follow up)**");
-    expect(post).toContain('**New ideas and requests (needs confirming)**');
+    expect(post).toContain("**Asked about:** Northbank's view on Xero");
+    expect(post).toContain("**To follow up (the record didn't say)**\n• What Northbank said about Xero");
+    expect(post).toContain('**Needs confirming**\n• Rowan wants Sam on the case-study template');
+    // the sections people act on come first
+    expect(post.indexOf('**Needs confirming**')).toBeLessThan(post.indexOf('**To follow up'));
+    expect(post.indexOf('**To follow up')).toBeLessThan(post.indexOf('**Asked about:**'));
     expect(post).not.toMatch(/(^|\n)\*[^*]/);
     expect(post).not.toMatch(/@/); // nobody to tag: no people given
   });
-  it('empty sections say so rather than vanish', () => {
+  it('asked-about topics share one line, the repeated "Rowan asked" dropped', async () => {
+    const { topic } = await import('../../src/voice/talk-summary.ts');
+    const post = formatCallSummary('Rowan', { id: 'c', startUnix: 0, durationS: 180, credits: null, callerName: 'Rowan', transcript: [] }, {
+      asked_about: ['Rowan asked if there was anything pressing to do now that Rowan is back.', "Rowan asked what's going on with the USD partial payment rounding issue.", 'which open asks make sense for him'],
+      didnt_know: [], new_ideas: [],
+    });
+    expect(post).toContain("**Asked about:** if there was anything pressing to do now that Rowan is back; what's going on with the USD partial payment rounding issue; which open asks make sense for him");
+    expect(topic('Rowanna asked about pricing.', 'Rowan')).toBe('Rowanna asked about pricing'); // only the caller's own name
+  });
+  it('an empty section is left out; the first line still says there is nothing to follow up', () => {
     const post = formatCallSummary('Sam', { id: 'c', startUnix: 0, durationS: 30, credits: null, callerName: null, transcript: [] }, { asked_about: [], didnt_know: [], new_ideas: [] });
-    expect(post).toContain('(1 min call)');
-    expect(post).toContain('• none raised');
+    expect(post.split('\n\n')).toEqual([
+      '📝 **Call summary** · Sam talked it through (1 min call) · nothing to follow up',
+      '**Asked about:** nothing specific',
+      '_From the call transcript. Nothing above is agreed until someone confirms it here._',
+    ]);
+    const some = formatCallSummary('Sam', { id: 'c', startUnix: 0, durationS: 30, credits: null, callerName: null, transcript: [] }, { asked_about: ['pricing'], didnt_know: [], new_ideas: [] });
+    expect(some).not.toMatch(/Needs confirming|To follow up/);
   });
 });
 

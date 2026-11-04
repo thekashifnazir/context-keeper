@@ -15,6 +15,10 @@ export interface ArchiveMessage {
 export interface RoomDoc {
   file: string; // e.g. "product.md"
   text: string;
+  /** The document's title as the room shows it ("Ledgerly: product overview"); its "# " line wins. */
+  title?: string;
+  /** Where its public copy lives in this repo ("demo/ledgerly/docs/product.md"), for links; null = none. */
+  path?: string | null;
 }
 export interface RoomRecord {
   name: string;
@@ -40,7 +44,10 @@ export function loadDemoRoom(root: string, roomName: string, asOf?: string): Roo
   const hist = loadYaml(join(dir, 'chat-history.yaml'));
   const docs: RoomDoc[] = (hist.docs as string[]).map((p) => {
     const file = join(dir, p);
-    return { file: p.split('/').pop()!, text: existsSync(file) ? readFileSync(file, 'utf8') : '' };
+    const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    // The title as the seed names the room document (seed/content.ts titleOf): its "# " line.
+    const title = text.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? p.split('/').pop()!.replace(/\.md$/, '');
+    return { file: p.split('/').pop()!, text, title, path: `demo/${ROOM_DIRS[roomName] ?? roomName}/${p}` };
   }).filter((d) => d.text);
   const cutoff = asOf ? toMs(asOf) : Infinity;
   const messages: ArchiveMessage[] = (hist.messages as any[])

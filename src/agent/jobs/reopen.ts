@@ -10,8 +10,9 @@
 //     thread through handleOwnerDesk, like a clash ruling.
 // If the desk note can't be sent, the verdict drops to might-be-related: we never say "I've asked
 // the owner" for a note that didn't go.
-import { rowFields, type BlockInfo } from '../blocks.ts';
+import { rowFields, sourceText, type BlockInfo } from '../blocks.ts';
 import { firstName } from './restriction.ts';
+import { quoteLine } from '../handoff/text.ts';
 
 /** The decision id of a row block ("pilot-plan.md §2 D1" → "D1"). */
 export const decisionId = (b: BlockInfo): string => b.blockId.split(' ').at(-1) ?? b.blockId;
@@ -27,7 +28,7 @@ export function reopenIf(b: BlockInfo): string {
 /** The only public line for a reopen request (the decision's quote is added below it by code). */
 export function reopenLine(name: string, condition: string): string {
   const cond = condition ? ` Reopen if: ${condition.replace(/[.\s]+$/, '')}.` : '';
-  return `Thanks, ${firstName(name)}. That's new information on a recorded decision, so I've asked the owner whether to reopen it. Until they decide, the plan stays as it is.${cond}`;
+  return `Thanks, ${firstName(name)}. That's new information on a recorded decision, so I've asked the owner whether to reopen it; until they decide, the plan stays as it is.${cond}`;
 }
 
 /** The owner-desk note: names the decision, quotes it and its "Reopen if", and asks the question. */
@@ -35,11 +36,11 @@ export function reopenNote(p: { n: number; roomName: string; raisedBy: string; t
   const id = decisionId(p.row);
   const cond = reopenIf(p.row);
   return [
-    `#${p.n} · Reopen request in ${p.roomName}`,
-    `${p.raisedBy} said (${p.messageRef}): "${p.text.trim()}"`,
-    `It's about ${id} (${p.row.ref}): ${p.row.display}`,
-    `Reopen if: ${cond || '(the record gives no condition)'}`,
-    p.claim ? `Why it may qualify: ${p.claim.trim()}` : '',
-    `Should ${id} be reopened? The room has been told it's with you and the plan stands until you decide. Reply in this thread (or start with #${p.n}): "plan stands" to keep ${id}, or your ruling in a sentence, and I'll post it back in their thread.`,
+    `↩️ **#${p.n} · Reopen request** · #${p.roomName}`,
+    `**${p.raisedBy} said:** ${quoteLine(p.text, 400)}`,
+    `**Decision ${id}:** ${p.row.display.replace(/\*\*|__/g, '')} — ${sourceText(p.row)}`,
+    `**Reopen if:** ${cond || '(the record gives no condition)'}`,
+    p.claim ? `**Why it may qualify:** ${p.claim.trim()}` : '',
+    `**Should ${id} be reopened?** Reply in this thread (or start with #${p.n}): "plan stands" to keep ${id}, or your ruling in a sentence; I'll post it back in their thread. The room has been told the plan stands until you decide.`,
   ].filter(Boolean).join('\n');
 }

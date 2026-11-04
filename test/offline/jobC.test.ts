@@ -13,8 +13,9 @@ beforeEach(() => { t = setup('ck-jobC-'); });
 const ALEX = '@switch-slack-conn-alex:localhost';
 const alexFirst = msg('a1', 'Hi all! Why not run the pilot with five agencies?', ALEX, 'Alex', { received_at: '2026-11-04T10:00:00Z' });
 const goodLines = [
-  { kind: 'decided', text: 'The pilot runs with three agencies, 25 clients each (Kash decided: support is Priya plus Kash).', block: 'pilot-plan.md §2 D2', quote: 'Three agencies, max 25 clients each' },
-  { kind: 'talk_to', text: 'Priya runs onboarding calls and pilot support.', block: 'pilot-plan.md §3.1', quote: 'Priya: onboarding calls and pilot support.' },
+  { kind: 'decided', headline: 'Three agencies, 25 clients each', text: 'Kash decided: support is Priya plus Kash.', block: 'pilot-plan.md §2 D2', quote: 'Three agencies, max 25 clients each' },
+  // a greeting from the model is dropped: the post's first line already welcomes them (Kash, 4 Nov)
+  { kind: 'talk_to', headline: 'Welcome, Alex! Priya runs onboarding', text: '', block: 'pilot-plan.md §3.1', quote: 'Priya: onboarding calls and pilot support.' },
 ];
 
 describe('job C: when a brief fires', () => {
@@ -62,8 +63,9 @@ describe('job C: the brief', () => {
     expect(brief.thread).toBe('a1');
     expect(brief.body.split('\n')).toEqual([
       '👋 **Welcome, Alex** · a quick catch-up on where things stand',
-      '• The pilot runs with three agencies, 25 clients each (Kash decided: support is Priya plus Kash). (pilot-plan.md §2)',
-      '• Priya runs onboarding calls and pilot support. (pilot-plan.md §3)',
+      // a marker for its kind, a bold headline, one short follow-on at most, the source as people know it
+      '✅ **Three agencies, 25 clients each** · Kash decided: support is Priya plus Kash. — Ledgerly pilot plan › Decisions (Kash, 6 Oct)',
+      '💬 **Priya runs onboarding** — Ledgerly pilot plan › Who does what (30 Oct)',
       TALK_IT_THROUGH,
     ]);
     expect(line).toMatchObject({ kind: 'brief', trigger: 'room_join' });

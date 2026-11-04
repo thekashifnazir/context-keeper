@@ -48,7 +48,9 @@ const esc = (s: string) => s.replace(/</g, '‹').replace(/>/g, '›');
 
 export function userPrompt(inp: ScriptInput, feedback?: string): string {
   const who = `Person: ${inp.person}${inp.awayFor ? `, away ${inp.awayFor}` : ''}${inp.room ? `. Room: ${inp.room}` : ''}.`;
-  return `${who}\n\n<brief>\n${esc(inp.briefText)}\n</brief>${feedback ? `\n\n${feedback}` : ''}`;
+  // The brief's sources are Markdown links now (docs/message-style.md): the script needs only their names.
+  const brief = inp.briefText.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1');
+  return `${who}\n\n<brief>\n${esc(brief)}\n</brief>${feedback ? `\n\n${feedback}` : ''}`;
 }
 
 export const wordCount = (s: string): number => s.split(/\s+/).filter((w) => /[A-Za-z0-9]/.test(w)).length;

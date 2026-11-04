@@ -85,8 +85,12 @@ describe('sources people can read (Kash, 4 Nov: the Also line ended in a raw sw_
     claude.done();
     expect(poster.sent).toHaveLength(1);
     expect(rawIdsIn(poster.sent[0].body)).toEqual([]);
-    // other sources fold into the quote's source line (Kash, 4 Nov: make the replies scannable)
-    expect(poster.sent[0].body.split('\n').at(-1)).toBe('> Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off). — product.md §2, 20 Oct · also led-002, Rowan, 4 Nov');
+    // the quote is one italic line with its source named the way people know it; other sources go on
+    // one "Also:" line (Kash, 4 Nov, I9: "what do those squiggles mean", the quote blocks "don't help")
+    expect(poster.sent[0].body.split('\n').slice(1)).toEqual([
+      '_“Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).”_ — Product › Payment reminders (20 Oct)',
+      '**Also:** Priya, 1 Sep · Rowan, 4 Nov',
+    ]);
     // the trace keeps the real ref: the scorer and the hand-off still know exactly which message it was
     expect(traces()[0].items[0].sources.map((x) => x.ref)).toEqual(['product.md §2', 'led-002', SW]);
   });
@@ -100,7 +104,7 @@ describe('sources people can read (Kash, 4 Nov: the Also line ended in a raw sw_
     await decide(deps(claude, poster), 'room1', 'ck-test', live, [msg('m1', "Why don't we add automatic payment reminders?")]);
     claude.done();
     expect(rawIdsIn(poster.sent[0].body)).toEqual([]);
-    expect(poster.sent[0].body).toMatch(/\n> .+ — Rowan, 4 Nov · also product\.md §2$/);
+    expect(poster.sent[0].body).toMatch(/\n_“.+”_ — Rowan, 4 Nov\n\*\*Also:\*\* Product › Payment reminders \(20 Oct\)$/);
   });
 });
 
@@ -116,7 +120,8 @@ describe('happy path', () => {
     expect(poster.sent).toHaveLength(1);
     expect(poster.sent[0].thread).toBe('m1');
     expect(poster.sent[0].body).toContain('Automatic reminders at 3, 7 and 14 days overdue');
-    expect(poster.sent[0].body).toContain('led-002');
+    expect(poster.sent[0].body).toContain('Product › Payment reminders (20 Oct)'); // the source as people know it
+    expect(poster.sent[0].body).not.toMatch(/product\.md|§|led-002/); // never the file, § number or message id
     const [line] = traces();
     expect(line.kind).toBe('reply');
     expect(line.items[0].verdict).toBe('covered');
@@ -289,22 +294,31 @@ describe('state', () => {
 });
 
 describe('job A reply layout (Kash, 4 Nov: "make the updates really nice and clear")', () => {
-  const src = (ref: string, display: string, who: string) => ({ ref, display, who });
-  it('bold label · reply, then the quote with its source on the same line, other sources folded in, the new part last', () => {
-    const body = compose('Thanks Rowan! Reminders go out at 3, 7 and 14 days overdue.', [
-      src('product.md §2', 'Automatic reminders at 3, 7 and 14 days overdue.', 'product.md §2, 20 Oct'),
-      src('product.md §4', 'x', 'product.md §4, 20 Oct'),
-      src('product.md §2', 'y', 'product.md §2, 20 Oct'),
+  const src = (ref: string, display: string, source: string) => ({ ref, display, source });
+  const PR = '[Product overview › Payment reminders](https://example.test/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)';
+  it('bold label · answer, then the quote as one italic line with its linked source, other sources on one Also line, the new part last', () => {
+    const body = compose('Reminders go out at 3, 7 and 14 days overdue.', [
+      src('product.md §2', 'Automatic reminders at 3, 7 and 14 days overdue.', PR),
+      src('product.md §4', 'x', 'Product overview › Integrations (20 Oct)'),
+      src('product.md §2', 'y', PR),
     ], { label: LABEL['might-be-related'], newPart: 'a weekly summary email of unpaid invoices for partners.' });
     expect(body.split('\n')).toEqual([
-      '🔎 **Related** · Thanks Rowan! Reminders go out at 3, 7 and 14 days overdue.',
-      '> Automatic reminders at 3, 7 and 14 days overdue. — product.md §2, 20 Oct · also product.md §4',
+      '🔎 **Related** · Reminders go out at 3, 7 and 14 days overdue.',
+      `_“Automatic reminders at 3, 7 and 14 days overdue.”_ — ${PR}`,
+      '**Also:** Product overview › Integrations (20 Oct)',
       '💡 **Logged as a new idea** · a weekly summary email of unpaid invoices for partners',
     ]);
   });
-  it('a multi-line quote keeps "> " on every line; the source rides on the last', () => {
-    expect(compose('r', [src('led-002', 'first line\nsecond line', 'Rowan, 4 Nov (led-002)')], { label: LABEL.covered }).split('\n'))
-      .toEqual(['📌 **In the record** · r', '> first line', '> second line — Rowan, 4 Nov (led-002)']);
+  it('a multi-line quote folds into one line; a long one is cut at a word with "…"', () => {
+    expect(compose('r', [src('led-002', 'first line\nsecond line', 'Rowan, 4 Nov')], { label: LABEL.covered }).split('\n'))
+      .toEqual(['📌 **In the record** · r', '_“first line second line”_ — Rowan, 4 Nov']);
+    const long = compose('r', [src('led-002', `${'word '.repeat(60)}end`, 'Rowan, 4 Nov')]).split('\n')[1];
+    expect(long).toMatch(/^_“(word ){30,}word …”_ — Rowan, 4 Nov$/);
+    expect(long.length).toBeLessThan(230);
+  });
+  it('a "Reopen if" at the end of the answer gets its own labelled line, above the quote', () => {
+    expect(compose('Decided no: one price for the pilot (Kash, 6 Oct). Reopen if: two partners ask for it.', [src('pilot-plan.md §2', 'q', 'Ledgerly pilot plan › Decisions (Kash, 6 Oct)')], { label: LABEL['contradicts-record'] }).split('\n'))
+      .toEqual(['⚠️ **The record says otherwise** · Decided no: one price for the pilot (Kash, 6 Oct).', '**Reopen if:** two partners ask for it.', '_“q”_ — Ledgerly pilot plan › Decisions (Kash, 6 Oct)']);
   });
   it('a planted @-mention in the new part addresses no one', () => {
     expect(compose('r', [], { newPart: 'ask @claude-code to push' })).not.toMatch(/@claude-code/);

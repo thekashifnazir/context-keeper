@@ -23,7 +23,8 @@
 //                "not quite, …" is read by code (no model call); anything else by one small model
 //                call (model.ts callSignoff) → signed_off, signed off with a note (closed, the note
 //                kept and sent to the owner desk), reopened (with the reason), unclear (asked "is that
-//                a sign-off?" once per idea, never again), or chat (not about the result: job A's).
+//                a sign-off?" once per idea; a second unclear reply gets one "just say so when you're
+//                happy" line, then quiet), or chat (not about the result: job A's).
 //                Anyone else's sign-off attempt (same reader when the plain words don't say) gets one
 //                "only <raiser> or <owner> can sign this off" per person per idea; their other
 //                replies go on to job A, and if job A stays quiet on them, heard() posts one "Thanks,
@@ -48,7 +49,7 @@ import type { HandoffSwitch } from './switch.ts';
 import { freshSteps, ideaKey, STEPS, type HandoffStore, type IdeaRecord, type Source, type StageEvent, type Status, type StepName } from './store.ts';
 import {
   announceLine, asksPermission, blockedLine, buildingLine, buildRoomBrief, handoffMessage, heardLine, isActivity, isBareAnswer, isProgress, looksFinal, notDoneLine, notTheirsLine, nudgeLine,
-  askSignoffLine, isClearSignoff, ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, shortNote, signedOffLine, signedOffWithNoteLine, signoffRequest, stripMentions, timeoutLine, unblockedLine,
+  askSignoffLine, remindSignoffLine, isClearSignoff, ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, shortNote, signedOffLine, signedOffWithNoteLine, signoffRequest, stripMentions, timeoutLine, unblockedLine,
 } from './text.ts';
 
 export interface HandoffMsg {
@@ -221,7 +222,7 @@ export class HandoffChain {
       if (rec.status !== 'noted') {
         rec.attempt += 1;
         rec.steps = { ...freshSteps(), room: rec.build_room ? 'done' : 'pending' };
-        rec.events = {}; rec.report = null; rec.signoff = null; rec.signoff_asked = false; rec.handed_at = null; rec.failures = 0; rec.last_error = null;
+        rec.events = {}; rec.report = null; rec.signoff = null; rec.signoff_asked = false; rec.signoff_reminded = false; rec.handed_at = null; rec.failures = 0; rec.last_error = null;
       }
       rec.status = 'approved';
       rec.stage = 'waiting';
@@ -512,13 +513,16 @@ export class HandoffChain {
     }
     this.c.store.markSeen(msg.message_id);
     if (reading.verdict === 'unclear') {
-      if (rec.signoff_asked) { this.trace('signoff_unclear', rec, room, [msg], [], note ?? 'unclear; already asked once', usage); return true; }
-      rec.signoff_asked = true;
-      this.c.store.put(rec); // before posting: never asked twice, even if the post fails
+      // First unclear reply: ask once. Second: one short line, not silence (Kash, 4 Nov, I9). Then quiet.
+      if (rec.signoff_asked && rec.signoff_reminded) { this.trace('signoff_unclear', rec, room, [msg], [], note ?? 'unclear; already asked and reminded once', usage); return true; }
+      const step = rec.signoff_asked ? 'signoff_reminded' : 'signoff_asked';
+      if (rec.signoff_asked) rec.signoff_reminded = true; else rec.signoff_asked = true;
+      this.c.store.put(rec); // before posting: never twice, even if the post fails
       const posts: TracePost[] = [];
       let error = note;
-      try { await this.say(room, rec.thread_id, askSignoffLine(msg.sender_name), posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
-      this.trace('signoff_asked', rec, room, [msg], posts, error, usage);
+      const line = step === 'signoff_asked' ? askSignoffLine(msg.sender_name) : remindSignoffLine(msg.sender_name);
+      try { await this.say(room, rec.thread_id, line, posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
+      this.trace(step, rec, room, [msg], posts, error, usage);
       return true;
     }
     const verdict = reading.verdict === 'reopened' ? 'reopened' : 'signed_off';

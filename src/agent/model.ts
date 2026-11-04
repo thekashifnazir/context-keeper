@@ -160,7 +160,9 @@ export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { i
 
 // ---- job C: the brief (one call; the reviewer runs after, inside postBrief) ---------------------
 
-export interface BriefLine { kind: string; text: string; block: string; quote: string }
+/** headline: the point in a few words (bold); text: at most one short follow-on sentence. A line from
+ *  before 5 Nov (or a model that leaves headline empty) has the whole line in text. */
+export interface BriefLine { kind: string; headline?: string; text: string; block: string; quote: string }
 
 export async function callBrief(claude: Claude, cfg: ModelConfig, system: string, ctx: RoomContext, person: { name: string; kind: 'joiner' | 'returner'; since: string | null; first_message: string }): Promise<{ lines: BriefLine[]; usage: Usage }> {
   maybeFault();
@@ -181,7 +183,7 @@ export async function callBrief(claude: Claude, cfg: ModelConfig, system: string
   const raw = (tool?.input as { lines?: unknown[] } | undefined)?.lines;
   if (!Array.isArray(raw)) throw new Error(`no write_brief call (stop_reason ${msg.stop_reason})`);
   const s = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
-  const lines = raw.map((l: any) => ({ kind: s(l?.kind), text: s(l?.text), block: s(l?.block), quote: s(l?.quote) })).filter((l) => l.text);
+  const lines = raw.map((l: any) => ({ kind: s(l?.kind), headline: s(l?.headline), text: s(l?.text), block: s(l?.block), quote: s(l?.quote) })).filter((l) => l.text || l.headline);
   return { lines, usage };
 }
 

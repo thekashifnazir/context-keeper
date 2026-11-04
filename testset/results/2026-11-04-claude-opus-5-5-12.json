@@ -1,0 +1,2899 @@
+{
+  "schema": "ck.score/1",
+  "meta": {
+    "run_id": "r20261104-1826-08e4",
+    "set": "main",
+    "mode": "real-time",
+    "model": "claude-opus-5-5",
+    "burst_gap_s": 20,
+    "started_at": "2026-11-04T18:27:15.053Z",
+    "versions": {
+      "harness_sha": "6a673d5afdaef56a0a549b45e90ae8ad22565b25",
+      "agent_sha": "6a673d5afdaef56a0a549b45e90ae8ad22565b25",
+      "switch": "ok",
+      "mattermost": "11.9.0.28847360617.c473b66b835687963ea56067351ebc1fa6ee1bcfeab088033350f370a34020a5.false"
+    },
+    "incidents": [],
+    "cases_sha256": "7c3af0e411b1f074706f6bc3b713b1295fba00352c903271f69d3d795b27ad04",
+    "content_sha256": "57bf2d24e83bd954b5134beb5b00890a0aa95e2994cdff1b0e09264f2d8da843",
+    "prices_as_of": "2026-10-06"
+  },
+  "summary": {
+    "set": "main",
+    "overall": {
+      "passed": 23,
+      "total": 24
+    },
+    "job_a": {
+      "passed": 16,
+      "total": 17
+    },
+    "job_d": {
+      "passed": 4,
+      "total": 4
+    },
+    "job_b": {
+      "passed": 1,
+      "total": 1
+    },
+    "quiet": {
+      "passed": 2,
+      "total": 2
+    },
+    "bursts": {
+      "B1": true,
+      "B2": true
+    },
+    "confident_wrong": 0,
+    "diagnostics": {
+      "covered_on_other": 1,
+      "citations_verified": {
+        "verified": 54,
+        "cited": 73
+      },
+      "quotes_verified": {
+        "verified": 69,
+        "cited": 73
+      },
+      "briefs_seen": {
+        "T01": true,
+        "T16": false
+      },
+      "trace_missing": 0,
+      "trace_mismatch": 0,
+      "unattributed": 0,
+      "switch_doc_notices": {
+        "before_t0": 8,
+        "during_run": 1
+      },
+      "latency_s": {
+        "p50": 15.5,
+        "p95": 32.7,
+        "n": 22
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "T01",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": "B1",
+      "window": "ledgerly-pilot:B1",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §2",
+          "led-002"
+        ]
+      },
+      "item": {
+        "message_id": "sw_11c816782353ca367ce6a5462986d5e8",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §2",
+            "quote": "Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).",
+            "source": "[Product overview › Payment reminders](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)"
+          },
+          {
+            "ref": "product.md §2",
+            "quote": "Shipped in v0.6 (12 Aug 2026).",
+            "source": "[Product overview › Payment reminders](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)"
+          },
+          {
+            "ref": "status.md §1",
+            "quote": "Payment reminders, all three tones (product.md §2)",
+            "source": "[Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov)"
+          },
+          {
+            "ref": "research.md §2",
+            "quote": "10 of 12 chase late payments by hand, and it's the most-hated admin task. (This led to the reminders in product.md §2.)",
+            "source": "[Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "8197ddd7-0a31-4914-8dca-3edd1d935821",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "product.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "rtg7oxm4spdyfbpwbcmsaagc6e",
+      "public_post_ids": [
+        "95idjfd8ob85tps9t1nedrq8no"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · Welcome back! Automatic reminders at 3, 7 and 14 days overdue, in three tones, shipped in v0.6 on 12 Aug and are tested with real partner data. They came from the September interviews, where 10 of 12 agencies said chasing by hand was their most-hated task.\n_“Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).”_ — [Product overview › Payment reminders](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)\n**Also:** [Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov) · [Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep)\n\n📌 **In the record** · Direct debit through GoCardless is in the product, so agencies avoid card fees on large invoices. 7 of 12 interviewed agencies named that pain. So far it's only been tested in the sandbox, and a live test is booked for 17 Nov, so hold off promising it to partners until then.\n_“Direct debit through GoCardless, so agencies avoid card fees on large invoices.”_ — [Product overview › Payments](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#3-payments) (20 Oct)\n**Also:** [Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep) · [Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)\n\n📌 **In the record** · Each client gets a portal listing all their invoices, where they can download PDFs and payment receipts and update their billing contact. It's tested with real partner data.\n_“Each client gets a portal listing all their invoices.”_ — [Product overview › Client portal](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#5-client-portal) (20 Oct)\n**Also:** [Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 32.7,
+      "also_expect": "returner_brief"
+    },
+    {
+      "id": "T02",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": "B1",
+      "window": "ledgerly-pilot:B1",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §3"
+        ]
+      },
+      "item": {
+        "message_id": "sw_4ac647ecef1fd2db4591de2ef381f0c5",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §3",
+            "quote": "**Direct debit through GoCardless**, so agencies avoid card fees on large invoices.",
+            "source": "[Product overview › Payments](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#3-payments) (20 Oct)"
+          },
+          {
+            "ref": "research.md §2",
+            "quote": "7 of 12 named card fees on large invoices as a pain. (This led to GoCardless in product.md §3.)",
+            "source": "[Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep)"
+          },
+          {
+            "ref": "status.md §2",
+            "quote": "**GoCardless direct debit** (shipped-untested): sandbox only. A live test is booked for 17 Nov.",
+            "source": "[Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "8197ddd7-0a31-4914-8dca-3edd1d935821",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §3: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §3",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "8qepdrajnpbrxc6yxza8s4qmge",
+      "public_post_ids": [
+        "95idjfd8ob85tps9t1nedrq8no"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · Welcome back! Automatic reminders at 3, 7 and 14 days overdue, in three tones, shipped in v0.6 on 12 Aug and are tested with real partner data. They came from the September interviews, where 10 of 12 agencies said chasing by hand was their most-hated task.\n_“Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).”_ — [Product overview › Payment reminders](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)\n**Also:** [Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov) · [Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep)\n\n📌 **In the record** · Direct debit through GoCardless is in the product, so agencies avoid card fees on large invoices. 7 of 12 interviewed agencies named that pain. So far it's only been tested in the sandbox, and a live test is booked for 17 Nov, so hold off promising it to partners until then.\n_“Direct debit through GoCardless, so agencies avoid card fees on large invoices.”_ — [Product overview › Payments](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#3-payments) (20 Oct)\n**Also:** [Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep) · [Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)\n\n📌 **In the record** · Each client gets a portal listing all their invoices, where they can download PDFs and payment receipts and update their billing contact. It's tested with real partner data.\n_“Each client gets a portal listing all their invoices.”_ — [Product overview › Client portal](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#5-client-portal) (20 Oct)\n**Also:** [Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 24.7,
+      "also_expect": null
+    },
+    {
+      "id": "T03",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": "B1",
+      "window": "ledgerly-pilot:B1",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §5"
+        ]
+      },
+      "item": {
+        "message_id": "sw_9b88702604fad893fad738bd4c2c65ab",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §5",
+            "quote": "Each client gets a portal listing all their invoices.",
+            "source": "[Product overview › Client portal](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#5-client-portal) (20 Oct)"
+          },
+          {
+            "ref": "product.md §5",
+            "quote": "Clients can download PDFs and payment receipts, and update their billing contact.",
+            "source": "[Product overview › Client portal](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#5-client-portal) (20 Oct)"
+          },
+          {
+            "ref": "status.md §1",
+            "quote": "The client portal (product.md §5)",
+            "source": "[Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "8197ddd7-0a31-4914-8dca-3edd1d935821",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §5: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §5",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "product.md §5",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "1phcafusapfkxn9sdw9orusgso",
+      "public_post_ids": [
+        "95idjfd8ob85tps9t1nedrq8no"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · Welcome back! Automatic reminders at 3, 7 and 14 days overdue, in three tones, shipped in v0.6 on 12 Aug and are tested with real partner data. They came from the September interviews, where 10 of 12 agencies said chasing by hand was their most-hated task.\n_“Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off).”_ — [Product overview › Payment reminders](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#2-payment-reminders) (20 Oct)\n**Also:** [Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov) · [Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep)\n\n📌 **In the record** · Direct debit through GoCardless is in the product, so agencies avoid card fees on large invoices. 7 of 12 interviewed agencies named that pain. So far it's only been tested in the sandbox, and a live test is booked for 17 Nov, so hold off promising it to partners until then.\n_“Direct debit through GoCardless, so agencies avoid card fees on large invoices.”_ — [Product overview › Payments](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#3-payments) (20 Oct)\n**Also:** [Customer research summary › What we heard](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#2-what-we-heard) (28 Sep) · [Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)\n\n📌 **In the record** · Each client gets a portal listing all their invoices, where they can download PDFs and payment receipts and update their billing contact. It's tested with real partner data.\n_“Each client gets a portal listing all their invoices.”_ — [Product overview › Client portal](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#5-client-portal) (20 Oct)\n**Also:** [Pilot readiness status › Shipped-tested](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#1-shipped-tested-tested-with-real-partner-data) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 18.7,
+      "also_expect": null
+    },
+    {
+      "id": "T04",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T04",
+      "expected": {
+        "job": "A",
+        "verdict": "parked",
+        "sources": [
+          "roadmap.md §1",
+          "led-016"
+        ],
+        "must_mention": [
+          "Rowan"
+        ]
+      },
+      "item": {
+        "message_id": "sw_76203b596cc0dbae019eb1325584aa49",
+        "job": "A",
+        "verdict": "parked",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**QuickBooks integration.** Two of the 12 interviewed agencies use it. Parked so the pilot stays on Xero CSV users (`led-016`).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "led-016",
+            "quote": "QuickBooks is parked for phase 2. Only 2 of 12 use it, and the pilot partners are all on Xero. Added to roadmap §1.",
+            "source": "Kash, 20 Oct"
+          },
+          {
+            "ref": "roadmap.md header",
+            "quote": "Owner: Kash. Last updated 28 Oct 2026.",
+            "source": "[Ledgerly roadmap](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md) (28 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "610b7c5c-6fb2-479f-81e5-bc3cbb397dea",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict parked"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "roadmap.md §1: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-016",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md header",
+          "expected": false,
+          "resolves": false,
+          "quote_verified": false,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "6uyjudbirb8q8dkxg9izjd5kxe",
+      "public_post_ids": [
+        "sphzaczkafrtbgi47p4etc97he"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "🗂️ **Parked** · QuickBooks won't be in the pilot. It's parked for phase 2, which means later, not never. Kash parked it on 20 Oct because only 2 of the 12 agencies we interviewed use it, and all the pilot partners are on Xero.\n_“QuickBooks integration. Two of the 12 interviewed agencies use it. Parked so the pilot stays on Xero CSV users.”_ — [Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)\n**Also:** Kash, 20 Oct · [Ledgerly roadmap](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md) (28 Oct)"
+      ],
+      "owner_text": [],
+      "latency_s": 15.1,
+      "also_expect": null
+    },
+    {
+      "id": "T05",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T05",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-011"
+        ],
+        "must_mention": [
+          "weekday"
+        ]
+      },
+      "item": {
+        "message_id": "sw_d93e6bc2266f4aa5526fbb33c3004d2a",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)"
+          },
+          {
+            "ref": "led-011",
+            "quote": "Decision D1: onboarding calls Tue to Thu, weekdays only. Partner finance staff are weekday only, and we can't staff support at weekends. Confirmed.",
+            "source": "Kash, 6 Oct"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "ad09c4ff-03a7-4c16-bc15-ef2477ebad41",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "pilot-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-011",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "96n85jsczpbziyz47oie8pexxa",
+      "public_post_ids": [
+        "momegawr3frm3gqd7gtaj3zj3o"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · Onboarding calls are on weekdays, Tue to Thu. Kash decided this on 6 Oct (D1) because partner finance staff work weekdays only and we can't staff support at weekends. Owners who'd rather do a weekend fit a weekday slot instead.\n**Reopen if:** a partner can't make any Tue–Thu slot.\n_“Onboarding calls on weekdays, Tue to Thu: Partner finance staff work weekdays only; support is staffed on weekdays”_ — [Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)\n**Also:** Kash, 6 Oct"
+      ],
+      "owner_text": [],
+      "latency_s": 18.4,
+      "also_expect": null
+    },
+    {
+      "id": "T06",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T06",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "research.md §1",
+          "led-008",
+          "led-010"
+        ]
+      },
+      "item": {
+        "message_id": "sw_0c015f30329fe283dd95740f71b91654",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D4 | confirmed | **Customer interviews before the pilot**, not a survey | 12 agencies interviewed in Sep; surveys only hear from people who already want the thing | A mailing-list survey (selection bias) | Slower than a survey | Never for this pilot (already done) | `led-008` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 10 Sep)"
+          },
+          {
+            "ref": "led-008",
+            "quote": "Decision: interviews, not a survey. Surveys mostly get answers from people who already want the thing. I've booked 12 agency interviews for September; the summary will go in research.md.",
+            "source": "Kash, 10 Sep"
+          },
+          {
+            "ref": "led-010",
+            "quote": "Interviews done, 12 of 12. Summary is in research.md. Big ones: chasing payments by hand, and card fees on big invoices.",
+            "source": "Kash, 26 Sep"
+          },
+          {
+            "ref": "research.md §1",
+            "quote": "**12 agency interviews** of 30 minutes each, with owners or finance leads at agencies of 2 to 30 people.",
+            "source": "[Customer research summary › Method](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#1-method) (28 Sep)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "3a9f16b4-e926-4aaf-9b7b-2030251c079f",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "led-008: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-008",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-010",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "research.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "m8tsc7fh8igczgkdjz1b7m51hw",
+      "public_post_ids": [
+        "zoc1mpiix7d6ikka618wxjb9jy"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · We did this: Kash interviewed 12 agency owners and finance leads in September, and the findings are in research.md (the big ones were chasing payments by hand and card fees on big invoices). Kash chose interviews over a survey on 10 Sep (D4), because surveys mostly hear from people who already want the thing.\n**Reopen if:** never for this pilot, since the interviews are done.\n_“Customer interviews before the pilot, not a survey: 12 agencies interviewed in Sep; surveys only hear from people who already want the thing”_ — [Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 10 Sep)\n**Also:** Kash, 10 Sep · Kash, 26 Sep · [Customer research summary › Method](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/research.md#1-method) (28 Sep)"
+      ],
+      "owner_text": [],
+      "latency_s": 15.5,
+      "also_expect": null
+    },
+    {
+      "id": "T07",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T07",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "product.md §7",
+          "led-006"
+        ],
+        "must_mention": [
+          "Sam"
+        ]
+      },
+      "item": {
+        "message_id": "sw_f215fbabe18030a05eddfb8211ae04ec",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §7",
+            "quote": "**A native mobile app.** The web app is fully responsive. Decided 9 Sep, because agencies invoice from a desk and two codebases would halve our speed (see `led-006`).",
+            "source": "[Product overview › Deliberately not doing](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#7-deliberately-not-doing) (20 Oct)"
+          },
+          {
+            "ref": "led-006",
+            "quote": "Decision: no native mobile app. Agencies invoice from a desk, and none of the interviews so far asked for one. Responsive web only. Added to product doc §7.",
+            "source": "Kash, 9 Sep"
+          },
+          {
+            "ref": "led-004",
+            "quote": "Could we get a mobile app on the roadmap? Feels like everyone expects one.",
+            "source": "Sam, 3 Sep"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "7ef16e5c-d2b0-4f0e-845e-aa753149e72b",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §7: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §7",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-006",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-004",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "ij9mqcgqsjn6mxntapyy5sjpme",
+      "public_post_ids": [
+        "ihn7brir3fnhbcsto6ocji9one"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · We're not building a native mobile app. Kash decided on 9 Sep to go responsive web only, because agencies invoice from a desk, none of the interviews asked for an app, and two codebases would halve our speed. Sam suggested the same idea on 3 Sep.\n_“A native mobile app. The web app is fully responsive. Decided 9 Sep, because agencies invoice from a desk and two codebases would halve our speed (see led-006).”_ — [Product overview › Deliberately not doing](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#7-deliberately-not-doing) (20 Oct)\n**Also:** Kash, 9 Sep · Sam, 3 Sep"
+      ],
+      "owner_text": [],
+      "latency_s": 19.2,
+      "also_expect": null
+    },
+    {
+      "id": "T08",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T08",
+      "expected": {
+        "job": "A",
+        "verdict": "new",
+        "sources": [],
+        "must_mention": [
+          "Rowan"
+        ]
+      },
+      "item": {
+        "message_id": "sw_cd93ac67ef6b9a84c25e248fb97dafb8",
+        "job": "A",
+        "verdict": "new",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "abe49d55-177a-451f-9397-67bb34f91130",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict new"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for new"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [],
+      "case_post_id": "hb1bgx5pkjbxmjp9d7do3u173e",
+      "public_post_ids": [
+        "axm9ys3cf3nw9maia3dqri797r"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "💡 **New idea** · Thanks Rowan, dark mode for the invoice editor is logged as a new idea."
+      ],
+      "owner_text": [],
+      "latency_s": 13.4,
+      "also_expect": null
+    },
+    {
+      "id": "T09",
+      "room": "ledgerly-pilot",
+      "author": "Sam",
+      "burst": null,
+      "window": "ledgerly-pilot:T09",
+      "expected": {
+        "job": "A",
+        "verdict": "might-be-related",
+        "sources": [
+          "product.md §1"
+        ]
+      },
+      "item": {
+        "message_id": "sw_393814f464849fd934b0f45e025d3325",
+        "job": "A",
+        "verdict": "might-be-related",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "product.md §1",
+            "quote": "**Editable templates:** every label on the invoice (such as \"Invoice\", \"Due date\" and \"Total\") can be renamed per client. There is no built-in translation.",
+            "source": "[Product overview › Invoices](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#1-invoices) (20 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "2a080403-d4a7-4ecf-852f-7247a62a2690",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict might-be-related"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "product.md §1: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "product.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "81kgizwobbg4irf5y8mrwni3tc",
+      "public_post_ids": [
+        "qrfyfmmacby1xkcf5hpokr3fue"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "🔎 **Related** · You can rename every invoice label (like \"Invoice\", \"Due date\" and \"Total\") for each client, so that client's labels could be set in Welsh. There's no built-in translation, though (product.md §1.4).\n_“Editable templates: every label on the invoice (such as \"Invoice\", \"Due date\" and \"Total\") can be renamed per client. There is no built-in translation.”_ — [Product overview › Invoices](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#1-invoices) (20 Oct)"
+      ],
+      "owner_text": [],
+      "latency_s": 13.4,
+      "also_expect": null
+    },
+    {
+      "id": "T10",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T10",
+      "expected": {
+        "job": "A",
+        "verdict": "contradicts-record",
+        "sources": [
+          "status.md §2",
+          "product.md §4",
+          "roadmap.md §1"
+        ],
+        "routing": "owner_private_allowed"
+      },
+      "item": {
+        "message_id": "sw_8adaf2b95ab8262819abfbe022a91698",
+        "job": "A",
+        "verdict": "contradicts-record",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "status.md §2",
+            "quote": "**Xero:** CSV export is shipped-tested. **Live sync is planned, and doesn't exist yet** (roadmap.md §1).",
+            "source": "[Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)"
+          },
+          {
+            "ref": "roadmap.md header",
+            "quote": "Owner: Kash. Last updated 28 Oct 2026.",
+            "source": "[Ledgerly roadmap](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md) (28 Oct)"
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**Live two-way Xero sync** (today it's a CSV export; see product.md §4).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "product.md §4",
+            "quote": "**Xero: CSV export only.** Live two-way sync is planned for phase 2 (see roadmap.md §1).",
+            "source": "[Product overview › Integrations](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#4-integrations) (20 Oct)"
+          },
+          {
+            "ref": "led-017",
+            "quote": "Makes sense. Xero is CSV export for now; live sync is phase 2 as well.",
+            "source": "Priya, 20 Oct"
+          },
+          {
+            "ref": "status.md header",
+            "quote": "Labels: **shipped-tested**, **shipped-untested**, **in-progress**, **planned**, **not-planned**. Check the label before telling a partner something works.",
+            "source": "[Pilot readiness status](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md) (2 Nov)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "533df424-eac7-4a08-b3ce-57e95638a966",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict contradicts-record"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "status.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "status.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md header",
+          "expected": false,
+          "resolves": false,
+          "quote_verified": false,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "product.md §4",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-017",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md header",
+          "expected": false,
+          "resolves": false,
+          "quote_verified": false,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "syh3xm77k3dh38mcbe3iqhtm4w",
+      "public_post_ids": [
+        "5ntrptd8w7yntm8yga3hyh5gjy"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "⚠️ **The record says otherwise** · Live Xero sync won't be ready for the pilot. It doesn't exist yet and is planned for phase 2, after the pilot. Right now Xero is CSV export only, as Priya noted on 20 Oct. It's worth checking the status labels and correcting this with Northbank before the pilot.\n_“Xero: CSV export is shipped-tested. Live sync is planned, and doesn't exist yet (roadmap.md §1).”_ — [Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)\n**Also:** [Ledgerly roadmap](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md) (28 Oct) · [Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct) · [Product overview › Integrations](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#4-integrations) (20 Oct) · Priya, 20 Oct · [Pilot readiness status](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 14.8,
+      "also_expect": null
+    },
+    {
+      "id": "T11",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T11",
+      "expected": {
+        "job": "D",
+        "restriction": "personal",
+        "sources": [
+          "pilot-plan.md §3"
+        ]
+      },
+      "item": {
+        "message_id": "sw_8d81954a14e82b6cb6bfa5493cdf9e74",
+        "job": "D",
+        "verdict": null,
+        "restriction": "personal",
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)"
+          },
+          {
+            "ref": "pilot-plan.md §3",
+            "quote": "Priya: onboarding calls and pilot support.",
+            "source": "[Ledgerly pilot plan › Who does what](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#3-who-does-what) (30 Oct)"
+          },
+          {
+            "ref": "pilot-plan.md §3",
+            "quote": "Rowan: partner comms from 4 Nov (back from leave).",
+            "source": "[Ledgerly pilot plan › Who does what](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#3-who-does-what) (30 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "b2a74491-49f7-462e-a4c6-c660119e7e8a",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job D"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "restriction personal"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for personal"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §3",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §3",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "ozcky17i8ibrpezhockyt31fue",
+      "public_post_ids": [
+        "frm9434bwt8wdq1myfp3szomeo"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Thanks Rowan, noted that you can't do calls before 10am. The onboarding plan stays the same: Priya runs the onboarding calls, on weekdays Tue to Thu."
+      ],
+      "owner_text": [],
+      "latency_s": 14,
+      "also_expect": null
+    },
+    {
+      "id": "T12",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T12",
+      "expected": {
+        "job": "D",
+        "restriction": "project",
+        "clashes_with": "D2",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-012"
+        ],
+        "routing": "owner_private_required"
+      },
+      "item": {
+        "message_id": "sw_b9ca74c731ef5db39243c9e00273c39c",
+        "job": "D",
+        "verdict": null,
+        "restriction": "project",
+        "clashes_with": "D2",
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D2 | confirmed | **Three agencies, max 25 clients each** | Support is Priya plus Kash; three keeps the loop tight; one is too small to learn from | One agency (too small a sample); five (support can't cope) | Waiting-list agencies wait until 2027 | Support capacity changes (a new hire) | `led-012` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)"
+          },
+          {
+            "ref": "led-012",
+            "quote": "Decision D2: three agencies, max 25 clients each. Support is Priya and me, and one agency would be too small to learn from. Confirmed.",
+            "source": "Kash, 6 Oct"
+          },
+          {
+            "ref": "pilot-plan.md §3",
+            "quote": "Rowan: partner comms from 4 Nov (back from leave).",
+            "source": "[Ledgerly pilot plan › Who does what](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#3-who-does-what) (30 Oct)"
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "**Three partner agencies:** Fieldnote Studio, Harbour & Pine and Northbank Creative. All three signed their pilot letters by 30 Oct.",
+            "source": "[Ledgerly pilot plan › What and when](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#1-what-and-when) (30 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "1e513eee-ca27-422a-ac9e-70dfc41cb661",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job D"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "restriction project, clashes with D2"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for project"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "owner desk names D2; one neutral thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "led-012",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "pilot-plan.md §3",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "c73pk58f93gxt8jofq7zxwujec",
+      "public_post_ids": [
+        "ckegjmcqatr67ynnk447pqjsoc"
+      ],
+      "owner_post_ids": [
+        "8hx39n1h5bfeiyfit9outc3qbh"
+      ],
+      "public_text": [
+        "Thanks, rowan. Noted, and I've flagged it to the owner. The plan stays as it is until they decide."
+      ],
+      "owner_text": [
+        "⚖️ **#1 · Clash to rule on** · #ck-eval-r20261104-1826-08e4-ledgerly\n**rowan said:** _“Honestly we can't take three agencies, it's too much. One is plenty.”_\n**Clashes with D2**: **Three agencies, max 25 clients each**: Support is Priya plus Kash; three keeps the loop tight; one is too small to learn from\n**The clash:** Rowan says the team can't take three agencies and one is plenty. That clashes with D2 (three agencies, max 25 clients each).\n**Why it was decided:** D2 was confirmed by Kash on 6 Oct (led-012): support is Priya plus Kash, three keeps the loop tight, and one agency was rejected as too small a sample. Reopen if support capacity changes (a new hire). All three partners signed pilot letters by 30 Oct. Rowan, who handles partner comms from 4 Nov, gave no new capacity information.\n**Options:**\n1. Keep D2 as decided: three agencies, max 25 clients each\n2. Keep three agencies but ask Rowan what exactly is too much (for example the partner comms load) and rebalance the work\n3. Keep three agencies but lower the client cap per agency to reduce load\n**Reply** in this thread (or start with #1) and I'll post your ruling back in their thread. The room got a neutral \"flagged to the owner\" reply; the plan stands until you rule."
+      ],
+      "latency_s": 14.8,
+      "also_expect": null
+    },
+    {
+      "id": "T13",
+      "room": "ledgerly-pilot",
+      "author": "Priya",
+      "burst": null,
+      "window": "ledgerly-pilot:T13",
+      "expected": {
+        "job": "D",
+        "restriction": "project",
+        "clashes_with": "D3",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-013",
+          "status.md §3"
+        ],
+        "routing": "owner_private_required"
+      },
+      "item": {
+        "message_id": "sw_e3235095c5bca1fa4cf1f96ac29ae3e0",
+        "job": "D",
+        "verdict": null,
+        "restriction": "project",
+        "clashes_with": "D3",
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D3 | confirmed | Pilot currencies **GBP, EUR and USD** | Northbank bills two US clients | GBP only (loses Northbank's US clients) | USD has open issue #41 | #41 isn't fixed by 20 Nov | `led-013` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 8 Oct)"
+          },
+          {
+            "ref": "led-013",
+            "quote": "Decision D3: pilot currencies GBP, EUR and USD. Northbank bills two US clients. Confirmed.",
+            "source": "Kash, 8 Oct"
+          },
+          {
+            "ref": "status.md §2",
+            "quote": "**USD invoices** (shipped-untested): a rounding issue on partial payments is open (issue #41).",
+            "source": "[Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)"
+          },
+          {
+            "ref": "status.md §3",
+            "quote": "#41: a USD partial payment can be off by 1 cent on the remaining balance.",
+            "source": "[Pilot readiness status › Known issues](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#3-known-issues) (2 Nov)"
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "A two-week pilot from **Tue 24 Nov to Fri 4 Dec 2026**.",
+            "source": "[Ledgerly pilot plan › What and when](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#1-what-and-when) (30 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "839ad7f2-71db-4146-9ddb-a1dc93367694",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job D"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "restriction project, clashes with D3"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for project"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "owner desk names D3; one neutral thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "led-013",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "status.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "status.md §3",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "3cht4c9nuidr9mp4737bnpi5xw",
+      "public_post_ids": [
+        "xhe1x7tks3fqfpih16aupjsixh"
+      ],
+      "owner_post_ids": [
+        "hkjphn8ywtfkiyjjgiu1pjh3pr"
+      ],
+      "public_text": [
+        "Thanks, priya. Noted, and I've flagged it to the owner. The plan stays as it is until they decide."
+      ],
+      "owner_text": [
+        "⚖️ **#2 · Clash to rule on** · #ck-eval-r20261104-1826-08e4-ledgerly\n**priya said:** _“We have to keep the pilot to GBP and EUR. The USD rounding bug (#41) won't be fixed in time.”_\n**Clashes with D3**: Pilot currencies **GBP, EUR and USD**: Northbank bills two US clients\n**The clash:** Priya says the pilot has to be GBP and EUR only, dropping USD, because she expects the USD partial-payment rounding bug (#41) won't be fixed in time. That clashes with D3 (GBP, EUR and USD).\n**Why it was decided:** D3 (confirmed by Kash, led-013, 8 Oct 2026): pilot currencies are GBP, EUR and USD because Northbank bills two US clients. GBP-only was rejected because it loses Northbank's US clients. Open issue #41 was accepted as a known downside. Reopen if #41 isn't fixed by 20 Nov. Today is 4 Nov, so that deadline hasn't passed yet. Priya is forecasting, and the condition isn't met yet.\n**Options:**\n1. Keep D3 as decided (GBP, EUR and USD) and check #41 on 20 Nov, its reopen date\n2. Drop USD now and confirm with Northbank how its two US clients will be billed during the pilot\n3. Keep USD but don't take USD partial payments until #41 is fixed (the cent-off bug only affects partial payments)\n**Reply** in this thread (or start with #2) and I'll post your ruling back in their thread. The room got a neutral \"flagged to the owner\" reply; the plan stands until you rule."
+      ],
+      "latency_s": 14.8,
+      "also_expect": null
+    },
+    {
+      "id": "T14",
+      "room": "ledgerly-pilot",
+      "author": "Kash",
+      "burst": null,
+      "window": "ledgerly-pilot:T14",
+      "expected": {
+        "job": "B",
+        "verdict": "decision",
+        "sources": [],
+        "routing": "owner_private_allowed"
+      },
+      "item": {
+        "message_id": "sw_0aef63223df2d1f45e96d54dde7e370c",
+        "job": "B",
+        "verdict": "decision",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "A two-week pilot from **Tue 24 Nov to Fri 4 Dec 2026**.",
+            "source": "[Ledgerly pilot plan › What and when](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#1-what-and-when) (30 Oct)"
+          },
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)"
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "**Three partner agencies:** Fieldnote Studio, Harbour & Pine and Northbank Creative. All three signed their pilot letters by 30 Oct.",
+            "source": "[Ledgerly pilot plan › What and when](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#1-what-and-when) (30 Oct)"
+          },
+          {
+            "ref": "pilot-plan.md §3",
+            "quote": "Priya: onboarding calls and pilot support.",
+            "source": "[Ledgerly pilot plan › Who does what](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#3-who-does-what) (30 Oct)"
+          }
+        ],
+        "decision_record": {
+          "summary": "Fieldnote goes first for onboarding, on Tue 24 Nov 2026.",
+          "decided_by": "Kash",
+          "action_owner": null,
+          "due": "2026-11-24",
+          "reopen_if": null,
+          "date": "2026-11-04"
+        },
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "a24f86f5-9833-4fd4-92c2-7318af56147f",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job B"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict decision"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for decision"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply plus an allowed owner note"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §3",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "7n8m85uigb8x3fr67mtjg8k39o",
+      "public_post_ids": [
+        "zcdgqmescigyjxqyyp696rry4r"
+      ],
+      "owner_post_ids": [
+        "jd9swehjmjboix53dmfrokjz4y"
+      ],
+      "public_text": [
+        "Logged as decided: Fieldnote goes first for onboarding, on Tue 24 Nov 2026. (Kash's call.)"
+      ],
+      "owner_text": [
+        "🗳️ **#3 · Decision logged, no owner yet** · #ck-eval-r20261104-1826-08e4-ledgerly\n**Logged:** Fieldnote goes first for onboarding, on Tue 24 Nov 2026.\n**You said:** _“Ok, Fieldnote goes first for onboarding, Tue 24th.”_\n1. Suggested owner: Priya (pilot-plan.md §3.2: \"Priya: onboarding calls and pilot support.\"). Reply \"confirm\" to take it.\n**Date:** Tue 24 Nov\n**Reopen if:** not said. What would make this worth revisiting? Reply \"reopen if ...\".\n**Reply** in this thread (or start with #3): \"confirm\", \"owner Sam\", a date, a reopen-if, or \"leave it\". The decision itself is already logged; until you answer, the work stays unassigned."
+      ],
+      "latency_s": 14.3,
+      "also_expect": null
+    },
+    {
+      "id": "T15",
+      "room": "ledgerly-pilot",
+      "author": "Priya",
+      "burst": null,
+      "window": "ledgerly-pilot:T15",
+      "expected": {
+        "job": "none"
+      },
+      "item": {
+        "message_id": "sw_230b3513ce7dc4f08fbc5e59418eb446",
+        "job": "none",
+        "verdict": null,
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "621be511-3b96-4dcf-b955-e056135b4359",
+      "decision_kind": "silence",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "quiet: no visible posts, trace says silence"
+        },
+        "P2": {
+          "status": "n/a",
+          "reason": "quiet case"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for none"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "nothing posted"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 0 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": null
+      },
+      "citations": [],
+      "case_post_id": "metqn4536bbr3yd1m6qodzqhae",
+      "public_post_ids": [],
+      "owner_post_ids": [],
+      "public_text": [],
+      "owner_text": [],
+      "latency_s": null,
+      "also_expect": null
+    },
+    {
+      "id": "T16",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": "B2",
+      "window": "riverside-build-night:B2",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "event-plan.md §2",
+          "riv-004"
+        ],
+        "also_sources": [
+          "event-plan.md §4"
+        ]
+      },
+      "item": {
+        "message_id": "sw_b778f7b2db8249e5a7cbd19419437945",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §2",
+            "quote": "| E1 | confirmed | **Weekday evening, not a weekend** | First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs | A weekend (parked to §4) | A sponsor funds a full weekend | `riv-004` |",
+            "source": "[Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 14 Oct)"
+          },
+          {
+            "ref": "riv-004",
+            "quote": "Decision E1: weekday evening for this one. It's a first small pilot. A weekend needs a bigger sponsor and cuts out people with families or weekend jobs. Weekend version is parked for later.",
+            "source": "Kash, 14 Oct"
+          },
+          {
+            "ref": "riv-003",
+            "quote": "Would a weekend give people more time to build?",
+            "source": "Dana, 14 Oct"
+          },
+          {
+            "ref": "event-plan.md §4",
+            "quote": "**A full weekend hackathon**, once we have a bigger sponsor and a community to draw on.",
+            "source": "[Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "27d0a7fb-7e71-499a-b320-b87d7699a0ab",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "event-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-004",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-003",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "event-plan.md §4",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "6dr643fg5ifs5cgcfjfaznzgky",
+      "public_post_ids": [
+        "of15smr9s7ddjr4okcxxqppq5y"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · This one is a weekday evening. Kash decided that on 14 Oct (E1) after Dana asked the same thing: it's a first small pilot, and a weekend needs a bigger sponsor and cuts out people with families or weekend jobs. A full weekend hackathon is parked for a later event.\n**Reopen if:** A sponsor funds a full weekend.\n_“Weekday evening, not a weekend: First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 14 Oct)\n**Also:** Kash, 14 Oct · Dana, 14 Oct · [Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)\n\n📌 **In the record** · There's no pre-event survey for this one. Kash decided that on 19 Oct (E2), because surveys only hear from people who already want X.\n**Reopen if:** Never for event #1.\n_“No pre-event survey: Surveys only hear from people who already want X”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 19 Oct)\n**Also:** Kash, 19 Oct\n\n📌 **In the record** · Students from the society are very welcome, but this event is open to the whole community, not students-only. Kash decided that on 22 Oct (E3) after Dana suggested bringing in the society: the venue's programme is for everyone, and student no-show rates are high. A students-only night with the society is parked for later.\n**Reopen if:** The uni society co-hosts a separate night.\n_“Community-wide, not students-only: The venue's programme is for everyone; student no-show rates are high”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 22 Oct)\n**Also:** Kash, 22 Oct · Dana, 22 Oct · [Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 36.2,
+      "also_expect": "joiner_brief"
+    },
+    {
+      "id": "T17",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": "B2",
+      "window": "riverside-build-night:B2",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "event-plan.md §2",
+          "riv-006"
+        ]
+      },
+      "item": {
+        "message_id": "sw_cee8b7d8fb19e6b51e99c6f4634829c0",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §2",
+            "quote": "| E2 | confirmed | **No pre-event survey** | Surveys only hear from people who already want X | A survey to the mailing list | Never for event #1 | `riv-006` |",
+            "source": "[Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 19 Oct)"
+          },
+          {
+            "ref": "riv-006",
+            "quote": "Decision E2: no pre-event survey. Surveys only hear from people who already want X.",
+            "source": "Kash, 19 Oct"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "27d0a7fb-7e71-499a-b320-b87d7699a0ab",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "event-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-006",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "8c8zprkjs7bcmp4wyszhb1sf7c",
+      "public_post_ids": [
+        "of15smr9s7ddjr4okcxxqppq5y"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · This one is a weekday evening. Kash decided that on 14 Oct (E1) after Dana asked the same thing: it's a first small pilot, and a weekend needs a bigger sponsor and cuts out people with families or weekend jobs. A full weekend hackathon is parked for a later event.\n**Reopen if:** A sponsor funds a full weekend.\n_“Weekday evening, not a weekend: First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 14 Oct)\n**Also:** Kash, 14 Oct · Dana, 14 Oct · [Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)\n\n📌 **In the record** · There's no pre-event survey for this one. Kash decided that on 19 Oct (E2), because surveys only hear from people who already want X.\n**Reopen if:** Never for event #1.\n_“No pre-event survey: Surveys only hear from people who already want X”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 19 Oct)\n**Also:** Kash, 19 Oct\n\n📌 **In the record** · Students from the society are very welcome, but this event is open to the whole community, not students-only. Kash decided that on 22 Oct (E3) after Dana suggested bringing in the society: the venue's programme is for everyone, and student no-show rates are high. A students-only night with the society is parked for later.\n**Reopen if:** The uni society co-hosts a separate night.\n_“Community-wide, not students-only: The venue's programme is for everyone; student no-show rates are high”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 22 Oct)\n**Also:** Kash, 22 Oct · Dana, 22 Oct · [Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 29,
+      "also_expect": null
+    },
+    {
+      "id": "T18",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": "B2",
+      "window": "riverside-build-night:B2",
+      "expected": {
+        "job": "A",
+        "verdict": "parked",
+        "sources": [
+          "event-plan.md §4",
+          "riv-008"
+        ],
+        "also_sources": [
+          "event-plan.md §5"
+        ]
+      },
+      "item": {
+        "message_id": "sw_b453a83f52ac4e3cbba431277bda805b",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §2",
+            "quote": "| E3 | confirmed | **Community-wide, not students-only** | The venue's programme is for everyone; student no-show rates are high | Students-only (parked to §4) | The uni society co-hosts a separate night | `riv-008` |",
+            "source": "[Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 22 Oct)"
+          },
+          {
+            "ref": "riv-008",
+            "quote": "Decision E3: they're welcome, but this one is community-wide, not students-only. A students-only night with the society is parked for later.",
+            "source": "Kash, 22 Oct"
+          },
+          {
+            "ref": "riv-007",
+            "quote": "Could we pull in the uni computing society?",
+            "source": "Dana, 22 Oct"
+          },
+          {
+            "ref": "event-plan.md §4",
+            "quote": "**A students-only event** with the university society.",
+            "source": "[Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "27d0a7fb-7e71-499a-b320-b87d7699a0ab",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "fail",
+          "reason": "verdict covered, expected parked"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "riv-008: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": false,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": true,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-008",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-007",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "event-plan.md §4",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "irhqrhwrttb43kc67cx8he4syh",
+      "public_post_ids": [
+        "of15smr9s7ddjr4okcxxqppq5y"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · This one is a weekday evening. Kash decided that on 14 Oct (E1) after Dana asked the same thing: it's a first small pilot, and a weekend needs a bigger sponsor and cuts out people with families or weekend jobs. A full weekend hackathon is parked for a later event.\n**Reopen if:** A sponsor funds a full weekend.\n_“Weekday evening, not a weekend: First small pilot event; a weekend needs bigger sponsors and cuts out people with family or weekend jobs”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 14 Oct)\n**Also:** Kash, 14 Oct · Dana, 14 Oct · [Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)\n\n📌 **In the record** · There's no pre-event survey for this one. Kash decided that on 19 Oct (E2), because surveys only hear from people who already want X.\n**Reopen if:** Never for event #1.\n_“No pre-event survey: Surveys only hear from people who already want X”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 19 Oct)\n**Also:** Kash, 19 Oct\n\n📌 **In the record** · Students from the society are very welcome, but this event is open to the whole community, not students-only. Kash decided that on 22 Oct (E3) after Dana suggested bringing in the society: the venue's programme is for everyone, and student no-show rates are high. A students-only night with the society is parked for later.\n**Reopen if:** The uni society co-hosts a separate night.\n_“Community-wide, not students-only: The venue's programme is for everyone; student no-show rates are high”_ — [Event plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#2-decisions-with-reasons) (Kash, 22 Oct)\n**Also:** Kash, 22 Oct · Dana, 22 Oct · [Event plan › Later events](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#4-later-events-parked-not-rejected) (2 Nov)"
+      ],
+      "owner_text": [],
+      "latency_s": 21.2,
+      "also_expect": null
+    },
+    {
+      "id": "T19",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": null,
+      "window": "riverside-build-night:T19",
+      "expected": {
+        "job": "D",
+        "restriction": "personal",
+        "sources": [
+          "event-plan.md §1"
+        ]
+      },
+      "item": {
+        "message_id": "sw_a67bbe575053e780af9e4faacff0c25c",
+        "job": "D",
+        "verdict": null,
+        "restriction": "personal",
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §1",
+            "quote": "**Thu 26 Nov 2026, 18:30 to 21:30**, an evening build night.",
+            "source": "[Event plan › Format](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#1-format) (2 Nov)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "4e2e52a4-6236-47c5-8632-ca78f8dc3b1b",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job D"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "restriction personal"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for personal"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "c3msog9n87dtjjntn4yppdh5dy",
+      "public_post_ids": [
+        "8zatzeahdfgyxewnwzwk58fkzr"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Thanks Alex, noted that you need to leave by 9pm for your last train. The build night still runs 18:30 to 21:30 on Thu 26 Nov, so come for whatever part works for you."
+      ],
+      "owner_text": [],
+      "latency_s": 13.8,
+      "also_expect": null
+    },
+    {
+      "id": "T20",
+      "room": "riverside-build-night",
+      "author": "Dana",
+      "burst": null,
+      "window": "riverside-build-night:T20",
+      "expected": {
+        "job": "none"
+      },
+      "item": {
+        "message_id": "sw_e3b504c0317bc32c6dbce94c2a7b9e41",
+        "job": "none",
+        "verdict": null,
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "311cfc46-5e7f-4050-93e9-04e2562662c9",
+      "decision_kind": "silence",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "quiet: no visible posts, trace says silence"
+        },
+        "P2": {
+          "status": "n/a",
+          "reason": "quiet case"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for none"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "nothing posted"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 0 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": null
+      },
+      "citations": [],
+      "case_post_id": "k3qxneonrifgbyyfy33fpiyjne",
+      "public_post_ids": [],
+      "owner_post_ids": [],
+      "public_text": [],
+      "owner_text": [],
+      "latency_s": null,
+      "also_expect": null
+    },
+    {
+      "id": "T21",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T21",
+      "expected": {
+        "job": "A",
+        "verdict": "reopen",
+        "routing": "owner_private_required",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-011"
+        ]
+      },
+      "item": {
+        "message_id": "sw_e47cb0a8c8af5660ec0a2d4f2806f9c7",
+        "job": "A",
+        "verdict": "reopen",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |",
+            "source": "[Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)"
+          },
+          {
+            "ref": "led-011",
+            "quote": "Decision D1: onboarding calls Tue to Thu, weekdays only. Partner finance staff are weekday only, and we can't staff support at weekends. Confirmed.",
+            "source": "Kash, 6 Oct"
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "**Three partner agencies:** Fieldnote Studio, Harbour & Pine and Northbank Creative. All three signed their pilot letters by 30 Oct.",
+            "source": "[Ledgerly pilot plan › What and when](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#1-what-and-when) (30 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "82b215b6-5e79-4134-b0b9-16cc2b49998c",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict reopen"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "pilot-plan.md §2: resolves, quote verified, shown in the reply or owner desk"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "owner desk; one neutral thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-011",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "pe3afg4w9fy7pmt5euwhpf93to",
+      "public_post_ids": [
+        "dnuxztc5hirbufzy6jmh5iwnnr"
+      ],
+      "owner_post_ids": [
+        "j4ukjbym8fbjudwhcfrzoa8n3w"
+      ],
+      "public_text": [
+        "↩️ **Reopen request** · Thanks, rowan. That's new information on a recorded decision, so I've asked the owner whether to reopen it; until they decide, the plan stays as it is.\n**Reopen if:** A partner can't make any Tue–Thu slot.\n_“Onboarding calls on weekdays, Tue to Thu: Partner finance staff work weekdays only; support is staffed on weekdays”_ — [Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)\n**Also:** Kash, 6 Oct · [Ledgerly pilot plan › What and when](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#1-what-and-when) (30 Oct)"
+      ],
+      "owner_text": [
+        "↩️ **#4 · Reopen request** · #ck-eval-r20261104-1826-08e4-ledgerly\n**rowan said:** _“Can we reopen the weekday-only thing? Northbank's finance lead says she can't do any weekday slot that week.”_\n**Decision D1:** Onboarding calls on weekdays, Tue to Thu: Partner finance staff work weekdays only; support is staffed on weekdays — [Ledgerly pilot plan › Decisions](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/pilot-plan.md#2-decisions-each-confirmed-by-kash-with-the-reason) (Kash, 6 Oct)\n**Reopen if:** A partner can't make any Tue–Thu slot\n**Why it may qualify:** Reopen: D1 (onboarding calls on weekdays, Tue to Thu) is to be reopened if a partner can't make any Tue–Thu slot, and Rowan reports that the finance lead at Northbank, a pilot partner, can't do any weekday slot that week.\n**Should D1 be reopened?** Reply in this thread (or start with #4): \"plan stands\" to keep D1, or your ruling in a sentence; I'll post it back in their thread. The room has been told the plan stands until you decide."
+      ],
+      "latency_s": 15.8,
+      "also_expect": null
+    },
+    {
+      "id": "T22",
+      "room": "ledgerly-pilot",
+      "author": "Kash",
+      "burst": null,
+      "window": "ledgerly-pilot:T22",
+      "expected": {
+        "job": "A",
+        "verdict": "parked-recall",
+        "must_mention": [
+          "QuickBooks",
+          "Rowan"
+        ],
+        "sources": [
+          "roadmap.md §1",
+          "led-016"
+        ]
+      },
+      "item": {
+        "message_id": "sw_62cc9eba08d95990e32c71b99d504780",
+        "job": "A",
+        "verdict": "parked-recall",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**QuickBooks integration.** Two of the 12 interviewed agencies use it. Parked so the pilot stays on Xero CSV users (`led-016`).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "led-016",
+            "quote": "QuickBooks is parked for phase 2. Only 2 of 12 use it, and the pilot partners are all on Xero. Added to roadmap §1.",
+            "source": "Kash, 20 Oct"
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**Live two-way Xero sync** (today it's a CSV export; see product.md §4).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**SSO** (Google and Microsoft sign-in).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**Self-serve sign-up** (after D5 in the pilot plan).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**A public launch event** for agencies.",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "f09c23c3-e5af-45fd-ae49-f5c845e97feb",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict parked-recall"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "roadmap.md §1: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-016",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "6jkhrpmqm3rjbrbjkjgdbfya7r",
+      "public_post_ids": [
+        "e88r5ewdkj8tzg59ecwqcwa5nw"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "🗂️ **Parked for later** · Five items are parked for phase 2 on the roadmap: QuickBooks integration, live two-way Xero sync (today it's a CSV export), SSO with Google and Microsoft sign-in, self-serve sign-up, and a public launch event for agencies. Kash parked QuickBooks on 20 Oct because only 2 of 12 interviewed agencies use it and the pilot partners are all on Xero.\n_“QuickBooks integration. Two of the 12 interviewed agencies use it. Parked so the pilot stays on Xero CSV users.”_ — [Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)\n**Also:** Kash, 20 Oct"
+      ],
+      "owner_text": [],
+      "latency_s": 14.7,
+      "also_expect": null
+    },
+    {
+      "id": "T23",
+      "room": "riverside-build-night",
+      "author": "Alex",
+      "burst": null,
+      "window": "riverside-build-night:T23",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "riv-012"
+        ],
+        "also_sources": [
+          "event-plan.md §1"
+        ],
+        "must_mention": [
+          "19:30"
+        ]
+      },
+      "item": {
+        "message_id": "sw_92af445fc48adef6008113df3bf36ada",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "event-plan.md §1",
+            "quote": "Food arrives at **20:00**, not at the start, so people stay through the build.",
+            "source": "[Event plan › Format](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#1-format) (2 Nov)"
+          },
+          {
+            "ref": "riv-011",
+            "quote": "Heads up: the venue kitchen shuts at 20:00 on Thursdays, so food has to land by 19:30.",
+            "source": "Dana, 2 Nov"
+          },
+          {
+            "ref": "riv-012",
+            "quote": "OK, food at 19:30 then. I'll fix the plan doc later.",
+            "source": "Kash, 2 Nov"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "f103f408-7839-4912-9037-901886ec8dcc",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "riv-012: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "event-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-011",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "riv-012",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "nzqbij3f6jdfze8wjymj4a3cha",
+      "public_post_ids": [
+        "d17fxkzwc3ypufwsy7awg9rb7y"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "📌 **In the record** · No, food is now at 19:30. Dana let us know the venue kitchen shuts at 20:00 on Thursdays, and Kash moved food to 19:30 on 2 Nov. The plan doc still says 20:00 and hasn't been updated yet.\n_“Food arrives at 20:00, not at the start, so people stay through the build.”_ — [Event plan › Format](https://github.com/thekashifnazir/context-keeper/blob/main/demo/riverside/docs/event-plan.md#1-format) (2 Nov)\n**Also:** Dana, 2 Nov · Kash, 2 Nov"
+      ],
+      "owner_text": [],
+      "latency_s": 17,
+      "also_expect": null
+    },
+    {
+      "id": "T24",
+      "room": "ledgerly-pilot",
+      "author": "Sam",
+      "burst": null,
+      "window": "ledgerly-pilot:T24",
+      "expected": {
+        "job": "A",
+        "verdict": "contradicts-record",
+        "routing": "owner_private_allowed",
+        "sources": [
+          "status.md §2"
+        ],
+        "must_mention": [
+          "planned"
+        ]
+      },
+      "item": {
+        "message_id": "sw_d14f667e9cf3961349707ac2d827fd94",
+        "job": "A",
+        "verdict": "contradicts-record",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "status.md §2",
+            "quote": "**Xero:** CSV export is shipped-tested. **Live sync is planned, and doesn't exist yet** (roadmap.md §1).",
+            "source": "[Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)"
+          },
+          {
+            "ref": "roadmap.md §1",
+            "quote": "**Live two-way Xero sync** (today it's a CSV export; see product.md §4).",
+            "source": "[Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct)"
+          },
+          {
+            "ref": "roadmap.md header",
+            "quote": "Owner: Kash. Last updated 28 Oct 2026.",
+            "source": "[Ledgerly roadmap](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md) (28 Oct)"
+          },
+          {
+            "ref": "product.md §4",
+            "quote": "**Xero: CSV export only.** Live two-way sync is planned for phase 2 (see roadmap.md §1).",
+            "source": "[Product overview › Integrations](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#4-integrations) (20 Oct)"
+          },
+          {
+            "ref": "led-017",
+            "quote": "Makes sense. Xero is CSV export for now; live sync is phase 2 as well.",
+            "source": "Priya, 20 Oct"
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null,
+        "new_part": null
+      },
+      "decision_id": "b39faa17-64c9-4f30-83ce-b37978da4f1c",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict contradicts-record"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "status.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 1 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "status.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "roadmap.md header",
+          "expected": false,
+          "resolves": false,
+          "quote_verified": false,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "product.md §4",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-017",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "s11axit9apnbjfp9drh9mintuc",
+      "public_post_ids": [
+        "sroi7eodf7ypmmcdfd6dbjx3jh"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "⚠️ **The record says otherwise** · Live Xero sync isn't ready, so we can't confirm it to Northbank. Today Xero is CSV export only, and live sync is planned for phase 2 after the pilot (status.md, updated by Priya on 2 Nov; Priya confirmed it in the room on 20 Oct).\n_“Xero: CSV export is shipped-tested. Live sync is planned, and doesn't exist yet (roadmap.md §1).”_ — [Pilot readiness status › Shipped-untested, in-progress or planned](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/status.md#2-shipped-untested-in-progress-or-planned) (2 Nov)\n**Also:** [Ledgerly roadmap › Phase 2: parked, not rejected](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md#1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected) (28 Oct) · [Ledgerly roadmap](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/roadmap.md) (28 Oct) · [Product overview › Integrations](https://github.com/thekashifnazir/context-keeper/blob/main/demo/ledgerly/docs/product.md#4-integrations) (20 Oct) · Priya, 20 Oct"
+      ],
+      "owner_text": [],
+      "latency_s": 22.8,
+      "also_expect": null
+    }
+  ],
+  "bursts": [
+    {
+      "id": "B1",
+      "members": [
+        "T01",
+        "T02",
+        "T03"
+      ],
+      "answered_once": true,
+      "reason": "one decision covers all; 1 public non-brief post(s); 1 reply decision(s)"
+    },
+    {
+      "id": "B2",
+      "members": [
+        "T16",
+        "T17",
+        "T18"
+      ],
+      "answered_once": true,
+      "reason": "one decision covers all; 1 public non-brief post(s); 1 reply decision(s)"
+    }
+  ],
+  "briefs": [
+    {
+      "id": "T01",
+      "expect": "returner_brief",
+      "seen": true
+    },
+    {
+      "id": "T16",
+      "expect": "joiner_brief",
+      "seen": false
+    }
+  ],
+  "unattributed": [],
+  "pre_replay_posts": [
+    {
+      "post_id": "bprxk6eoa7fhzn7cisxuti6ufy",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "message": "Hey! Ping @context-keeper-eval and I'll jump in."
+    },
+    {
+      "post_id": "h4gdjpmekbd7bdmguxawtub9uh",
+      "channel_id": "tgbw7ao1diy7dbagpfc1o5ahfc",
+      "message": "Hi there! Just @context-keeper-eval me when you're ready."
+    },
+    {
+      "post_id": "644cqnyb6j8pxra83pofpke36a",
+      "channel_id": "kjgd5xd7zjg55yxsxpxgmooo4r",
+      "message": "Hey! Ping @context-keeper-eval and I'll jump in."
+    }
+  ],
+  "switch_doc_notices": [
+    {
+      "post_id": "gmqgynfjmprtd886tubq6yzxye",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793816821406,
+      "message": "📄 created room document “Ledgerly pilot plan”."
+    },
+    {
+      "post_id": "9pif1gykwidsxq35bjf33ndj4w",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793816821494,
+      "message": "📄 created room document “Ledgerly: product overview”."
+    },
+    {
+      "post_id": "dz93fwh5wigkbqauhtswcejkzh",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793816821573,
+      "message": "📄 created room document “Ledgerly: customer research summary”."
+    },
+    {
+      "post_id": "nr6gpbzxojfcfj4tiq7sc5hzoa",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793816821669,
+      "message": "📄 created room document “Ledgerly roadmap”."
+    },
+    {
+      "post_id": "4zo7sxci8irh5mzbum4z3nhfjo",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793816821759,
+      "message": "📄 created room document “Ledgerly: pilot readiness status”."
+    },
+    {
+      "post_id": "hzczio5wbiygjmf4ae7bdju6uw",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793816821840,
+      "message": "📄 created room document “Channel archive”."
+    },
+    {
+      "post_id": "3ipbwx433tyfzxdt4w5xpfczpr",
+      "channel_id": "a4cypxc7ztffzmpspx3y71kbyr",
+      "create_at": 1793817234436,
+      "message": "📄 created room document “Decision log”."
+    },
+    {
+      "post_id": "tjha7r5wt7gspnhqymtnohgteo",
+      "channel_id": "kjgd5xd7zjg55yxsxpxgmooo4r",
+      "create_at": 1793816824714,
+      "message": "📄 created room document “Riverside Build Night #1: event plan”."
+    },
+    {
+      "post_id": "cpgo8ngbepnw5gryinki48y8ee",
+      "channel_id": "kjgd5xd7zjg55yxsxpxgmooo4r",
+      "create_at": 1793816824829,
+      "message": "📄 created room document “Channel archive”."
+    }
+  ],
+  "usage": {
+    "calls": 35,
+    "input_tokens": 21679,
+    "cache_read_tokens": 223842,
+    "cache_write_tokens": 70381,
+    "output_tokens": 23432,
+    "est_cost_usd": 0.952
+  }
+}
