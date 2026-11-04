@@ -319,6 +319,12 @@ describe('after the call', () => {
     expect(post).toMatch(/^Context Keeper · Rowan talked it through \(4 min call\)/);
     expect(post).toMatch(/needs confirming/);
     expect(post).toMatch(/Nothing above is agreed until someone confirms it here/);
+    // headings in Markdown bold (**…**): bold in Mattermost, and Switch's Slack adapter makes it Slack bold;
+    // a single *…* is italic in Mattermost
+    expect(post).toContain("**Asked about**\n• Northbank's view on Xero");
+    expect(post).toContain("**The record didn't say (to follow up)**");
+    expect(post).toContain('**New ideas and requests (needs confirming)**');
+    expect(post).not.toMatch(/(^|\n)\*[^*]/);
   });
   it('empty sections say so rather than vanish', () => {
     const post = formatCallSummary('Sam', { id: 'c', startUnix: 0, durationS: 30, credits: null, callerName: null, transcript: [] }, { asked_about: [], didnt_know: [], new_ideas: [] });
@@ -338,8 +344,8 @@ describe('Ideas in progress: job E hand-off status in the talk prompt (read-only
 
   it('says each status in plain words, with when it last changed', () => {
     expect(plainStatus(idea({ status: 'noted' }))).toBe("noted, waiting for Kash's OK to build it");
-    expect(plainStatus(idea({ status: 'approved' }))).toBe('approved by Kash, waiting to start');
-    expect(plainStatus(idea({ status: 'handed_off' }))).toBe('being built by Claude Code');
+    expect(plainStatus(idea({ status: 'approved' }))).toBe('approved by Kash, waiting for Claude Code to start');
+    expect(plainStatus(idea({ status: 'handed_off' }))).toBe('being built by Claude Code'); // a record from before stages
     expect(plainStatus(idea({ status: 'handed_off', events: { nudge: 'n1' } }))).toMatch(/waiting for Kash's OK/);
     const report = { message_id: 'r', body: 'Done I1', links: ['https://github.com/o/ledgerly-demo/issues/7'], outcome: 'done' as const, at: '2026-11-04T13:20:00Z' };
     expect(plainStatus(idea({ status: 'awaiting_signoff', report }))).toBe('done (GitHub issue 7), waiting for Rowan to sign it off');
@@ -348,6 +354,20 @@ describe('Ideas in progress: job E hand-off status in the talk prompt (read-only
     expect(plainStatus(idea({ status: 'some_new_stage' as never }))).toBe('some new stage'); // job E grows stages: never a crash
     const [t] = talkIdeas([idea({ status: 'signed_off', report, signoff, approved: { by: 'k', message_id: 'a', at: '2026-11-04T12:30:00Z' } })], 'room1');
     expect(t).toEqual({ ref: 'I1', idea: 'What if the overdue reminder emails had a pay-now link?', raiser: 'Rowan', status: 'done (GitHub issue 7) and signed off by Rowan', changed: 'Wednesday 4 November, 13:40' });
+  });
+
+  it("says job E's stage while handed off: waiting to start, being built, waiting for the owner's OK", () => {
+    expect(plainStatus(idea({ status: 'approved', stage: 'waiting' }))).toBe('approved by Kash, waiting for Claude Code to start');
+    expect(plainStatus(idea({ status: 'handed_off', stage: 'waiting' }))).toBe('approved by Kash, waiting for Claude Code to start');
+    expect(plainStatus(idea({ status: 'handed_off', stage: 'waiting', events: { nudge: 'n1' } }))).toBe("approved by Kash, but Claude Code hasn't started yet; it may be waiting for Kash's OK on a step");
+    expect(plainStatus(idea({ status: 'handed_off', stage: 'building' }))).toBe('being built by Claude Code');
+    expect(plainStatus(idea({ status: 'handed_off', stage: 'building', events: { nudge: 'n1' } }))).toBe('being built by Claude Code');
+    expect(plainStatus(idea({ status: 'handed_off', stage: 'blocked' }))).toBe("being built by Claude Code, waiting for Kash's OK on a step");
+    expect(plainStatus(idea({ status: 'handed_off', stage: 'blocked' }), 'Priya')).toBe("being built by Claude Code, waiting for Priya's OK on a step");
+    // a finished idea keeps its last stage in the store; the status decides
+    expect(plainStatus(idea({ status: 'timed_out', stage: 'blocked' }))).toBe('with Claude Code, but no result yet after the time limit');
+    const [t] = talkIdeas([idea({ status: 'handed_off', stage: 'blocked' })], 'room1');
+    expect(t.status).toBe("being built by Claude Code, waiting for Kash's OK on a step");
   });
 
   it('only this room, in ref order; reads the store file without writing it', () => {

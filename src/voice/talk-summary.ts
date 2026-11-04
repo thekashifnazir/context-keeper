@@ -76,7 +76,7 @@ export async function summariseCall(claude: Claude, call: Call, caller: string):
 /** The room post. Plain Markdown (Switch converts it for Slack). */
 export function formatCallSummary(caller: string, call: Call, s: CallSummary): string {
   const mins = Math.max(1, Math.round(call.durationS / 60));
-  const sect = (title: string, items: string[], empty: string) => `*${title}*\n${items.length ? items.map((i) => `• ${i}`).join('\n') : `• ${empty}`}`;
+  const sect = (title: string, items: string[], empty: string) => `**${title}**\n${items.length ? items.map((i) => `• ${i}`).join('\n') : `• ${empty}`}`;
   return [
     `Context Keeper · ${caller} talked it through (${mins} min call)`,
     sect('Asked about', s.asked_about, 'nothing specific'),

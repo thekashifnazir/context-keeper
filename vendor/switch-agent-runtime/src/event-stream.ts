@@ -288,6 +288,14 @@ export interface SwitchEventStreamDeps {
    * `startCursor`.
    */
   startPosition?: Position;
+  /**
+   * [Context Keeper change, 4 Nov 2026] Called on every sign of life from the
+   * server: any frame on the socket (its `ping` included), any frame on the
+   * event stream, and every heartbeat that landed. Lets a caller run a watchdog
+   * that notices a connection gone quiet without an ending (a socket left
+   * half-open, a reattach that keeps being refused) and replaces the stream.
+   */
+  onAlive?: () => void;
   /** Rooms declared when the stream opens. Declared at open rather than
    * subscribed afterwards: catch-up runs immediately, and a room claimed a
    * moment later arrives too late for the buffered events a reconnect exists
@@ -485,6 +493,8 @@ export class SwitchEventStream {
    */
   private attaches = 0;
   private wakeBeat: () => void = () => {};
+  /** [Context Keeper change] The last socket close, so the log says why a stream ended. */
+  private lastClose: { code: number; reason: string } | null = null;
 
   constructor(deps: SwitchEventStreamDeps) {
     this.deps = deps;
@@ -526,6 +536,9 @@ export class SwitchEventStream {
   readonly placementsNameCallRooms = false;
 
   start(): void {
+    // [Context Keeper change] The caller's signal also closes the socket now
+    // open, so a stream the caller replaces does not hang on in its read.
+    this.deps.signal.addEventListener('abort', () => this.socketAbort?.abort(), { once: true });
     void this.streamLoop();
     void this.beatLoop();
   }
@@ -866,6 +879,7 @@ export class SwitchEventStream {
       let failure: unknown = null;
       // The wait a busy server named for this open, if it was refused as busy.
       let toldMs: number | null = null;
+      this.lastClose = null;
       try {
         const params = new URLSearchParams({
           connection_id: connectionId,
@@ -910,6 +924,7 @@ export class SwitchEventStream {
             rooms: this.rooms,
           });
         })) {
+          this.deps.onAlive?.(); // [Context Keeper change]
           await this.handleFrame(frame);
         }
       } catch (error) {
@@ -959,7 +974,12 @@ export class SwitchEventStream {
       }
 
       failures += 1;
-      const error = failure === null ? 'the server closed the stream' : String(failure);
+      // [Context Keeper change] with the socket's close code and reason.
+      const closed = this.lastClose as { code: number; reason: string } | null;
+      const error =
+        failure === null
+          ? `the server closed the stream${closed ? ` (code ${closed.code}${closed.reason ? `: ${closed.reason}` : ''})` : ''}`
+          : String(failure);
       if ((failures & (failures - 1)) === 0) {
         log.warn('SwitchEventStream: stream ended — reopening', {
           event: 'switch_stream_error',
@@ -1103,6 +1123,7 @@ export class SwitchEventStream {
       } catch {
         return;
       }
+      this.deps.onAlive?.(); // [Context Keeper change]
       if (parsed.event === 'ping') {
         socket.send(
           JSON.stringify({ type: 'pong', cursor: this.cursor, position: this._position })
@@ -1123,6 +1144,7 @@ export class SwitchEventStream {
     });
     socket.addEventListener('close', (event: CloseEvent) => {
       closed = { code: event.code, reason: event.reason };
+      this.lastClose = closed; // [Context Keeper change]
       if (event.code === SERVICE_RESTART) this.restartingUntil = Date.now() + RESTART_WINDOW_MS;
       notify();
     });
@@ -1539,6 +1561,7 @@ export class SwitchEventStream {
           failures = 0;
           rejections = 0;
           backoff = BEAT_INTERVAL_MS;
+          this.deps.onAlive?.(); // [Context Keeper change]
         }
       }
       await pause(backoff);
