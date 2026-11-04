@@ -453,7 +453,7 @@ describe('voice wired: talk link in the brief, audio clip on its trace line, cal
     expect(ended.error).toMatch(/talk_call_ended conv_1/);
     expect(post.thread).toBe('a1');
     expect(post.body).toMatch(/Alex talked it through \(2 min call\)/);
-    expect(post.body).toMatch(/The pilot size\./);
+    expect(post.body).toContain("**Asked about:** The pilot size");
     expect(line).toMatchObject({ kind: 'reply', room_name: ROOM });
     expect(line.items[0]).toMatchObject({ message_id: 'a1', job: 'none', brief_for: 'Alex' });
     expect(line.error).toMatch(/talk_call conv_1/);

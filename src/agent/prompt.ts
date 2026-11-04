@@ -147,7 +147,8 @@ export const BRIEF_NOTES = `# The catch-up brief (operator notes)
 
 Someone has just posted for the first time since joining the room, or since coming back after a long gap. Write their catch-up brief from the room's record, following the job C instructions above.
 - 3 to 5 lines, most important first: what changed (for a returner, only since they last posted), decisions with who decided and why, what's still open, and who to talk to about what. Make it personal: lead with what touches their role, if the record says what it is.
-- Each line is one or two short sentences, in plain words, no "already" or "as discussed", no blame, no chit-chat.
+- Each line is a headline and at most one short follow-on (Kash, 4 Nov: "break it up a bit more to make it easier to read"). headline: the point in a few words, as the person would say it ("Onboarding calls are Tue to Thu only", "Two things aren't tested yet"). text: one short sentence after it, under 20 words, with who decided and why, or what they should do; "" when the headline says it all. Plain words, no "already" or "as discussed", no blame, no chit-chat.
+- Don't greet them or say "welcome back": the post's first line already does.
 - Every line rests on one block of the record: give that block's id (the first part of its bracketed header, for example "pilot-plan.md §2 D3" or "led-018") and a quote copied exactly from the block's text after the header. A line you can't back with a quote, leave out. The quote is checked word for word and the line is dropped if it doesn't match.
 - Don't mention private notes, the owner desk, or anything that isn't in the record.
 Call write_brief once.`;
@@ -166,10 +167,11 @@ export const WRITE_BRIEF: Anthropic.Tool = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['kind', 'text', 'block', 'quote'],
+          required: ['kind', 'headline', 'text', 'block', 'quote'],
           properties: {
             kind: { type: 'string', enum: ['changed', 'decided', 'open', 'talk_to'] },
-            text: { type: 'string', description: 'The line as the person will read it' },
+            headline: { type: 'string', description: 'The point in a few words (shown in bold)' },
+            text: { type: 'string', description: 'At most one short follow-on sentence, or ""' },
             block: { type: 'string', description: 'The block id from its header, e.g. "pilot-plan.md §2 D3" or "led-018"' },
             quote: { type: 'string', description: 'Exact words from that block (after the header)' },
           },

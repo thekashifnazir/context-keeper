@@ -35,8 +35,13 @@ chat message can be named but not linked.
 5. **No internal jargon.** No `§`, file names, ids, "owner desk" in public, "job A". The idea's
    number (`I9`) appears only where the owner uses it as a command.
 6. **What needs someone to act comes first.** The call summary opens with a count ("1 to confirm, 1
-   to follow up"), then "Needs confirming", "To follow up", "Asked about"; empty sections are left out.
-7. **Always say something back, briefly.** Someone else's chat in a sign-off thread gets one "noted"
+   to follow up"), then "Needs confirming", "To follow up", and the topics asked about on one line,
+   without "Rowan asked…" on each; empty sections are left out.
+7. **A list item is a headline, not a paragraph.** Each catch-up brief line is a marker for its kind
+   (✅ decided, 🔄 changed, ❓ open, 💬 who to talk to), a bold headline of a few words, at most one
+   short follow-on sentence, and its source last. No greeting inside the list: the first line already
+   says "Welcome back".
+8. **Always say something back, briefly.** Someone else's chat in a sign-off thread gets one "noted"
    line; a second unclear sign-off reply gets "When you're happy with it, just say so and I'll close
    it." instead of silence. At most one extra line per person per idea.
 

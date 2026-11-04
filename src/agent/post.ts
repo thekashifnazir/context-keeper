@@ -329,7 +329,7 @@ export async function postBrief(
   let usage: Usage | null = null;
   if (kept.length) {
     try {
-      const r = await callReviewer(deps.claude, deps.cfg, kept.map((k, i) => ({ id: `line${i + 1}`, claim: k.line.text, quotes: [k.full] })));
+      const r = await callReviewer(deps.claude, deps.cfg, kept.map((k, i) => ({ id: `line${i + 1}`, claim: briefClaim(k.line), quotes: [k.full] })));
       usage = r.usage;
       const before = kept.length;
       for (let i = before - 1; i >= 0; i--) {
@@ -352,9 +352,21 @@ export async function postBrief(
   return { posts, sources: kept.slice(0, 5).map((k) => ({ ref: k.ref, quote: k.quote })), events, usage, error, kept: Math.min(kept.length, 5) };
 }
 
-const BRIEF_KIND: Record<string, string> = { changed: 'Changed', decided: 'Decided', open: 'Open', talk_to: 'Talk to' };
-/** "• **Decided** · Partner price: free in the pilot, then £19 a month. — [Ledgerly pilot plan › Decisions](…) (Kash, 6 Oct)" */
-export function briefLine(line: Pick<BriefLine, 'kind' | 'text'>, block: Pick<BlockInfo, 'kind' | 'ref' | 'at' | 'author' | 'label' | 'url'>): string {
-  const kind = BRIEF_KIND[line.kind];
-  return `• ${kind ? `**${kind}** · ` : ''}${line.text.trim()} — ${sourceText(block)}`;
+// Kash, 4 Nov, second voice call: the brief's bullets were 2–3 sentences each, "can you break it up a bit
+// more". So each line is a marker for its kind, a bold headline, at most one short follow-on, and its
+// source last, named as job A's are ("Ledgerly pilot plan › Decisions (Kash, 6 Oct)", "Rowan, 4 Nov").
+const BRIEF_KIND: Record<string, string> = { changed: '🔄', decided: '✅', open: '❓', talk_to: '💬' };
+/** A greeting at the start of a line: the post's first line already welcomes them. */
+const GREETING = /^(?:hi|hello|hey|welcome(?: back)?)\b(?:,?\s+[A-Z][\w'-]*)?\s*[!.,:]+\s*/i;
+const ungreet = (t: string) => t.trim().replace(GREETING, '').replace(/^\w/, (c) => c.toUpperCase());
+const stop = (t: string) => t.replace(/[\s.!:;,]+$/, '');
+/** What the reviewer checks for a brief line: its headline and follow-on together. */
+export const briefClaim = (l: Pick<BriefLine, 'headline' | 'text'>) => [l.headline?.trim(), l.text.trim()].filter(Boolean).join(': ');
+/** "✅ **Onboarding calls are Tue to Thu only** · Partner finance staff work weekdays. — Kash, 6 Oct" */
+export function briefLine(line: Pick<BriefLine, 'kind' | 'headline' | 'text'>, block: Pick<BlockInfo, 'kind' | 'ref' | 'at' | 'author' | 'label' | 'url'>): string {
+  const mark = BRIEF_KIND[line.kind] ?? '•';
+  const head = stop(ungreet(line.headline ?? ''));
+  const text = ungreet(line.text);
+  const body = head ? `**${head}**${text ? ` · ${text}` : ''}` : text;
+  return `${mark} ${body} — ${sourceText(block)}`;
 }

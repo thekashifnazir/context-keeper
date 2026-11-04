@@ -40,8 +40,8 @@ class FakeEleven implements Eleven {
 
 const BASE = 'https://ck.example.test';
 const goodLines = [
-  { kind: 'decided', text: 'The pilot runs with three agencies, 25 clients each.', block: 'pilot-plan.md §2 D2', quote: 'Three agencies, max 25 clients each' },
-  { kind: 'talk_to', text: 'Priya runs onboarding calls and pilot support.', block: 'pilot-plan.md §3.1', quote: 'Priya: onboarding calls and pilot support.' },
+  { kind: 'decided', headline: 'Three agencies, 25 clients each', text: 'Support is Priya plus Kash.', block: 'pilot-plan.md §2 D2', quote: 'Three agencies, max 25 clients each' },
+  { kind: 'talk_to', text: 'Priya runs onboarding calls and pilot support.', block: 'pilot-plan.md §3.1', quote: 'Priya: onboarding calls and pilot support.' }, // no headline: an older line shape
 ];
 const summaryOf = (s: { asked_about?: string[]; didnt_know?: string[]; new_ideas?: string[] }) =>
   message(OPUS, [{ type: 'text', text: JSON.stringify({ asked_about: [], didnt_know: [], new_ideas: [], ...s }) }]);
@@ -96,8 +96,8 @@ describe('the brief: a short, named talk link and a scannable layout (Kash: "sho
     const lines = body.split('\n');
     expect(lines[0]).toBe("👋 **Welcome back, Rowan** · here's what changed while you were away");
     expect(lines.slice(1, -1)).toEqual([
-      '• **Decided** · The pilot runs with three agencies, 25 clients each. — Ledgerly pilot plan › Decisions (Kash, 6 Oct)',
-      '• **Talk to** · Priya runs onboarding calls and pilot support. — Ledgerly pilot plan › Who does what (30 Oct)',
+      '✅ **Three agencies, 25 clients each** · Support is Priya plus Kash. — Ledgerly pilot plan › Decisions (Kash, 6 Oct)',
+      '💬 Priya runs onboarding calls and pilot support. — Ledgerly pilot plan › Who does what (30 Oct)',
     ]);
     const id = lines.at(-1)!.match(/^🎧 \*\*Talk it through\*\* · \[Start a voice catch-up\]\(https:\/\/ck\.example\.test\/talk\/([A-Za-z0-9_-]{12})\) \(up to 10 min\)\. I'll post a summary here after\.$/)![1];
     expect(body).not.toMatch(/elevenlabs\.io|var_|agent_id/);
@@ -307,7 +307,8 @@ describe('people named in "needs confirming" are tagged (Kash: "get me on there 
     // what needs someone to act comes first: needs confirming, then to follow up, then asked about
     const [head, ideas, didnt, asked] = post.split('\n\n');
     expect(head).toBe('📝 **Call summary** · Rowan talked it through (3 min call) · 2 to confirm, 1 to follow up');
-    expect(asked).toBe('**Asked about**\n• Rowan asked what Kash decided about pricing.');
+    // topics on one line, without "Rowan asked…" every time (Kash, 4 Nov, second call)
+    expect(asked).toBe('**Asked about:** what Kash decided about pricing');
     expect(didnt).toBe("**To follow up (the record didn't say)**\n• Whether Sam's form is ready.");
     expect(ideas).toBe("**Needs confirming**\n• @rowan_demo would like to find the two waiting-list agencies; this needs @owner_demo's confirmation.\n• Kash to brief @sam_demo on it too, says Rowan.");
     expect(post.match(/@owner_demo/g)).toHaveLength(1);
