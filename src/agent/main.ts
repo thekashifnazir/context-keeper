@@ -41,7 +41,7 @@ import { EVICTION_CREDENTIALS_REJECTED, EVICTION_TAKEN_OVER } from '../../vendor
 import type { RoomJoinPayload } from '../../vendor/switch-agent-runtime/src/types.ts';
 import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
-import { briefTrigger, runBrief, type BriefOpts } from './jobs/brief.ts';
+import { briefTrigger, resumableBriefs, runBrief, type BriefOpts, type BriefTrigger } from './jobs/brief.ts';
 import { featuresFromEnv } from './features.ts';
 import { demoConfigFromEnv, DemoLimiter, gateMessage, matchesRoom, roomFeatures } from './demo.ts';
 import { meteredClaude, spendMeterFromEnv, spendNote } from './spend.ts';
@@ -257,7 +257,7 @@ const saveBuffers = () => atomicWriteJson(bufFile, [...carried, ...[...buffers.e
 function enqueue(roomId: string, input: Input, gate: Promise<void> | null = null) {
   const key = `${roomId}|${input.sender}`;
   const b = buffers.get(key);
-  if (b?.inputs.some((i) => i.message_id === input.message_id)) return;
+  if (b?.inputs.some((i) => i.message_id === input.message_id)) { if (gate) b.gates.push(gate); return; } // a re-run brief's gate still counts
   if (b) clearTimeout(b.timer);
   const entry: Buffer = b ?? { inputs: [], timer: undefined as unknown as NodeJS.Timeout, first: Date.now(), gates: [] };
   entry.inputs.push(input);
@@ -331,6 +331,52 @@ async function run(roomId: string, inputs: Input[], gates: Promise<void>[] = [],
   }
 }
 
+/** Job C off the stream; returns the gate job A's reply for the burst waits on (the brief's text post).
+ *  The attempt is saved first (state.beginBrief), so the next event doesn't trigger a second brief and
+ *  a restart before the text posts runs it again (resumableBriefs); runBrief marks the person briefed
+ *  once the text is out. */
+function startBrief(roomId: string, rec: RoomRecord, input: Input, trig: BriefTrigger, handle: string | null): Promise<void> {
+  const attempt = deps.state.beginBrief(roomId, input, trig, handle);
+  const who = input.sender_name;
+  const demoRoom = isDemo(roomId);
+  const roomName = roomNames.get(roomId) ?? roomId;
+  // The text brief goes first and job A's reply waits for it (the gate); the audio clip follows in the
+  // background, and the brief's trace line (written once the clip is done) carries both posts.
+  let textDone!: () => void;
+  const gate = new Promise<void>((r) => { textDone = r; });
+  const opts: BriefOpts = {};
+  // A dry-run room gets no clip and no link (nothing paid for); nor does a public demo room.
+  const rf = roomFeatures(features, demoRoom);
+  const v = voice && allowed(roomId) && (rf.audioBrief || rf.talkLink) ? voice : null;
+  if (demoRoom) opts.closing = ''; // no "talk it through" line where there is no voice
+  void (async () => {
+    try {
+      const talk = v ? await v.talkClosing(rec, roomName, who, roomId) : null;
+      if (talk) opts.closing = talk.closing;
+      if (v) opts.after = async ({ threadId, briefText }) => {
+        textDone();
+        return v.afterBrief({ roomId, roomName, threadId, messageId: input.message_id, person: who, handle, since: trig.since, briefText, talk: talk?.talk ?? null });
+      };
+    } catch (e) { console.error('voice prep failed:', (e as Error).message); }
+    try {
+      const t = await runBrief(deps, roomId, roomName, buildRoomContext(rec), input, trig, opts);
+      if (demoRoom && limiter && t.kind === 'brief') limiter.noteReply(roomId, null);
+      console.log(`brief ${t.decision_id} for ${who} (${trig.kind}${attempt > 1 ? `, attempt ${attempt} after a restart` : ''}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`);
+    } catch (e) { console.error('brief crashed:', (e as Error).message); } finally { textDone(); }
+  })();
+  return gate;
+}
+
+async function resumeBriefs() {
+  for (const { roomId, brief } of resumableBriefs(deps.state)) {
+    if (stopped) return;
+    const rec = await recordFor(roomId).catch(() => null);
+    if (!rec) { console.log(`pending brief for ${brief.input.sender_name} in ${roomNames.get(roomId) ?? roomId}: no record; left for the next start`); continue; }
+    console.log(`re-running the brief for ${brief.input.sender_name} in ${roomNames.get(roomId) ?? roomId} (cut off by a restart)`);
+    enqueue(roomId, brief.input, startBrief(roomId, rec, brief.input, brief.trigger, brief.handle));
+  }
+}
+
 async function onEvent(ev: AgentBridgeEvent) {
   if (ev.type.includes('join')) {
     const j = ev.payload as RoomJoinPayload;
@@ -387,37 +433,7 @@ async function onEvent(ev: AgentBridgeEvent) {
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
   const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
   memory.addLive(ev.room_id, live);
-  let gate: Promise<void> | null = null;
-  if (trig && rec) {
-    // One attempt per person per room (runBrief marks it too); marked now, because the brief runs off
-    // the stream: the next event (their second message, another room's) doesn't wait ~30 s for it.
-    deps.state.markBriefed(ev.room_id, input.sender);
-    const roomName = roomNames.get(ev.room_id) ?? ev.room_id;
-    // The text brief goes first and job A's reply waits for it (the gate); the audio clip follows in the
-    // background, and the brief's trace line (written once the clip is done) carries both posts.
-    let textDone!: () => void;
-    gate = new Promise<void>((r) => { textDone = r; });
-    const opts: BriefOpts = {};
-    // A dry-run room gets no clip and no link (nothing paid for); nor does a public demo room.
-    const rf = roomFeatures(features, demoRoom);
-    const v = voice && allowed(ev.room_id) && (rf.audioBrief || rf.talkLink) ? voice : null;
-    if (demoRoom) opts.closing = ''; // no "talk it through" line where there is no voice
-    void (async () => {
-      try {
-        const talk = v ? await v.talkClosing(rec, roomName, who, ev.room_id) : null;
-        if (talk) opts.closing = talk.closing;
-        if (v) opts.after = async ({ threadId, briefText }) => {
-          textDone();
-          return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, handle: m.sender_name ?? null, since: trig.since, briefText, talk: talk?.talk ?? null });
-        };
-      } catch (e) { console.error('voice prep failed:', (e as Error).message); }
-      try {
-        const t = await runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts);
-        if (demoRoom && limiter && t.kind === 'brief') limiter.noteReply(ev.room_id, null);
-        console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`);
-      } catch (e) { console.error('brief crashed:', (e as Error).message); } finally { textDone(); }
-    })();
-  }
+  const gate = trig && rec ? startBrief(ev.room_id, rec, input, trig, m.sender_name ?? null) : null;
   enqueue(ev.room_id, input, gate);
 }
 
@@ -486,11 +502,15 @@ function openStream(): StreamHandle {
           // interrupted (a step caught mid-send is never re-sent). Not on a reconnect.
           if (resumed) return;
           resumed = true;
-          const queued = carried;
-          carried = [];
-          for (const q of queued) for (const i of q.inputs) enqueue(q.room, i);
-          if (queued.length) console.log(`re-queued ${queued.reduce((n, q) => n + q.inputs.length, 0)} message(s) from before the restart`);
-          return handoff?.resume();
+          // A brief the restart cut off before its text posted runs again (once more at most), and its
+          // message waits for it as before (already-answered ids are skipped by the pipeline).
+          return resumeBriefs().then(() => {
+            const queued = carried;
+            carried = [];
+            for (const q of queued) for (const i of q.inputs) enqueue(q.room, i);
+            if (queued.length) console.log(`re-queued ${queued.reduce((n, q) => n + q.inputs.length, 0)} message(s) from before the restart`);
+            return handoff?.resume();
+          });
         })
         .catch((e) => console.error('joining rooms failed:', e.message));
     },

@@ -6,7 +6,8 @@ import { normalise } from '../../shared/quote.ts';
 import type { Details } from '../pending.ts';
 import { quoteLine } from '../handoff/text.ts';
 
-export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+// Capitalised: with no display-name lookup (Mattermost in the eval) the name is the lowercase username.
+export const firstName = (name: string) => ((f) => f.charAt(0).toUpperCase() + f.slice(1))(name.trim().split(/\s+/)[0] || name);
 
 /** The only public line for a project clash. Kash, 3 Nov: "only something neutral, like 'flagged to the owner'". */
 export const neutralClashLine = (name: string) =>
