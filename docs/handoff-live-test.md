@@ -1,110 +1,162 @@
-# Job E live test: idea → done (morning runbook)
+# Job E and voice live test: idea → done, and the spoken catch-up (morning runbook)
 
-The chain is built and tested offline (`npx vitest run test/offline/handoff.test.ts`). It has not
-run live yet: that needs Kash's "Allow once" clicks. This page is the first live run, in a fresh
-smoke room, so no demo channel gets a test post. About 20 minutes.
+Both are wired into the live agent (`src/agent/main.ts`) and tested offline
+(`npx vitest run test/offline/wiring.test.ts test/offline/handoff.test.ts test/offline/voice.test.ts`).
+Neither has run live yet: job E needs your "Allow once" clicks. This is the first live run, in a fresh
+smoke room, so no demo channel gets a test post. About 30 minutes.
 
-## 0. Wire it into the listener (once, before the test)
+## 0. What's wired, and the flags
 
-`src/agent/main.ts` doesn't call job E yet; the jobs B/C/D lane was editing it overnight. Add the
-hook after that lane merges. Job E goes **before** the owner-desk handler and before job A:
+| Flag | Default for `npm run agent` | In `npm run eval` | What it does |
+|---|---|---|---|
+| `CK_JOB_E` | on | off unless you set it | Job A's `new` ideas go on the owner desk list; "approve I<n>" hands one to Claude Code in `CK_BUILD_ROOM`; the raiser signs it off in the original thread |
+| `CK_AUDIO_BRIEF` | on (needs `ELEVENLABS_API_KEY`) | off unless you set it | Job C's ~60 s audio clip, posted under the text brief in the same thread |
+| `CK_TALK_LINK` | on (needs `ELEVENLABS_API_KEY` and `agent_id` in `state/voice-ids.json`) | off unless you set it | The brief's last line becomes a per-person "talk it through" link; after the call, its summary posts in the same thread |
 
-```ts
-import { handoffFromEnv, handleFromSender } from './handoff/wire.ts';
+`0`, `off`, `false` or `no` turns one off. The eval runner (`eval/replay.ts`, `startAgent`) starts the
+agent with all three at `0` unless the eval's own environment sets them. The agent prints which are on
+at start: `features: job E on, audio brief on, talk link on`.
 
-const ownerInfo = readJson<{ owner_sender?: string; owner_handle?: string; owner_desk_room?: string }>('state/owner.json', {});
-const handoff = handoffFromEnv({
-  op, selfSenders,
-  canPost: allowed,                                               // the same CK_POST_ROOMS guard
-  canCreate: (name) => postPrefixes.some((p) => name.startsWith(p)),
-  onRoom: (r) => { roomNames.set(r.id, r.name); },                // so the new room is named and allowed
-  owner: (body) => poster.owner(body),                            // the same CK_POST_OWNER guard
-  ownerSender: process.env.CK_OWNER_SENDER || ownerInfo.owner_sender || null,
-  ownerUsername: ownerInfo.owner_handle ?? null,
-  ownerDeskRoom: process.env.CK_OWNER_DESK_ROOM || ownerInfo.owner_desk_room || null,
-});
-setInterval(() => { handoff.tick().catch((e) => console.error('job E tick:', e.message)); }, 60_000);
-// in onConnected, after joinRooms() resolves:   await handoff.resume();
+Where each hook sits in `main.ts`:
+- every message event goes to job E first (`handoff.onMessage`): an "approve I<n>" in the owner desk,
+  anything in a build room, and the raiser's or your sign-off reply. Anything else falls through to
+  jobs A–D. Another agent's post (any `@switch-agent-` sender) never reaches job A.
+- after each job A decision, each `new` idea is noted for you (`noteNewIdeas`, once per idea).
+- after the rooms are joined, once per process: `handoff.resume()`. Every 60 s: `handoff.tick()`
+  (timeouts) and, while a talk link is open, a check for a finished call.
+- a brief: the talk agent's prompt is refreshed from the room's record, the text brief posts (with the
+  link as its last line), then job A goes on as usual while the clip is made and posted. The brief's
+  `ck.trace/1` line carries both posts. A dry-run room (not in `CK_POST_ROOMS`) gets neither the clip
+  nor the link, and nothing is paid for.
 
-// in onEvent, right after `const at = …`, before the owner-desk branch and before enqueue():
-const hm = { room_id: ev.room_id, room_name: roomNames.get(ev.room_id) ?? ev.room_id, message_id: m.message_id,
-  sender: m.sender, sender_name: who, sender_handle: m.sender_name, body: m.body, thread_id: m.thread_id ?? null, received_at: at };
-if (await handoff.onMessage(hm)) return;
-if (m.sender.startsWith('@switch-agent-')) return;   // another agent's post is never a proposal (PR11)
+Safety rule in code: the build room is only created and posted in when its name starts with one of
+`CK_POST_ROOMS`. If it doesn't (the default `ledgerly-build`, or an existing real `#ledgerly-build`),
+the chain stops at the room step, tells you in the desk, and posts nothing in the original thread.
+Fix `CK_BUILD_ROOM` and restart: it picks the idea up again.
 
-// in run(), after decideWithRetry(): each genuinely new idea goes on the list
-for (const r of results) for (const it of r.trace?.items ?? []) {
-  if (it.job !== 'A' || it.verdict !== 'new') continue;
-  const x = inputs.find((i) => i.message_id === it.message_id);
-  if (x) await handoff.noteIdea({ room_id: roomId, room_name: roomNames.get(roomId) ?? roomId, message_id: x.message_id,
-    sender: x.sender, sender_name: x.sender_name, sender_handle: handleFromSender(x.sender), body: x.body,
-    thread_id: x.thread_id ?? null, received_at: x.received_at }, it.sources);
-}
-```
-
-`onMessage` returns true when job E owns the message: an "approve I<n>" in the owner desk (other
-desk text falls through to jobs B and D), anything in a build room, and the raiser's or the owner's
-sign-off reply. Then `npx vitest run` must still be green.
+`send_targeted_message` was checked against the live server's ops listing (`GET /agents/{id}/ops`,
+read on 4 Nov at about 00:45): `body` required, plus `target_names`, `target_roles`, `thread_id`. The
+code sends `{ target_names: ["claude-code"], body }`, so nothing needed fixing. It returns `event_id`
+and `target_statuses` (`live`, `awaiting_manual_poll`, `no_session`, `disconnected`, or `not_permitted`).
 
 ## 1. Before you start
 
+- In the checkout that will run the agent (the build repo, after the wiring lane merges).
 - Switch Console 0.40.1 open and staying open (risk row 7: a closed Console leaves Claude Code
   looking "live" while it answers nothing).
 - `claude-code` in Console: Auto mode **off**, "Me and my agents", working directory the
   ledgerly-demo repo (as on 3 Nov).
 - Three Chrome profiles signed in to Slack: yours, **Rowan** and **Sam**.
-- A fresh smoke room, seeded like the demo room (never reuse or delete one; Switch #1202):
-  `npm run seed -- --bridge slack --room-name ck-smoke-e-1105 --owner-desk-room <your desk id from state/owner.json>`
+- Voice: `ELEVENLABS_API_KEY` in `.env`, and `state/voice-ids.json` with an `agent_id`. If it's
+  missing, copy it from the checkout that ran `npx tsx src/voice/cli.ts agent-setup` (running
+  `agent-setup` again makes a second ElevenLabs agent; see `docs/voice-resources.md`).
+- A fresh `state/handoff.json` makes the first idea `I1`. If there's one from an earlier try, the
+  next idea gets the next number: use whatever number the desk note shows.
+- Make a fresh smoke room, seeded like the demo room (never reuse or delete one; Switch #1202). Do
+  this **before** starting the agent: the agent joins its rooms when it starts.
+  ```bash
+  npm run seed -- --bridge slack --room-name ck-smoke-e-$(date +%m%d) --owner-desk-room $(node -p 'require("./state/owner.json").owner_desk_room')
+  ```
 - Start the agent with the smoke guards:
   ```bash
-  CK_POST_ROOMS=ck-smoke- CK_POST_OWNER=1 CK_BUILD_ROOM=ck-smoke-build-1105 CK_HANDOFF_TIMEOUT_MIN=10 npm run agent
+  CK_POST_ROOMS=ck-smoke- CK_POST_OWNER=1 CK_BUILD_ROOM=ck-smoke-build-$(date +%m%d) CK_HANDOFF_TIMEOUT_MIN=10 npm run agent
   ```
-  `CK_BUILD_ROOM` starts with `ck-smoke-`, so the agent may create it and post there. The real
-  `#ledgerly-pilot` and `#ledgerly-build` stay dry-run (their drafts are only logged).
+  Check the start log: `features: job E on, audio brief on, talk link on`, and
+  `listening in ck-smoke-e-<MMDD> (posting on)`. `CK_BUILD_ROOM` starts with `ck-smoke-`, so the agent
+  may create it and post there. The real `#ledgerly-pilot` and `#ledgerly-build` stay dry-run (their
+  drafts are only logged).
+- The seed adds only you. In Slack, invite Rowan and Sam to `#ck-smoke-e-<MMDD>`, then have **Sam**
+  post "Morning" once. Joining marks him for a welcome brief on his first message; this way it lands
+  there, not in Rowan's idea thread at step 8.
 
 ## 2. The run (Slack)
 
+Rowan last posted on 13 Sep in the seeded record, so his first message in the smoke room is a
+returner's: it gets the catch-up brief first. That's the voice test (§3). Post the idea as his
+second message, so its thread is only about the idea.
+
 | # | Who, where | Do | Expect |
 |---|---|---|---|
-| 1 | **Rowan**, `#ck-smoke-e-1105` | Post a new idea, e.g. "What if the overdue reminder emails had a pay-now link?" | Context Keeper replies in the thread that it's recorded (job A `new`). |
-| 2 | **You**, owner desk | Read the note "New idea I1 from Rowan … Reply "approve I1"". Type `approve I1` | Desk: "Handing I1 (Rowan's idea) to Claude Code in #ck-smoke-build-1105." |
-| 3 | Slack sidebar | A new channel `#ck-smoke-build-1105` appears with you in it (Rowan too, if Switch could add him) | Top-level post: the idea, "raised by Rowan", the cited context. Then "@claude-code Hand-off I1 …". Rowan's thread gets "Approved by Kash: Claude Code is building this…" |
-| 4 | **Restart check** | Before clicking anything: Ctrl-C the agent, start it again with the same command | Log says it's resuming. **No second "@claude-code Hand-off I1"** in the build room. |
-| 5 | **You**, build room thread under the hand-off | Claude Code shows permission cards. Click **Allow once** each time (about 3; never "Allow for this session") | Claude Code posts "Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/N" (top-level). |
-| 6 | Rowan's original thread | — | "Claude Code has done this: <issue link>. Rowan, you raised it, so it's yours to sign off…" |
-| 7 | **Sam**, same thread | Reply `looks right` | Nothing happens (only the raiser or you count). |
-| 8 | **Rowan**, same thread | Reply `looks right` | "Signed off by Rowan. Closed." Desk: "I1 signed off by Rowan." |
+| 1 | **Rowan**, `#ck-smoke-e-<MMDD>` | Post "Morning all, back today." | In its thread: "Welcome back, Rowan. Here's what changed while you were away:", a few bullets, and a last line "Want to talk it through? … https://elevenlabs.io/app/talk-to?…". Within about a minute, an audio clip `catch-up-rowan.mp3` in the same thread. Leave it for §3. |
+| 2 | **Rowan**, same room, a new top-level message, a minute after step 1 | Post a new idea, e.g. "What if the overdue reminder emails had a pay-now link?" | Context Keeper replies in its thread that it's recorded (job A `new`). |
+| 3 | **You**, owner desk | Read "New idea I1 from Rowan in #ck-smoke-e-<MMDD> (<date>): … Reply "approve I1" to hand it to Claude Code." Type `approve I1` | Desk: "Handing I1 (Rowan's idea) to Claude Code in #ck-smoke-build-<MMDD>." |
+| 4 | Slack sidebar | A new channel `#ck-smoke-build-<MMDD>` appears with you in it (Rowan too, if Switch could add him) | Top-level post: "Approved idea I1, raised by Rowan …", the idea quoted, the cited context. Then "@claude-code Hand-off I1 from Context Keeper, approved by Kash. …". Rowan's idea thread: "Approved by Kash: Claude Code is building this in #ck-smoke-build-<MMDD>. I'll post the result here for Rowan to sign off." |
+| 5 | **Restart check** | Before clicking anything: Ctrl-C the agent, start it again with the same command | **No second "@claude-code Hand-off I1"** in the build room. (A `resumed` trace line appears only if a step was mid-send when it stopped.) |
+| 6 | **You**, build room, Claude Code's thread | Claude Code shows permission cards. Click **Allow once** each time (about 3; never "Allow for this session") | Claude Code posts "Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/N" (top-level). |
+| 7 | Rowan's idea thread | — | "Claude Code has done this: <issue link>. Rowan, you raised it, so it's yours to sign off: reply here with "looks right", or "not quite" and what's missing." |
+| 8 | **Sam**, same thread | Reply `looks right` | No sign-off (only the raiser or you count). Job A sees it as ordinary chat. |
+| 9 | **Rowan**, same thread | Reply `looks right` | "Signed off by Rowan. Closed." Desk: "I1 signed off by Rowan." |
 
 Optional extras, once the main run passes: a second idea where you click **Decline** on the card
 (expect "Claude Code couldn't finish I2: …" in Rowan's thread and "approve I2 again" in the desk);
 and one where you click nothing for 10 min (expect "No result from Claude Code on this after 10
 min…" in Rowan's thread; a late "Done" still asks for sign-off).
 
-## 3. Check the trace
+## 3. Voice: the clip and "talk it through"
+
+Uses the brief from step 1 (any time in the 3 hours after it posted).
+
+1. **Play the clip.** In Slack, press play on `catch-up-rowan.mp3` in the brief's thread: about 60 s,
+   Rowan by first name, no links or ids read out, ending with an offer to talk it through. The agent
+   also keeps a copy: `afplay "$(ls -t build/voice/live/*.mp3 | head -1)"`.
+2. **Open the talk link** from the brief's last line, in Rowan's Chrome profile (or yours: the name in
+   the link is Rowan either way). ElevenLabs' talk page opens; allow the microphone. If it asks you
+   to sign in, use your ElevenLabs account (the agent lives there).
+3. **Talk for a minute or two**: "What did I miss?", then one question the record can't answer
+   (something from today, say), then one request ("Could Sam send me the pilot numbers on Friday?").
+   Say thanks and let it end the call.
+4. **Wait a minute or two.** The call summary posts in the same brief thread: "Context Keeper · Rowan
+   talked it through (N min call)", with "Asked about", "The record didn't say (to follow up)" and
+   "New ideas and requests (needs confirming)". Once per call.
+
+If the clip or link doesn't appear, the text brief still stands (fail quiet). The agent log says why:
+`voice off: …` at start, `[voice] talk link left out: …`, or `audio_failed: …` on the brief's log line.
+
+## 4. Check the trace
+
+The trace file is `CK_TRACE_FILE` from `.env` (`state/trace.jsonl`). Job E's lines carry a `handoff`
+object (step, idea ref, status) and job `E` items:
 
 ```bash
-grep '"decision_id":"E:' state/trace.ck.jsonl | node -e 'require("readline").createInterface({input:process.stdin}).on("line",l=>{const t=JSON.parse(l);console.log(t.decision_id.split(":").slice(1,3).join(" "),t.kind,t.error??"")})'
+node -e 'for (const l of require("fs").readFileSync("state/trace.jsonl","utf8").split("\n").filter(Boolean)) { const t = JSON.parse(l); if (t.handoff) console.log(t.ts.slice(11,19), t.handoff.step, t.handoff.ref ?? "-", t.handoff.status ?? "", t.handoff.target_status ?? "", t.error ?? "") }'
 ```
 
-Expected order for I1: `noted`, `approved`, `build_room_created`, `context_posted`, `handed_off`,
-`announced`, `resumed` (only if a step was mid-flight at the restart), `progress` (any heard),
-`signoff_requested`, `signoff_ignored` (Sam), `signed_off`. Exactly **one** `handed_off` line.
+Expected for I1, in order: `noted`, `approved`, `build_room_created`, `context_posted`, `handed_off`
+(target status `live`), `announced`, `resumed` (only if a step was mid-send at the restart),
+`progress` (any heard), `signoff_requested`, `signoff_ignored` (Sam), `signed_off`. Exactly **one**
+`handed_off` line. People chatting in the build room show as `build_room_chat`.
 
-## 4. Not yet proven live (watch for these)
+The brief and the call summary:
 
-1. `send_targeted_message` is called with `{ target_names, body }`. PR5c/PR11 proved the op and
-   `target_names`; the `body` key is assumed to match `post_message`. If it errors, the trace
-   shows `E:stalled:I1` with the 422 text: fix the key in `src/agent/handoff/switch.ts`.
-2. A room made by `create_room(agent_names: [context-keeper, claude-code])` should start a Claude
+```bash
+node -e 'for (const l of require("fs").readFileSync("state/trace.jsonl","utf8").split("\n").filter(Boolean)) { const t = JSON.parse(l); if (t.items.some((i) => i.brief_for)) console.log(t.ts.slice(11,19), t.kind, t.items[0].brief_for, t.posts.map((p) => p.body.split("\n")[0].slice(0, 50)).join(" | "), t.error ?? "") }'
+```
+
+Expected: Rowan's brief line (`brief`) with two posts, the text ("Welcome back, Rowan…") and the clip
+("[audio catch-up-rowan.mp3] …"), its error field naming the talk link; then, after the call, a
+`reply` line for Rowan with the summary post and `talk_call conv_…` in its error field.
+
+## 5. Not yet proven live (watch for these)
+
+1. A room made by `create_room(agent_names: [context-keeper, claude-code])` should start a Claude
    Code session on the hand-off (PR11 showed this for a room it was invited to by `!invite-agent`).
    If nothing happens in 2 minutes, type `!invite-agent @claude-code` in the build room, wait for
    the 10-minute timeout line, then `approve I1 again` in the desk.
-3. Adding Rowan by handle (`user_names`) may fail for an account Switch hasn't seen. The code
-   retries with you alone; the chain doesn't need Rowan in the build room.
+2. `handed_off` with a target status other than `live` (`awaiting_manual_poll`, `no_session`): the
+   message went, but Claude Code may not have seen it yet. Check Console. `not_permitted`: Switch
+   still sent it and Claude Code will say it can't act; the desk tells you. It needs Claude Code's
+   addressing changed, then `approve I1 again`.
+3. Adding Rowan by handle (`user_names`, from his Slack sender name) may fail for an account Switch
+   hasn't seen. The code retries with you alone; the chain doesn't need Rowan in the build room.
 4. Claude Code is asked to start its report "Done I1:". If it words it differently, the report is
    matched to the oldest open hand-off in that room, so one idea at a time is safest for a take.
 5. The report is recognised as any `@switch-agent-` sender in the build room. Once its sender id
    shows in the log, pin it with `CK_CLAUDE_CODE_SENDER=<id>`.
+6. The clip goes up through Switch's media route with the live listener's connection and session
+   ids (the smoke test on 3 Nov posted without them, into a room nobody was listening in). If the
+   upload fails, the brief's log line says `audio_failed: media upload: …`.
+7. The call is matched by the caller name in the link and a start time after the link went out.
+   Only the latest call is checked each minute, so test one call at a time.
 
 For the demo take, the same run with `CK_BUILD_ROOM=ledgerly-build` and the real rooms added to
 `CK_POST_ROOMS` is your call; nothing in code posts there by default.
