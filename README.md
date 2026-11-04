@@ -463,11 +463,12 @@ Context Keeper was built by voice: dictated into Claude Code with Wispr Flow. Th
 | Counter at the start of the build window (3 Nov, 18:34) | 13,696 |
 | At the start of day 2 (4 Nov, 09:48) | 22,678 |
 | Dictated in the window by then | 8,982 |
-| Final total in the window | [NEED final Wispr total] |
+| Final counter (4 Nov, 22:20) | 37,641 |
+| **Dictated in the build window** | **23,945** |
 
 The prompt log (kept locally, not committed) had 190 prompts from 3 Nov 18:34 to 4 Nov 19:09, 96 of them backfilled from session transcripts.
 
-<img src="blog/shots/wispr-day2-start-22678-words.png" alt="Wispr Flow Insights at the start of day 2: 22,678 words" width="420">
+<img src="blog/shots/wispr-final-37641-words.png" alt="Wispr Flow Insights at submission: 37,641 words, 181 words per minute, top 0.1%" width="520">
 
 ## Built with
 
