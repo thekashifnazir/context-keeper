@@ -40,12 +40,14 @@ export function realClaude(): Claude {
 
 // ---- errors -------------------------------------------------------------------------------------
 
-export type ErrorKind = 'fatal' | 'retryable' | 'bad_request';
+export type ErrorKind = 'fatal' | 'retryable' | 'bad_request' | 'paused';
 
-/** 401/403 or out of credit → stop and alert once. 5xx, 429, timeouts, connection errors → fail quiet, retry once. */
+/** 401/403 or out of credit → stop and alert once. 5xx, 429, timeouts, connection errors → fail quiet, retry once.
+ *  The daily spend cap (src/agent/spend.ts) → paused: nothing sent, no per-message note, no retry. */
 export function errorKind(e: unknown): ErrorKind {
-  const err = e as { status?: number; message?: string; name?: string };
-  const msg = String(err?.message ?? '');
+  const err = e as { status?: number; message?: string; name?: string; spendCap?: boolean };
+  const msg = String(err?.message ?? (typeof e === 'string' ? e : ''));
+  if (err?.spendCap || /daily spend cap reached/.test(msg)) return 'paused';
   if (err?.status === 401 || err?.status === 403) return 'fatal';
   if (err?.status === 400 && /credit balance|billing/i.test(msg)) return 'fatal';
   if (err?.status === 400 || err?.status === 404 || err?.status === 422) return 'bad_request';
@@ -69,7 +71,7 @@ function maybeFault(): void {
 
 export interface Usage { model: string; input: number; cacheRead: number; cacheWrite: number; output: number; ms: number }
 
-const usageOf = (msg: Anthropic.Message, ms: number): Usage => ({
+export const usageOf = (msg: Anthropic.Message, ms: number): Usage => ({
   model: msg.model,
   input: msg.usage?.input_tokens ?? 0,
   cacheRead: msg.usage?.cache_read_input_tokens ?? 0,
