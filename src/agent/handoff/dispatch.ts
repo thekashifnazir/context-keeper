@@ -4,6 +4,7 @@
 //   noteNewIdeas()   after a job A decision: each genuinely new idea goes on the owner's list, and so
 //                    does a might-be-related one where job A named the part the record doesn't have
 //                    yet (the trace item's new_part; "builds on <ref>"; Kash, 4 Nov)
+//   heardAfterJobA() someone else's chatter in a sign-off thread that job A stayed quiet on → one "noted" line
 //   isAgentSender()  another agent's post (Claude Code's, say) is never a proposal for job A (PR11)
 import type { TraceItem, TraceLine } from '../../shared/trace.ts';
 import type { Input } from '../pipeline.ts';
@@ -55,4 +56,24 @@ export async function noteNewIdeas(chain: ChainLike, roomId: string, roomName: s
     refs.push(rec.ref);
   }
   return refs;
+}
+
+export interface HeardLike { heard: HandoffChain['heard'] }
+
+/** After a job A decision: a burst from someone other than the raiser or the owner, in an idea's
+ *  sign-off thread, that job A posted nothing for gets one "noted" line (chain.heard decides; at most
+ *  one per person per idea). One call per thread in the burst. */
+export async function heardAfterJobA(chain: HeardLike, roomId: string, roomName: string, inputs: Input[], results: { trace: TraceLine | null }[]): Promise<number> {
+  const posted = results.some((r) => r.trace?.posts.some((p) => p.route !== 'owner_private'));
+  const lastByThread = new Map<string, Input>();
+  for (const x of inputs) if (x.thread_id) lastByThread.set(x.thread_id, x);
+  let n = 0;
+  for (const x of lastByThread.values()) {
+    const ok = await chain.heard({
+      room_id: roomId, room_name: roomName, message_id: x.message_id, sender: x.sender, sender_name: x.sender_name,
+      body: x.body, thread_id: x.thread_id ?? null, received_at: x.received_at,
+    }, posted);
+    if (ok) n++;
+  }
+  return n;
 }

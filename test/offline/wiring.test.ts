@@ -142,7 +142,7 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     // 4. Exactly one hand-off, with the live server's argument names; Switch adds the @claude-code.
     const t = sw.named('send_targeted_message');
     expect(t).toHaveLength(1);
-    expect(Object.keys(t[0].args).sort()).toEqual(['body', 'target_names']);
+    expect(Object.keys(t[0].args).sort()).toEqual(['body', 'target_names', 'thread_id']);
     expect(t[0].args.target_names).toEqual(['claude-code']);
     expect(t[0].args.body).toMatch(/^\*\*Hand-off I1\*\*/);
     expect(t[0].args.body).not.toMatch(/@claude-code/);
@@ -217,7 +217,7 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     await new Promise((r) => setTimeout(r, 10));
     await l.chain.tick();
     await l.chain.tick();
-    expect(l.ownerPosts.filter((b) => b.includes('your OK'))).toEqual(['**I1 · May need your OK** · no result from Claude Code after 1 min. If a card is waiting, open its thread under the hand-off in #ck-smoke-build-1105 and click Allow once.']);
+    expect(l.ownerPosts.filter((b) => b.includes('your OK'))).toEqual(['**I1 · May need your OK** · no result from Claude Code after 1 min. If a card is waiting, open the I1 thread in #ck-smoke-build-1105 and click Allow once.']);
     const thread = sw.named('post_message').filter((c) => c.room === PILOT.id).map((c) => String(c.args.body));
     expect(thread).toEqual(["✅ **Approved** by Kash · waiting for Claude Code to start building it in #ck-smoke-build-1105. I'll post each step here for Rowan."]);
   });

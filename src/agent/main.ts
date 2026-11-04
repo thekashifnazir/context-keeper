@@ -1,5 +1,7 @@
 // main: the live Context Keeper (jobs A, B, C text, D). Listens to every room it's in (untagged), batches each
-// person's messages until they go quiet (CK_BURST_GAP_S, 90 s hard cap), runs the pipeline, and
+// person's messages until they go quiet (src/agent/burst.ts: CK_BURST_GAP_SHORT_S after a finished-looking
+// message, CK_BURST_GAP_S otherwise, 90 s hard cap), starting the verdict call while it waits (prefetch;
+// CK_PREFETCH=0 turns it off), runs the pipeline, and
 // saves its stream position so a restart resumes instead of dropping what came in meanwhile. The
 // unsent burst queue and the room's live messages are saved as well (CK_STATE_DIR/agent-buffer.json,
 // live/<room>.jsonl), so a restart neither loses a queued message nor forgets what was said earlier.
@@ -36,13 +38,14 @@ import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
 import { briefTrigger, runBrief, type BriefOpts } from './jobs/brief.ts';
 import { featuresFromEnv } from './features.ts';
-import { HandleMemo, isAgentSender, noteNewIdeas, toHandoffMsg } from './handoff/dispatch.ts';
+import { gapConfigFromEnv, quietGapMs } from './burst.ts';
+import { HandleMemo, heardAfterJobA, isAgentSender, noteNewIdeas, toHandoffMsg } from './handoff/dispatch.ts';
 import { handoffFromEnv } from './handoff/wire.ts';
 import { handleOwnerDesk } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
 import { loadEnv } from './env.ts';
-import { callSignoff, modelConfigFromEnv, realClaude } from './model.ts';
-import { decideWithRetry, type Deps, type Input } from './pipeline.ts';
+import { callSignoff, callVerdict, modelConfigFromEnv, realClaude } from './model.ts';
+import { actionable, decideWithRetry, type Deps, type Input, type PrefetchedVerdict } from './pipeline.ts';
 import type { Poster } from './post.ts';
 import { systemPrompt } from './prompt.ts';
 import { isDocNotice, RoomMemory } from './memory.ts';
@@ -74,8 +77,8 @@ const owner = { owner_desk_room: process.env.CK_OWNER_DESK_ROOM || ownerFile.own
 const prefixes = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean);
 const postPrefixes = prefixes(process.env.CK_POST_ROOMS ?? 'ck-smoke-,ck-eval-');
 const listenPrefixes = process.env.CK_LISTEN_ROOMS ? prefixes(process.env.CK_LISTEN_ROOMS) : null;
-const gapMs = Number(process.env.CK_BURST_GAP_S ?? 20) * 1000;
-const CAP_MS = 90_000;
+const gaps = gapConfigFromEnv();
+const prefetchOn = !/^(0|off|false|no)$/i.test(process.env.CK_PREFETCH ?? '1');
 
 const sessions = new Map<string, string>();
 async function op(roomId: string | null, name: string, args: Record<string, unknown>): Promise<any> {
@@ -194,38 +197,83 @@ const recordFor = (roomId: string): Promise<RoomRecord | null> => memory.record(
 // Per-author quiet gap: one decision per person's burst, never per thread.
 // The stream position moves past a message as soon as it's queued, so the queue is saved too
 // (state/agent-buffer.json): a restart inside the quiet gap re-queues it instead of dropping it.
-const buffers = new Map<string, { inputs: Input[]; timer: NodeJS.Timeout; first: number }>();
+// Speed (Kash, 4 Nov: "any parallel streams?"): each time a message joins a burst, the verdict call for
+// the burst so far starts at once (prefetch), on the record as it is then. When the gap ends, the
+// decision uses it only if the burst is still those same messages and the record hasn't changed since
+// (memory.version); otherwise it calls again, as before. Nothing posts before the gap ends.
+// A brief (job C) runs off the stream; job A's decision waits for the brief's text post (`gates`).
+type Buffer = { inputs: Input[]; timer: NodeJS.Timeout; first: number; gates: Promise<void>[] };
+const buffers = new Map<string, Buffer>();
+type Prefetch = { ids: string; ready: Promise<{ verdict: PrefetchedVerdict; version: number; ctx: ReturnType<typeof buildRoomContext>; at: number } | null>; started: number };
+const prefetches = new Map<string, Prefetch>();
 const bufFile = `${SD}/agent-buffer.json`;
 // Read now, not once the rooms are joined: catch-up events arrive first and would overwrite the file.
 let carried = readJson<{ room: string; inputs: Input[] }[]>(bufFile, []);
 const saveBuffers = () => atomicWriteJson(bufFile, [...carried, ...[...buffers.entries()].map(([k, b]) => ({ room: k.slice(0, k.indexOf('|')), inputs: b.inputs }))]);
-function enqueue(roomId: string, input: Input) {
+function enqueue(roomId: string, input: Input, gate: Promise<void> | null = null) {
   const key = `${roomId}|${input.sender}`;
   const b = buffers.get(key);
   if (b?.inputs.some((i) => i.message_id === input.message_id)) return;
   if (b) clearTimeout(b.timer);
-  const entry = b ?? { inputs: [], timer: undefined as unknown as NodeJS.Timeout, first: Date.now() };
+  const entry: Buffer = b ?? { inputs: [], timer: undefined as unknown as NodeJS.Timeout, first: Date.now(), gates: [] };
   entry.inputs.push(input);
-  const wait = Math.max(0, Math.min(gapMs, entry.first + CAP_MS - Date.now()));
-  entry.timer = setTimeout(() => { buffers.delete(key); saveBuffers(); void run(roomId, entry.inputs); }, wait);
+  if (gate) entry.gates.push(gate);
+  const wait = quietGapMs(input.body, entry.first, Date.now(), gaps);
+  entry.timer = setTimeout(() => { buffers.delete(key); saveBuffers(); void run(roomId, entry.inputs, entry.gates, key, entry.first); }, wait);
   buffers.set(key, entry);
   saveBuffers();
+  if (prefetchOn && process.env.CK_PAUSE !== '1' && !stopped) prefetch(key, roomId, [...entry.inputs]);
 }
 
-async function run(roomId: string, inputs: Input[]) {
+/** Starts the burst's verdict call now (see above). A newer prefetch for the same person replaces it;
+ *  a replaced call still runs to the end (its cost is the price of the head start) and is ignored. */
+function prefetch(key: string, roomId: string, inputs: Input[]) {
+  const started = Date.now();
+  const ready = (async () => {
+    const rec = await recordFor(roomId);
+    if (!rec) return null;
+    await memory.refresh(roomId);
+    const todo = actionable(deps, roomId, inputs);
+    if (!todo.length) return null;
+    const version = memory.version(roomId);
+    const ctx = buildRoomContext(rec);
+    const call = callVerdict(deps.claude, deps.cfg, deps.system, ctx, todo.map((m) => ({ message_id: m.message_id, sender: m.sender_name, body: m.body, received_at: m.received_at, thread_id: m.thread_id })));
+    call.catch(() => {}); // a replaced call's failure is nobody's; the used one's is the decision's
+    const at = { t: 0 };
+    void call.then(() => { at.t = Date.now(); }, () => { at.t = Date.now(); });
+    return { verdict: { ids: todo.map((m) => m.message_id), call }, version, ctx, get at() { return at.t; } };
+  })().catch((e) => { console.error(`prefetch failed: ${(e as Error).message}`); return null; });
+  prefetches.set(key, { ids: inputs.map((i) => i.message_id).join(','), ready, started });
+}
+
+async function run(roomId: string, inputs: Input[], gates: Promise<void>[] = [], key: string | null = null, first = Date.now()) {
   if (stopped) return;
+  const gapEnd = Date.now();
+  const pre = key ? prefetches.get(key) : undefined;
+  if (key && pre) prefetches.delete(key);
   const rec = await recordFor(roomId);
   if (!rec) { console.log(`no record for room ${roomNames.get(roomId) ?? roomId}: it has no room documents in Switch; skipping (seed it with npm run seed)`); return; }
   try {
     await memory.refresh(roomId);
-    const ctx = buildRoomContext(rec);
-    const results = await decideWithRetry(deps, roomId, roomNames.get(roomId) ?? roomId, ctx, inputs);
+    const got = pre && pre.ids === inputs.map((i) => i.message_id).join(',') ? await pre.ready : null;
+    const fresh = !!got && got.version === memory.version(roomId);
+    const ctx = fresh ? got!.ctx : buildRoomContext(rec);
+    if (gates.length) await Promise.all(gates); // the brief's text first, then job A's reply
+    const t1 = Date.now();
+    const results = await decideWithRetry(deps, roomId, roomNames.get(roomId) ?? roomId, ctx, inputs, fresh ? got!.verdict : null);
+    const done = Date.now();
     for (const r of results) if (r.trace) console.log(`decision ${r.trace.decision_id}: ${r.trace.kind} ${r.trace.items.map((i) => `${i.message_id}=${i.job}/${i.verdict ?? '-'}`).join(' ')}${r.trace.error ? ` (${r.trace.error})` : ''}`);
+    // One line per decision for measuring a reply's time: the gap, whether the early verdict was used and
+    // when it was ready, and the rest (gate, reviewer, posting) after the gap.
+    const calls = results.flatMap((r) => r.usages).map((u) => `${u.model.replace(/^claude-/, '')} ${(u.ms / 1000).toFixed(1)} s`).join(' + ');
+    console.log(`timing ${roomNames.get(roomId) ?? roomId}: burst ${inputs.length}, gap ${((gapEnd - first) / 1000).toFixed(1)} s from first message, prefetch ${!pre ? 'none' : !got ? 'stale (burst changed)' : fresh ? `used (verdict ready ${got.at ? ((got.at - pre.started) / 1000).toFixed(1) : '?'} s after start, ${got.at && got.at > gapEnd ? `${((got.at - gapEnd) / 1000).toFixed(1)} s after the gap` : 'before the gap ended'})` : 'stale (record changed)'}, after gap to done ${((done - gapEnd) / 1000).toFixed(1)} s (decide ${((done - t1) / 1000).toFixed(1)} s${gates.length ? `, brief wait ${((t1 - gapEnd) / 1000).toFixed(1)} s` : ''}), model ${calls || '-'}`);
     if (handoff) {
       try {
         const refs = await noteNewIdeas(handoff, roomId, roomNames.get(roomId) ?? roomId, inputs, results, handles);
         if (refs.length) console.log(`job E: noted ${refs.join(', ')} for the owner`);
-      } catch (e) { console.error('job E note failed:', (e as Error).message); }
+        const heard = await heardAfterJobA(handoff, roomId, roomNames.get(roomId) ?? roomId, inputs, results);
+        if (heard) console.log(`job E: ${heard} "noted" line(s) in a sign-off thread`);
+      } catch (e) { console.error('job E after decision failed:', (e as Error).message); }
     }
   } catch (e) {
     // A crash becomes a note, never a dead loop.
@@ -278,30 +326,34 @@ async function onEvent(ev: AgentBridgeEvent) {
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
   const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
   memory.addLive(ev.room_id, live);
+  let gate: Promise<void> | null = null;
   if (trig && rec) {
+    // One attempt per person per room (runBrief marks it too); marked now, because the brief runs off
+    // the stream: the next event (their second message, another room's) doesn't wait ~30 s for it.
+    deps.state.markBriefed(ev.room_id, input.sender);
     const roomName = roomNames.get(ev.room_id) ?? ev.room_id;
-    // The text brief goes first and job A waits for it; the audio clip follows in the background, and
-    // the brief's trace line (written once the clip is done) carries both posts.
+    // The text brief goes first and job A's reply waits for it (the gate); the audio clip follows in the
+    // background, and the brief's trace line (written once the clip is done) carries both posts.
     let textDone!: () => void;
-    const textPosted = new Promise<void>((r) => { textDone = r; });
+    gate = new Promise<void>((r) => { textDone = r; });
     const opts: BriefOpts = {};
     const v = voice && allowed(ev.room_id) ? voice : null; // a dry-run room gets no clip and no link (nothing paid for)
-    try {
-      const talk = v ? await v.talkClosing(rec, roomName, who, ev.room_id) : null;
-      if (talk) opts.closing = talk.closing;
-      if (v) opts.after = async ({ threadId, briefText }) => {
-        textDone();
-        return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, since: trig.since, briefText, talk: talk?.talk ?? null });
-      };
-    } catch (e) { console.error('voice prep failed:', (e as Error).message); }
-    Promise.resolve()
-      .then(() => runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts))
-      .then((t) => console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`))
-      .catch((e) => console.error('brief crashed:', (e as Error).message))
-      .finally(() => textDone());
-    await textPosted;
+    void (async () => {
+      try {
+        const talk = v ? await v.talkClosing(rec, roomName, who, ev.room_id) : null;
+        if (talk) opts.closing = talk.closing;
+        if (v) opts.after = async ({ threadId, briefText }) => {
+          textDone();
+          return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, since: trig.since, briefText, talk: talk?.talk ?? null });
+        };
+      } catch (e) { console.error('voice prep failed:', (e as Error).message); }
+      try {
+        const t = await runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts);
+        console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`);
+      } catch (e) { console.error('brief crashed:', (e as Error).message); } finally { textDone(); }
+    })();
   }
-  enqueue(ev.room_id, input);
+  enqueue(ev.room_id, input, gate);
 }
 
 async function joinRooms() {

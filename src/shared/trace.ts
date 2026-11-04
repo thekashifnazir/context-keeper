@@ -66,6 +66,8 @@ export const HANDOFF_STEPS = [
   'building', 'blocked', 'unblocked',
   // free-form sign-off replies (5 Nov): approved with feedback, and the one "is that a sign-off?" ask
   'signed_off_with_note', 'signoff_asked',
+  // someone else's chatter in a sign-off thread that job A stayed quiet on: one "noted" line (5 Nov)
+  'heard',
 ] as const;
 export type HandoffStep = (typeof HANDOFF_STEPS)[number];
 const Handoff = z.object({

@@ -73,8 +73,15 @@ const quietItem = (id: string): TraceItem => ({ message_id: id, job: 'none', ver
 
 export interface DecideResult extends Outcome { usages: Usage[] }
 
+/** A verdict call the listener started while the person's quiet gap was still running (main.ts
+ *  prefetch), for exactly these message ids on this record. Used only when the decision's actionable
+ *  ids are the same; it is the decision's own call 1 (an error in it is a model error, as ever).
+ *  Nothing is posted from it before the gap ends and the gate and reviewer have run. */
+export interface PrefetchedVerdict { ids: string[]; call: Promise<{ msg: Awaited<ReturnType<typeof callVerdict>>['msg']; usage: Usage }> }
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 /** One attempt at a decision. `notifyOwnerOnError` is false on the retry, so the owner gets one note. */
-export async function decide(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, rawInputs: Input[], opts: { notifyOwnerOnError?: boolean } = {}): Promise<DecideResult> {
+export async function decide(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, rawInputs: Input[], opts: { notifyOwnerOnError?: boolean; prefetched?: PrefetchedVerdict | null } = {}): Promise<DecideResult> {
   const inputs = actionable(deps, roomId, rawInputs);
   if (!inputs.length) return { trace: null, retry: false, fatal: false, usages: [] };
   const usages: Usage[] = [];
@@ -102,7 +109,8 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
   // Call 1: the cited verdict.
   let items;
   try {
-    const { msg, usage } = await callVerdict(deps.claude, deps.cfg, deps.system, ctx, inputs.map((m) => ({ message_id: m.message_id, sender: m.sender_name, body: m.body, received_at: m.received_at, thread_id: m.thread_id })));
+    const pre = opts.prefetched && sameIds(opts.prefetched.ids, inputs.map((m) => m.message_id)) ? opts.prefetched.call : null;
+    const { msg, usage } = await (pre ?? callVerdict(deps.claude, deps.cfg, deps.system, ctx, inputs.map((m) => ({ message_id: m.message_id, sender: m.sender_name, body: m.body, received_at: m.received_at, thread_id: m.thread_id }))));
     usages.push(usage);
     items = parseVerdict(msg, ctx, inputs.map((m) => m.message_id));
   } catch (e) {
@@ -180,8 +188,8 @@ async function failQuiet(
 }
 
 /** A decision with the fail-quiet retry: on a retryable error, wait 60 s and try once more. */
-export async function decideWithRetry(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, inputs: Input[]): Promise<DecideResult[]> {
-  const first = await decide(deps, roomId, roomName, ctx, inputs);
+export async function decideWithRetry(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, inputs: Input[], prefetched?: PrefetchedVerdict | null): Promise<DecideResult[]> {
+  const first = await decide(deps, roomId, roomName, ctx, inputs, { prefetched });
   if (!first.retry) return [first];
   await (deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(RETRY_AFTER_MS);
   const second = await decide(deps, roomId, roomName, ctx, inputs, { notifyOwnerOnError: false });

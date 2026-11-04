@@ -4,6 +4,7 @@
 //   - never post a bare yes/no (or allow/decline) where Claude Code's approval card lives:
 //     a bare word there could read as an answer to Switch's "Allow once / Decline" card.
 // Chat text is data: the idea and the cited quotes go out as quoted lines, never as instructions.
+import { plainCommand } from '../../shared/command.ts';
 import { isRawMessageId } from '../../shared/refs.ts';
 import type { IdeaRecord } from './store.ts';
 
@@ -54,7 +55,9 @@ export function ownerIdeaNote(rec: IdeaRecord, flagged: boolean): string {
     quoteBlock(rec.text, 400),
     ...(on ? [`Builds on ${on}.${part ? ` New part: ${part}` : ''}`] : []),
     ...(flagged ? ['⚠️ It reads like instructions to an agent. It goes to Claude Code as quoted data only.'] : []),
-    `Reply \`approve ${rec.ref}\` to hand it to Claude Code. Nothing happens until you do.`,
+    // Bold, not inline code: Slack pasted a copied `approve I7` back as code (Kash, 4 Nov). The
+    // parser takes either now (plainCommand), but bold copies as plain words.
+    `Reply **approve ${rec.ref}** to hand it to Claude Code. Nothing happens until you do.`,
   ].join('\n');
 }
 
@@ -70,14 +73,19 @@ function contextLines(rec: IdeaRecord): string[] {
   return [...head, '**Context from the record:**', ...[...by].flatMap(([ref, quotes]) => [`${ref}:`, ...quotes.map((q) => quoteBlock(q, 300))])];
 }
 
-/** Top-level post in the build room, for the people there: a short header. The context is in the hand-off. */
-export function buildRoomBrief(rec: IdeaRecord, ownerName: string): string {
+/** The one top-level post in the build room, for the people there (Kash, 4 Nov, I7: "still want to
+ *  work on text for ck-build as a lot of text"): what it is, the idea, the new part, where the result
+ *  goes. 3 or 4 short lines. The long context Claude Code needs goes in the hand-off, which is a reply
+ *  in this post's thread (`inThread`), so the channel shows one short post per approved idea. */
+export function buildRoomBrief(rec: IdeaRecord, ownerName: string, inThread = true): string {
   const part = rec.builds_on?.length ? newPartLine(rec) : null;
   return [
-    `**${rec.ref} · Approved** · ${rec.sender_name}'s idea from #${rec.room_name}, approved by ${ownerName}`,
+    `🛠️ **${rec.ref} · Approved** · ${rec.sender_name}'s idea from #${rec.room_name}, approved by ${ownerName}`,
     quoteBlock(rec.text, 300),
     ...(part ? [`New part: ${part}`] : []),
-    `Result goes back to ${rec.sender_name}'s thread for sign-off. Claude Code's hand-off below has the cited context.`,
+    inThread
+      ? `📬 Result goes back to ${rec.sender_name}'s thread for sign-off. Claude Code's brief is in the thread.`
+      : `📬 Result goes back to ${rec.sender_name}'s thread for sign-off. Claude Code's hand-off below has the cited context.`,
   ].join('\n');
 }
 
@@ -130,17 +138,23 @@ export function shortNote(text: string, max = 160): string {
 /** Kash, 4 Nov: "rather [than] do nothing, say only X can sign this off", so people know why they got no sign-off. */
 export const notTheirsLine = (byName: string, raiserName: string, ownerName: string, raiserIsOwner: boolean) =>
   raiserIsOwner ? `Thanks, ${byName}. Only ${ownerName}, who raised it, can sign this off.` : `Thanks, ${byName}. Only ${raiserName}, who raised it, or ${ownerName} can sign this off.`;
+/** Kash, 4 Nov (I7): "for sam should give feedback too, should always be giving something". Someone
+ *  other than the raiser or the owner says something in the sign-off thread that job A stays quiet on
+ *  ("great idea"): one short line, once per person per idea (shared with notTheirsLine's budget), so
+ *  they know they were heard and who closes it. Switch has no reaction op, so it's a line, not a 👍. */
+export const heardLine = (byName: string, raiserName: string, ownerName: string, raiserIsOwner: boolean) =>
+  raiserIsOwner ? `Thanks, ${byName}, noted. ${ownerName} signs this one off.` : `Thanks, ${byName}, noted. ${raiserName} signs this one off.`;
 /** Owner desk, once per attempt: Claude Code posted that it's waiting (card), or the backstop timer ran out. */
 export const nudgeLine = (rec: IdeaRecord, buildRoom: string, minutes: number | null = null) => (minutes === null
-  ? `**${rec.ref} · Needs your OK** · Claude Code is waiting: open its thread under the hand-off in #${buildRoom} and click Allow once.`
-  : `**${rec.ref} · May need your OK** · no result from Claude Code after ${minutes} min. If a card is waiting, open its thread under the hand-off in #${buildRoom} and click Allow once.`);
+  ? `**${rec.ref} · Needs your OK** · Claude Code is waiting: open the ${rec.ref} thread in #${buildRoom} and click Allow once.`
+  : `**${rec.ref} · May need your OK** · no result from Claude Code after ${minutes} min. If a card is waiting, open the ${rec.ref} thread in #${buildRoom} and click Allow once.`);
 export const reopenedLine = (byName: string, reason: string) => `↩️ **Reopened** by ${byName}${shortNote(reason, 200) ? `: ${shortNote(reason, 200)}` : ''}.`;
 
 // ---- what we read --------------------------------------------------------------------------------
 
 /** "approve I3", "approve I3 again", "approve" (only one idea waiting). Null when it isn't an approval. */
 export function parseApproval(body: string): { ref: string | null; again: boolean } | null {
-  const m = body.trim().match(/^approve[d]?\b\s*([A-Za-z]?\d+)?\s*(again)?\s*[.!]*$/i);
+  const m = plainCommand(body).match(/^approve[d]?\b\s*([A-Za-z]?\d+)?\s*(again)?\s*[.!]*$/i);
   if (!m) return null;
   return { ref: m[1] ?? null, again: !!m[2] };
 }
@@ -148,7 +162,7 @@ export function parseApproval(body: string): { ref: string | null; again: boolea
 /** A clear sign-off attempt, for people who can't sign off: "Great idea!" or "No worries" in the thread
  *  stays ordinary chat; these get the "only Rowan can sign this off" reply without a model call. */
 const CLEAR_SIGNOFF = /^\s*(looks (right|good)\b|lgtm\b|signed? (it )?off\b|ship it\b|approved?\b|not quite\b|not right\b|reopen\b)/i;
-export const isClearSignoff = (body: string) => CLEAR_SIGNOFF.test(body);
+export const isClearSignoff = (body: string) => CLEAR_SIGNOFF.test(plainCommand(body));
 
 // The fast path (no model call) takes only replies that can't mean anything else: the WHOLE reply is a
 // plain yes ("Looks right, thanks!", "LGTM 👍"), or it starts "not quite" / "not right" / "reopen".
@@ -160,7 +174,8 @@ const PLAIN_YES = new RegExp(String.raw`^\s*${YES}${TRIVIA}\s*$`, 'i');
 const PLAIN_NO = /^\s*(not quite|not right|reopen)\b/i;
 
 /** The raiser's reply when it's unmistakable; null means "read it" (the model decides). */
-export function parseSignoff(body: string): { verdict: 'signed_off' | 'reopened'; reason: string } | null {
+export function parseSignoff(raw: string): { verdict: 'signed_off' | 'reopened'; reason: string } | null {
+  const body = plainCommand(raw);
   if (PLAIN_NO.test(body)) return { verdict: 'reopened', reason: body.replace(/^\s*(not quite|not right|reopen)\b[\s,:;.!-]*/i, '').trim() };
   if (PLAIN_YES.test(body)) return { verdict: 'signed_off', reason: '' };
   return null;
