@@ -170,13 +170,21 @@ So we run the official standalone Compose release of the same server version Con
 ## Run it
 
 <!-- drafted by Claude from the build log; Kash to check -->
-From a clean clone to Context Keeper answering in a chat room on your own machine, with no Slack or Discord: Switch's self-hosted server plus the Mattermost that ships in Switch's own Compose file. Tested from a clean checkout on 4 Nov; full notes and timings in [docs/run-it.md](docs/run-it.md).
+From a clean clone to Context Keeper answering in a chat room on your own machine, with no Slack or Discord: Switch's self-hosted server plus the Mattermost that ships in Switch's own Compose file. Tested from a clean checkout on 4 Nov, on a Mac and on a brand-new Ubuntu VM: **about 4.5 min from an empty Ubuntu VM (2 min 52 s from clone)** to a cited answer. The step-by-step guide, with timings, what each check should print and what to do when one fails: **[docs/run-it.md](docs/run-it.md)**.
 
 **You need:** Node 22 or later, npm and git; Docker with Compose v2 (Docker Desktop, or Colima on a Mac), running; python3, curl and openssl; an Anthropic API key; about 3 GB free for the images. On an Apple Silicon Mac, run Docker with Rosetta: the test Mattermost image is amd64 only.
 
+**On Linux** (fresh Ubuntu 24.04 has git, python3, curl and openssl): Ubuntu's own `nodejs` is Node 18, too old, so take Node 22 from NodeSource; and add yourself to the `docker` group, then log in again:
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs
+sudo usermod -aG docker "$USER"             # then log out and back in
+```
+
 ```bash
 git clone https://github.com/thekashifnazir/context-keeper && cd context-keeper
-cp .env.example .env                        # set ANTHROPIC_API_KEY= in .env (don't export it)
+cp .env.example .env                        # fill in the existing ANTHROPIC_API_KEY= line in .env (a second line is ignored; don't export it)
 npm ci
 npm test                                    # offline tests
 scripts/server-up.sh --with-mattermost      # Switch 0.31.0 + Gateway + Mattermost; registers the agent
@@ -189,7 +197,9 @@ Then open Mattermost at `http://127.0.0.1:18065`, sign in as `user` (the passwor
 
 > Why don't we run onboarding on Saturdays? Agency owners have more time at weekends.
 
-You get a welcome brief (you're new to the room), then a thread reply quoting decision D1, who made it and when, and what would reopen it. The agent only posts in rooms whose names start with `ck-smoke-` or `ck-eval-` (`CK_POST_ROOMS`); anywhere else it decides, logs and sends nothing.
+**On a remote machine** (a cloud VM over SSH), `127.0.0.1` is that machine, not yours: forward the port first with `ssh -N -L 18065:127.0.0.1:18065 you@your-vm`, or post the question through Mattermost's API instead ([docs/run-it.md](docs/run-it.md), step 8).
+
+Within about 20 s, two posts land in your question's thread: a welcome brief (you're new to the room), then the cited answer, quoting decision D1, who made it and when, and what would reopen it, with its source shown as "Ledgerly pilot plan › Decisions (Kash, 6 Oct)". The agent only posts in rooms whose names start with `ck-smoke-` or `ck-eval-` (`CK_POST_ROOMS`); anywhere else it decides, logs and sends nothing.
 
 | To | Do |
 |---|---|
@@ -197,7 +207,7 @@ You get a welcome brief (you're new to the room), then a thread reply quoting de
 | Run the whole 24-case set | `npm run eval` |
 | Avoid ports already in use, or another Switch stack | `CK_COMPOSE_PROJECT=ckjudge CK_API_PORT=28000 CK_GATEWAY_PORT=23000 CK_POSTGRES_PORT=25432 CK_MM_PORT=28065 scripts/server-up.sh --with-mattermost` |
 | Use Switch Console too | "Connect to an existing server" with `SWITCH_API_URL` from `.env`; sign in as `admin@switch.local` with `GATEWAY_ADMIN_PASSWORD` from `server/.env` |
-| Clean up | `(cd server && docker compose -f standalone-docker-compose.yml --profile gateway --profile collab down -v)` |
+| Clean up | `(cd server && docker compose -f standalone-docker-compose.yml --profile gateway --profile collab down -v) && rm -f .env.local && rm -rf state` |
 
 Slack and Discord need a Switch Slack app or Discord bot connected to the server as a bridge (see [How the channels are set up](#how-the-channels-are-set-up)). Job E and voice are optional and stay off without their keys and flags ([.env.example](.env.example), [docs/handoff-live-test.md](docs/handoff-live-test.md)).
 
@@ -239,6 +249,22 @@ The eval runs the **real agent** against the **real Switch server**, in real tim
 **Citations, read carefully.** None of the quotes shown to people failed the check. The other 19 of the 73 stayed in the agent's trace and were never shown.
 
 **Speed.** The median went from 34.9 s to 16.1 s on 4 Nov, and was 15.5 s in the latest run: the verdict call now starts while the quiet gap runs, a finished-looking message waits 12 s instead of 20, and the catch-up brief no longer blocks the event stream.
+
+**Robustness.** A second runner (`npm run eval -- --robustness`) kills, restarts and starves the live agent on purpose, each check in its own fresh room. First full run `r20261104-1906-01f3`: 6/9 ([report](testset/results/2026-11-04-robustness-claude-opus-5-5.md)); the two fails we could fix were re-run on their own after the fix.
+
+| # | Check | Result |
+|---|---|---|
+| R1 | Quote gate: a quote that isn't in the source never posts as "covered" (offline test) | ✅ pass |
+| R2 | Restart mid-burst: killed while a returner's first message waits in the queue | ❌ fail in the first run: one combined reply, but the catch-up brief was lost for good. Fixed (the brief is saved as pending and re-run once after a restart), then ✅ pass in `r20261104-1959-990f` ([report](testset/results/2026-11-04-robustness-claude-opus-5-5-3.md)): one brief, one combined reply, no duplicates |
+| R3 | Own posts ignored: none of the agent's posts is ever taken as input | ✅ pass |
+| R4 | Fail quiet: a model error posts nothing public, one note to the owner, and the retry posts the right answer | ✅ pass |
+| R5 | Retract: the owner says "wrong" under an answer | ❌ fail: **not built** (see [Limits](#limits-and-whats-next)) |
+| R6 | A clash waiting for the owner survives a restart, and the ruling lands in the thread | ✅ pass |
+| R7a | Per-person limit in a public demo room: the limit line once, then silence, nothing dropped unseen | ✅ pass |
+| R7b | Daily spend cap: no model call after the cap | ❌ fail in the first run (the check also counted the call that crossed the cap); check corrected, then ✅ pass in `r20261104-1916-b591` ([report](testset/results/2026-11-04-robustness-claude-opus-5-5-2.md)) |
+| R8 | Missed while down: a message posted while the agent is stopped is answered once after it restarts | ✅ pass (there's no "late" marker; reported, not scored) |
+
+Model spend for the three robustness runs: $0.46, $0.15 and $0.30 (metered estimates, in [facts.md](facts.md)).
 
 **How it was tested honestly.** The 24 cases and the invented demo data (two teams, Ledgerly and Riverside) were prepared before the build window. One expectation (T14) changed in the window, openly, after a rule change; the build log says why. T24 hides instructions in chat; it has to be checked as a claim, not obeyed. `testset/` deliberately contains attack text aimed at the agent, not at you. These results describe Context Keeper's behaviour only; they're not a benchmark of Switch.
 
@@ -342,9 +368,10 @@ Switch's own three-factor safety test (Auto mode on, reach that matters, unvette
 | Chat messages are named, not linked | Switch gives agents no message permalink, so a chat source reads "Rowan, 4 Nov"; document sources link to their section |
 | Covered or parked is sometimes a judgement call | T18 (above). Left as an honest miss rather than tuned to the test |
 | Spend is an estimate | From a price table, on the high side; the real bill is on the Anthropic Console |
+| No retraction yet (robustness check R5) | **Not built.** When the owner replies "wrong" under an answer, nothing reads it: no correction is posted, the trace isn't marked retracted and nothing is logged as a miss. The R5 check fails for that reason, and stays in the results as a fail. Next on the list |
 | One VM, no automatic backups | `pg_dump` by hand ([docs/deploy-cloud.md](docs/deploy-cloud.md)); the agent log isn't rotated yet |
 
-Next: register against the server Console runs once Console's new API keys page ships (no Docker needed for local testing), and add people's roles so it can suggest who picks up approved work. Level 4 isn't claimed.
+Next: register against the server Console runs once Console's new API keys page ships (no Docker needed for local testing), add people's roles so it can suggest who picks up approved work, and build the retraction R5 tests for. Level 4 isn't claimed.
 
 ## What I liked about Switch, and what I'd improve
 

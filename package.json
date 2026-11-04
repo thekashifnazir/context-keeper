@@ -1,7 +1,7 @@
 {
   "name": "context-keeper",
   "version": "1.0.0",
-  "description": "<!-- Skeleton for the public build repo's README. The headings mirror the judging criteria so a judge can score straight down the page.      Required by the submit list: which agents are connected, how the channel is set up, how to run it.      Prose goes in Kash's voice at the end; [NEED] marks gaps. Don't fill numbers until they're measured. -->",
+  "description": "Your team chat's memory: it answers with the source, catches you up, and turns new ideas into work.",
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
