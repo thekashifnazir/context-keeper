@@ -61,7 +61,7 @@ describe('job C: the brief', () => {
     const brief = poster.pub()[0];
     expect(brief.thread).toBe('a1');
     expect(brief.body.split('\n')).toEqual([
-      'Welcome, Alex. A quick catch-up on where things stand:',
+      '👋 **Welcome, Alex** · a quick catch-up on where things stand',
       '• The pilot runs with three agencies, 25 clients each (Kash decided: support is Priya plus Kash). (pilot-plan.md §2)',
       '• Priya runs onboarding calls and pilot support. (pilot-plan.md §3)',
       TALK_IT_THROUGH,

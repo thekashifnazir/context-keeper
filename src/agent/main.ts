@@ -53,7 +53,8 @@ import type { RoomRecord } from './room.ts';
 import { AgentState, atomicWriteJson } from './state.ts';
 import { DEFAULT_MAX_RESTARTS, StreamWatchdog, watchdogMsFromEnv, type StreamHandle } from './stream-watchdog.ts';
 import { realEleven } from '../voice/eleven.ts';
-import { VoiceLive } from '../voice/live.ts';
+import { firstOf, VoiceLive } from '../voice/live.ts';
+import type { Person } from '../voice/talk-summary.ts';
 import { readTalkIdeas } from '../voice/talk-ideas.ts';
 import { DEFAULT_PORT as TOOL_PORT, startToolServer, toolSecret, tunnelUrl } from '../voice/talk-tool.ts';
 import { realSwitchMedia } from '../voice/post-audio.ts';
@@ -154,6 +155,17 @@ let eleven = null;
 if (features.audioBrief || features.talkLink) {
   try { eleven = realEleven(); } catch (e) { console.warn(`voice off: ${(e as Error).message}`); }
 }
+// The short talk link (<CK_PUBLIC_BASE_URL>/talk/<id>) needs the tool server up behind the tunnel;
+// until it is (or without the URL), the brief carries the long ElevenLabs link.
+let toolServerUp = false;
+const publicBase = (process.env.CK_PUBLIC_BASE_URL ?? '').trim() || null;
+// Who a call summary can tag: display name → chat handle, from people heard in the rooms (and the owner).
+const heard = new Map<string, Person[]>();
+const ownerHandle = process.env.CK_OWNER_HANDLE || ownerFile.owner_handle || null;
+const peopleOf = (): Person[] => [
+  ...(ownerHandle ? [{ name: deps.ownerName || 'Kash', handle: ownerHandle }] : []),
+  ...[...heard.values()].flat(),
+];
 const voice = eleven ? new VoiceLive({
   claude: deps.claude, el: eleven, poster, state: deps.state, audio: features.audioBrief, talk: features.talkLink,
   media: (roomId) => {
@@ -171,16 +183,26 @@ const voice = eleven ? new VoiceLive({
   // The live whats_new tool, through the cloudflared tunnel Kash starts (docs/handoff-live-test.md §3).
   // No tunnel URL (CK_TALK_TOOL_URL or tunnel.log), or it stops answering → no tool, refresh-on-change.
   tool: { url: () => tunnelUrl(), secret: toolSecret(process.env, `${SD}/talk-tool-secret`) },
+  publicBaseUrl: () => (toolServerUp ? publicBase : null),
+  namedLink: process.env.CK_TALK_LINK_STYLE !== 'bare',
+  peopleOf,
   log: (s) => console.log(s),
 }) : null;
 if (voice && features.talkLink && voice.talkAgentId()) {
   const port = Number(process.env.CK_TALK_TOOL_PORT || TOOL_PORT);
-  startToolServer({ port, secret: toolSecret(process.env, `${SD}/talk-tool-secret`), answer: (req) => voice.answerWhatsNew(req), log: (s) => console.log(`[voice] ${s}`) })
-    .then(() => console.log(`[voice] whats_new tool server on 127.0.0.1:${port}; tunnel it with: cloudflared tunnel --no-autoupdate --url http://127.0.0.1:${port} > tunnel.log 2>&1 &`))
+  startToolServer({ port, secret: toolSecret(process.env, `${SD}/talk-tool-secret`), answer: (req) => voice.answerWhatsNew(req), talkTarget: (id) => voice.talkTarget(id), log: (s) => console.log(`[voice] ${s}`) })
+    .then(() => {
+      toolServerUp = true;
+      console.log(`[voice] whats_new tool server on 127.0.0.1:${port}; tunnel it with: cloudflared tunnel --no-autoupdate --url http://127.0.0.1:${port} > tunnel.log 2>&1 &`);
+      console.log(publicBase ? `[voice] short talk links: ${publicBase}/talk/<id>` : '[voice] no CK_PUBLIC_BASE_URL: the brief carries the long ElevenLabs talk link');
+    })
     .catch((e) => console.error(`[voice] whats_new tool server not started (${(e as Error).message}); refresh-on-change only`))
     .finally(() => { void voice.syncTool(); });
 }
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().catch((e) => console.error('voice tick:', e.message)); }, 60_000).unref();
+// While a watched call is in progress (or ended, summary pending): a call check every 10 s, so "just
+// finished a call" lands soon after hanging up. No network otherwise.
+if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.quickTick().catch((e) => console.error('voice quick tick:', e.message)); }, 10_000).unref();
 console.log(`features: job E ${handoff ? 'on' : 'off'}, audio brief ${voice && features.audioBrief ? 'on' : 'off'}, talk link ${voice?.talkAgentId() ? 'on' : 'off'}`);
 
 // The record per room, from Switch (loaded on the room's first message, refreshed before each decision).
@@ -323,6 +345,8 @@ async function onEvent(ev: AgentBridgeEvent) {
   const live = { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null };
   // Another agent's post (Claude Code's, say) is room context, never a proposal (PR11).
   if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { memory.addLive(ev.room_id, live); return; }
+  // A person: remember their display name → chat handle, so a call summary can tag them.
+  if (m.sender_name && who) heard.set(m.sender_name, [{ name: who, handle: m.sender_name }, ...(firstOf(who) !== who ? [{ name: firstOf(who), handle: m.sender_name }] : [])]);
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
   const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
   memory.addLive(ev.room_id, live);
@@ -344,7 +368,7 @@ async function onEvent(ev: AgentBridgeEvent) {
         if (talk) opts.closing = talk.closing;
         if (v) opts.after = async ({ threadId, briefText }) => {
           textDone();
-          return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, since: trig.since, briefText, talk: talk?.talk ?? null });
+          return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, handle: m.sender_name ?? null, since: trig.since, briefText, talk: talk?.talk ?? null });
         };
       } catch (e) { console.error('voice prep failed:', (e as Error).message); }
       try {

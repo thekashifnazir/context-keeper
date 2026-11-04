@@ -73,7 +73,7 @@ describe('agent config', () => {
   it('tone (4 Nov live test, "Huhhh... [warm]" sounded annoyed): warm tags welcome, weary ones not; never a flat contradiction', () => {
     const p = c.agent.prompt.prompt;
     expect(p).toContain('# How you sound');
-    expect(p).toMatch(/Audio tags and little sounds are welcome[^\n]*warm or light: a soft laugh, \[warm\], \[cheerful\]/);
+    expect(p).toMatch(/Audio tags and little sounds are welcome[^\n]*gentle: a soft laugh, \[warm\], \[friendly\], \[calm\]/);
     expect(p).toMatch(/Never sound weary, impatient or put out, above all just before you answer their question: no "huhhh", no heavy sigh, no \[sighs\], \[exasperated\], \[annoyed\], \[impatient\]/);
     expect(p).not.toMatch(/never put anything in square brackets|no audio tags/i);
     expect(p).toContain(`"I don't see a decision from this morning in my notes, which run to 09:30."`);
@@ -87,10 +87,12 @@ describe('agent config', () => {
     expect(p).toContain('‹/record›');
     expect(p.match(/<\/record>/g)).toHaveLength(1);
   });
-  it('the refresh PATCH carries only the prompt, the opening line and the variables (both lines carry the time)', () => {
+  it('the refresh PATCH carries only the prompt, the opening line, the variables and the delivery settings (both lines carry the time)', () => {
     const r = refreshBody(room, 'Wednesday 4 November, 13:51', cfg);
     expect(Object.keys(r)).toEqual(['conversation_config']);
-    expect(Object.keys(r.conversation_config)).toEqual(['agent']);
+    expect(Object.keys(r.conversation_config)).toEqual(['agent', 'tts']);
+    // delivery only: never the voice or the model, so a dashboard voice change isn't undone
+    expect(Object.keys(r.conversation_config.tts).sort()).toEqual(['expressive_mode', 'similarity_boost', 'stability', 'suggested_audio_tags']);
     expect(Object.keys(r.conversation_config.agent).sort()).toEqual(['dynamic_variables', 'first_message', 'prompt']);
     expect(Object.keys(r.conversation_config.agent.prompt).sort()).toEqual(['prompt', 'timezone']);
     expect(r.conversation_config.agent.first_message).toContain('up to 13:51');
@@ -316,7 +318,7 @@ describe('after the call', () => {
     expect(claude.calls[0].params.messages[0].content).not.toContain('<b>');
     expect(summary.new_ideas).toEqual(['Rowan wants Sam on the case-study template']);
     const post = formatCallSummary('Rowan', call, summary);
-    expect(post).toMatch(/^Context Keeper · Rowan talked it through \(4 min call\)/);
+    expect(post).toMatch(/^📝 \*\*Call summary\*\* · Rowan talked it through \(4 min call\)/);
     expect(post).toMatch(/needs confirming/);
     expect(post).toMatch(/Nothing above is agreed until someone confirms it here/);
     // headings in Markdown bold (**…**): bold in Mattermost, and Switch's Slack adapter makes it Slack bold;
@@ -325,6 +327,7 @@ describe('after the call', () => {
     expect(post).toContain("**The record didn't say (to follow up)**");
     expect(post).toContain('**New ideas and requests (needs confirming)**');
     expect(post).not.toMatch(/(^|\n)\*[^*]/);
+    expect(post).not.toMatch(/@/); // nobody to tag: no people given
   });
   it('empty sections say so rather than vanish', () => {
     const post = formatCallSummary('Sam', { id: 'c', startUnix: 0, durationS: 30, credits: null, callerName: null, transcript: [] }, { asked_about: [], didnt_know: [], new_ideas: [] });

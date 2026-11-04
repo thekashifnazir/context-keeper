@@ -3,6 +3,10 @@
 // room: what they asked about, what the record didn't have, and new ideas or requests (always "needs
 // confirming"). Trust lives here, not in the speech: the post goes through the agent's normal public
 // path (postPublic) like any other post; this file only builds the text.
+// Also: the call list with each call's status (listCalls), so live.ts can say "just finished a call"
+// as soon as ElevenLabs marks it ended ("processing"), a minute or two before the summary (Kash, 4
+// Nov cloud call); and the people named in "needs confirming" tagged with their chat handle (tagPeople:
+// Switch turns "@handle" into a real mention, e.g. Slack's <@U…>), once each.
 import type Anthropic from '@anthropic-ai/sdk';
 import type { Claude, Usage } from '../agent/model.ts';
 import type { Eleven } from './eleven.ts';
@@ -10,14 +14,27 @@ import type { Eleven } from './eleven.ts';
 export interface Turn { role: 'user' | 'agent'; message: string; t: number }
 export interface Call { id: string; startUnix: number; durationS: number; credits: number | null; transcript: Turn[]; callerName: string | null }
 
+/** ElevenLabs' conversation statuses: initiated → in-progress → processing (the call has ended; the
+ *  transcript is being finalised) → done; or failed. */
+export const ENDED = new Set(['processing', 'done', 'processed']);
+export const FINISHED = new Set(['done', 'processed']);
+export const LIVE = new Set(['initiated', 'in-progress']);
+
+export interface CallStatus { id: string; status: string; startUnix: number }
+
+/** Our agent's latest calls (newest first) with their status: one cheap GET, no transcripts. */
+export async function listCalls(el: Eleven, agentId: string): Promise<CallStatus[]> {
+  const list = (await el.request('GET', `/v1/convai/conversations?agent_id=${encodeURIComponent(agentId)}&page_size=10`)).json();
+  return (list?.conversations ?? [])
+    .map((c: any) => ({ id: String(c.conversation_id), status: String(c.status ?? ''), startUnix: Number(c.start_time_unix_secs ?? 0) }))
+    .sort((a: CallStatus, b: CallStatus) => b.startUnix - a.startUnix);
+}
+
 /** The latest finished call for our agent (or a given one). Null when there's none yet. */
 export async function fetchCall(el: Eleven, agentId: string, conversationId?: string): Promise<Call | null> {
   let id = conversationId;
   if (!id) {
-    const list = (await el.request('GET', `/v1/convai/conversations?agent_id=${encodeURIComponent(agentId)}&page_size=10`)).json();
-    const done = (list.conversations ?? []).filter((c: any) => c.status === 'done' || c.status === 'processed');
-    done.sort((a: any, b: any) => (b.start_time_unix_secs ?? 0) - (a.start_time_unix_secs ?? 0));
-    id = done[0]?.conversation_id;
+    id = (await listCalls(el, agentId)).find((c) => FINISHED.has(c.status))?.id;
     if (!id) return null;
   }
   const c = (await el.request('GET', `/v1/convai/conversations/${encodeURIComponent(id!)}`)).json();
@@ -73,15 +90,64 @@ export async function summariseCall(claude: Claude, call: Call, caller: string):
   return { summary: { asked_about: list(p.asked_about), didnt_know: list(p.didnt_know), new_ideas: list(p.new_ideas) }, usage };
 }
 
-/** The room post. Plain Markdown (Switch converts it for Slack). */
-export function formatCallSummary(caller: string, call: Call, s: CallSummary): string {
+/** Posted in the brief's thread as soon as the call is seen to have ended, before the summary. */
+export const callEndedLine = (caller: string) =>
+  `📞 **${caller} just finished a call with Context Keeper** · I'll post the summary here in a minute or two.`;
+
+export interface Person { name: string; handle: string }
+
+/** A handle Switch can turn into a mention: its bridges read "@" + [A-Za-z0-9._-]+ (Slack's
+ *  _translate_mentions_to_slack), so anything else (a raw Switch sender id, a space) isn't one. */
+export const mentionable = (h: string | null | undefined): h is string => !!h && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(h) && !/[._-]$/.test(h);
+
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Tag each person named in `items` once: their first mention becomes "@handle" (Switch makes it a
+ *  real mention, so they're notified). Only where the next character can't run into the handle
+ *  ("Kash's", "Kash," are fine; "Kash." would read as the handle "kash."), else they go on one
+ *  "cc" line at the end. Names match whole words, case as written; longer names first ("Rowan
+ *  Price" before "Rowan"). Returns the items and the handles tagged. */
+export function tagPeople(items: string[], people: Person[]): { items: string[]; cc: string[]; tagged: string[] } {
+  const out = [...items];
+  const tagged: string[] = [];
+  const cc: string[] = [];
+  const seen = new Set<string>();
+  const byLen = [...people].filter((p) => p.name.trim() && mentionable(p.handle)).sort((a, b) => b.name.length - a.name.length);
+  for (const p of byLen) {
+    const key = p.handle.toLowerCase();
+    if (seen.has(key)) continue;
+    const re = new RegExp(`(?<![\\w@])${escRe(p.name.trim())}(?![\\w])`, 'g');
+    let named = false;
+    let done = false;
+    for (let i = 0; i < out.length && !done; i++) {
+      for (const m of out[i].matchAll(re)) {
+        named = true;
+        const next = out[i][m.index! + m[0].length] ?? '';
+        if (/[A-Za-z0-9._-]/.test(next)) continue;
+        out[i] = `${out[i].slice(0, m.index!)}@${p.handle}${out[i].slice(m.index! + m[0].length)}`;
+        done = true;
+        break;
+      }
+    }
+    if (!named) continue;
+    seen.add(key);
+    // A name that's part of a tagged person's longer name ("Rowan" after "Rowan Price") is the same person.
+    if (done) tagged.push(p.handle); else cc.push(p.handle);
+  }
+  return { items: out, cc, tagged };
+}
+
+/** The room post. Plain Markdown (Switch converts it for Slack). `people`: who can be tagged in the
+ *  "needs confirming" section (display name → chat handle); nobody is tagged anywhere else. */
+export function formatCallSummary(caller: string, call: Call, s: CallSummary, people: Person[] = []): string {
   const mins = Math.max(1, Math.round(call.durationS / 60));
-  const sect = (title: string, items: string[], empty: string) => `**${title}**\n${items.length ? items.map((i) => `• ${i}`).join('\n') : `• ${empty}`}`;
+  const sect = (title: string, items: string[], empty: string, extra: string[] = []) => `**${title}**\n${[...(items.length ? items.map((i) => `• ${i}`) : [`• ${empty}`]), ...extra].join('\n')}`;
+  const t = tagPeople(s.new_ideas, people);
   return [
-    `Context Keeper · ${caller} talked it through (${mins} min call)`,
+    `📝 **Call summary** · ${caller} talked it through (${mins} min call)`,
     sect('Asked about', s.asked_about, 'nothing specific'),
     sect("The record didn't say (to follow up)", s.didnt_know, 'nothing: every question had an answer in the record'),
-    sect('New ideas and requests (needs confirming)', s.new_ideas, 'none raised'),
+    sect('New ideas and requests (needs confirming)', t.items, 'none raised', t.cc.length ? [`cc ${t.cc.map((h) => `@${h}`).join(' ')}`] : []),
     '_From the call transcript. Nothing above is agreed until someone confirms it here._',
   ].join('\n\n');
 }

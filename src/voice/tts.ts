@@ -1,6 +1,9 @@
 // tts: the spoken script → an MP3 via ElevenLabs text-to-speech (one whole-file request; Slack plays a
 // finished file, so streaming adds nothing). Settings from PREP elevenlabs.md: eleven_v4, voice
-// Finley, mp3_44100_128, stability 0.7, a fixed seed so re-renders sound the same.
+// Finley, mp3_44100_128, stability 0.7, a fixed seed so re-renders sound the same. Reviewed after the
+// 4 Nov "too excited and loud" call: that was the live agent (stability 0.6, expressive tags, see
+// talk-agent.ts VOICE). The clip has no tags (the script forbids brackets), steady settings and a
+// fixed seed, so it's left as is; the script prompt now also asks for calm and even, no "!".
 import type { Eleven } from './eleven.ts';
 
 export interface TtsConfig { voiceId: string; modelId: string; outputFormat: string; stability: number; similarity: number; seed: number }

@@ -14,7 +14,7 @@ export const SCRIPT_TIMEOUT_MS = 90_000; // audio follows the text brief, so a s
 
 export const SPOKEN_SYSTEM = `You write the spoken version of a catch-up brief for a team chat room. It will be read aloud by a text-to-speech voice and posted as a short audio clip next to the written brief.
 
-How it sounds: a friendly colleague catching someone up at the coffee machine. Warm, plain, a bit informal, British English. Talk to the person by first name. Full sentences that flow into each other, joined with "so", "and", "which means", "the one thing". Never a list read out loud: no "firstly", "point two", "item", "bullet", no headings.
+How it sounds: a friendly colleague catching someone up at the coffee machine. Warm, plain, calm and even, a bit informal, British English. Talk to the person by first name. Full sentences that flow into each other, joined with "so", "and", "which means", "the one thing". Never a list read out loud: no "firstly", "point two", "item", "bullet", no headings.
 
 What it covers, from the brief only:
 - the three to five things that changed while they were away, biggest first;
@@ -28,6 +28,7 @@ What it leaves out: chit-chat, blame, every single message, anything the brief d
 Spoken style rules (the voice reads every character):
 - About ${TARGET_WORDS.ideal} words, never more than ${TARGET_WORDS.max}: count them. That's sixty seconds spoken. Pick the points that matter most to this person and leave the rest to the written brief.
 - No links, file names, message ids, issue numbers, section numbers, symbols, brackets, emoji or markdown.
+- Steady, not excited: full stops rather than exclamation marks, and no words in capitals for emphasis.
 - Write dates and money the way you'd say them: "Tuesday the twenty-fourth of November", "nineteen pounds a user a month".
 - Spell out short forms the first time if a listener might not know them.
 - End with one short sentence offering the talk-it-through call, e.g. "If you want the whole story, tap talk it through and ask me anything." Don't say goodbye twice.
@@ -65,6 +66,7 @@ export function spokenClean(s: string, aliases: Record<string, string> = {}): st
     .replace(/\s*(?:§|section\s+§?)\s*\d+(?:\.\d+)*/gi, '') // § numbers
     .replace(/\b[\w-]+\.(?:md|yaml|json|ts|pdf)\b/g, (m) => m.replace(/\.(md|yaml|json|ts|pdf)$/, '').replace(/[-_]/g, ' ') + ' doc')
     .replace(/#(\d+)/g, 'issue $1')
+    .replace(/!{2,}/g, '!') // stacked exclamation marks read as shouting (4 Nov: "really loud in places")
     .replace(/\s+([,.;:!?])/g, '$1')
     .replace(/\(\s*\)/g, '');
   for (const [from, to] of Object.entries(aliases)) t = t.replace(new RegExp(`\\b${from}\\b`, 'g'), to);

@@ -28,6 +28,7 @@ export const TOOL_PATH = '/voice/whats_new';
 export const SECRET_HEADER = 'x-ck-tool-secret';
 export const DEFAULT_PORT = 8790; // 8787 is often a wrangler dev server
 export const SECRET_FILE = 'state/talk-tool-secret';
+export const TALK_PATH = '/talk/'; // GET /talk/<short id> → 302 to the person's ElevenLabs talk page
 const MAX_NEWS = 15;
 
 // ---- the tunnel URL and the shared secret -----------------------------------------------------------
@@ -154,16 +155,33 @@ export interface ToolServerOptions {
   host?: string;
   secret: string;
   answer: (req: ToolRequest) => WhatsNewAnswer;
+  /** The short talk link's target (live.ts talkTarget): the full ElevenLabs URL for a known, unexpired
+   *  id, else null (404). Absent = no /talk route. */
+  talkTarget?: (id: string) => string | null;
   log?: (s: string) => void;
 }
 
+/** A short id as posted: 8 to 64 URL-safe characters (live.ts makes 12 from 9 random bytes). */
+const SHORT_ID = /^\/talk\/([A-Za-z0-9_-]{8,64})\/?$/;
+
 /** 127.0.0.1 only; the tunnel forwards to it. GET /health (no auth, says nothing about the room),
- *  POST /voice/whats_new (secret header required). */
+ *  POST /voice/whats_new (secret header required), GET /talk/<id> (the brief's short "talk it
+ *  through" link: a 302 to the full ElevenLabs URL while the link is open, a bare 404 otherwise; the
+ *  id is random and unguessable, and the target carries nothing the old long link didn't show). */
 export function startToolServer(o: ToolServerOptions): Promise<{ server: Server; port: number }> {
   const log = o.log ?? (() => {});
   const server = createServer((req, res) => {
     const send = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (req.method === 'GET' && req.url === '/health') return send(200, { ok: true, service: 'ck-talk-tool' });
+    const short = (req.method === 'GET' || req.method === 'HEAD') && o.talkTarget ? (req.url ?? '').split('?')[0].match(SHORT_ID) : null;
+    if (short) {
+      let target: string | null = null;
+      try { target = o.talkTarget!(short[1]); } catch { target = null; }
+      if (!target) return send(404, { error: 'not found' });
+      log(`talk link ${short[1].slice(0, 4)}…: redirected`);
+      res.writeHead(302, { location: target, 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'content-type': 'text/plain' });
+      return res.end(req.method === 'HEAD' ? undefined : 'Opening the voice catch-up…\n');
+    }
     if (req.method !== 'POST' || req.url !== TOOL_PATH) return send(404, { error: 'not found' });
     let size = 0;
     const chunks: Buffer[] = [];

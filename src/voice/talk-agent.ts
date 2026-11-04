@@ -9,7 +9,11 @@
 //   the prompt itself: the link is posted once, but the prompt keeps being refreshed, so a link's
 //   var_snapshot_at would go stale (it's still accepted, for links already posted).
 // - Expressive audio tags stay on (Kash likes them), steered warm: no weary or impatient sighs
-//   (4 Nov live test: "Huhhh... [warm]" opened the first answer and sounded annoyed).
+//   (4 Nov live test: "Huhhh... [warm]" opened the first answer and sounded annoyed), and calm: no
+//   excitable tags, capitals or stacked exclamation marks (4 Nov cloud call: "super excited… went
+//   from normal to really loud in places"). TTS stability 0.8 (was 0.6) for a steadier level, and
+//   the suggested tags are the gentle ones (VOICE). Both ride on every prompt refresh, so the live
+//   agent picks them up without a fresh agent-setup.
 // - 10-minute cap (max_duration_seconds 600); the prompt reads {{system__call_duration_secs}}, which
 //   ElevenLabs updates each turn, and warns once at about nine minutes.
 // - After the call: fetch the transcript and summarise it (talk-summary.ts) for posting in the room.
@@ -68,12 +72,29 @@ export const firstMessage = (roomLabel: string, snapshotAt: string): string =>
   `Hi {{caller_name}}, it's Context Keeper. I've got the ${roomLabel} room up to ${stampTime(snapshotAt)}. Do you want the three headlines first, or have you got a question?`;
 
 /** The tone rules, also checked by the offline tests. */
-export const soundRules = (notesTime: string, live = false) => `- Sound warm and upbeat from your first word, like a colleague who's glad to help. Audio tags and little sounds are welcome where they feel natural, as long as they're warm or light: a soft laugh, [warm], [cheerful], [friendly].
+export const soundRules = (notesTime: string, live = false) => `- Sound calm, warm and friendly from your first word, like a colleague who's glad to help. Keep an even pace and a steady, moderate volume for the whole call, the same level for good news as for bad: pleased, never excited.
+- Audio tags and little sounds are welcome where they feel natural, as long as they're gentle: a soft laugh, [warm], [friendly], [calm]. One at most in a reply.
+- Never excitable or loud: no [excited], [shouting], [ecstatic], [enthusiastic] or [cheerful], no words in capitals for emphasis, no exclamation marks in a row, and no bursts like "wow" or "amazing". Use full stops; an exclamation mark at most once in a call.
 - Never sound weary, impatient or put out, above all just before you answer their question: no "huhhh", no heavy sigh, no [sighs], [exasperated], [annoyed], [impatient] or [tired]. A question is never a bother.
 - Never contradict the caller flatly. Say what your notes show and how far they run, for example: "I don't see a decision from this morning in my notes, which run to ${notesTime}."
 - If they say they've seen more than you have, believe them: it's probably newer than your notes. ${live
   ? 'Say so in a friendly way and check the room with whats_new.'
   : 'Say so in a friendly way, tell them what you do have, and offer to flag it in the call summary so the team can confirm it.'}`;
+
+/** How the agent's voice is set: a steadier stability than the 0.6 of the first calls (4 Nov cloud
+ *  call: "went from normal to really loud in places"), still below 1 so it stays natural, and the
+ *  gentle tags as expressive mode's suggestions (it can still use others; the prompt rules them out). */
+export const VOICE = {
+  stability: 0.8,
+  similarity_boost: 0.75,
+  expressive_mode: true,
+  suggested_audio_tags: [
+    { tag: 'warm', description: 'Most replies: friendly and even' },
+    { tag: 'calm', description: 'Steady and reassuring, at a moderate volume' },
+    { tag: 'soft laugh', description: 'Something light or funny, briefly' },
+    { tag: 'thoughtful', description: 'Before an answer that needs a moment' },
+  ],
+} as const;
 
 /** With the live tool attached: when to use it and how to speak what it returns (PR20b/PR20c lessons:
  *  one short line before the lookup, never stacked fillers, never the raw text read out). */
@@ -166,8 +187,8 @@ export function agentBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig,
         },
       },
       // Expressive mode (on by default with eleven_v4_turbo) lets the LLM write audio tags. Left on;
-      // the prompt's "How you sound" rules keep them warm.
-      tts: { model_id: cfg.ttsModel, voice_id: cfg.voiceId, stability: 0.6, similarity_boost: 0.75 },
+      // the prompt's "How you sound" rules keep them warm and calm.
+      tts: { model_id: cfg.ttsModel, voice_id: cfg.voiceId, ...VOICE },
       turn: {
         turn_eagerness: 'patient',
         soft_timeout_config: { timeout_seconds: 3, use_llm_generated_message: true, randomize_fillers: true, message: 'Mm, let me think.' },
@@ -178,7 +199,8 @@ export function agentBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig,
 }
 
 /** The PATCH used before each link and while one is open: the prompt and the opening line (both
- *  carry the snapshot time). Keeps voice, tools and everything else. */
+ *  carry the snapshot time), and the delivery settings (VOICE), so a change to them reaches the live
+ *  agent on its next refresh. Keeps the voice and model, tools and everything else. */
 export function refreshBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null, live = false) {
   const full = agentBody(room, snapshotAt, cfg, ideas, live);
   const a = full.conversation_config.agent;
@@ -189,6 +211,7 @@ export function refreshBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfi
         dynamic_variables: a.dynamic_variables,
         prompt: { prompt: a.prompt.prompt, timezone: a.prompt.timezone },
       },
+      tts: { ...VOICE },
     },
   };
 }
