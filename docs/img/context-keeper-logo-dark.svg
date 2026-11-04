@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 96" width="480" height="96" role="img" aria-label="Context Keeper">
+  <title>Context Keeper</title>
+  <g transform="translate(8 8) scale(1.25)">
+    <rect width="64" height="64" rx="15" fill="#2563eb"/>
+    <rect x="14" y="17" width="36" height="7" rx="3.5" fill="#fff"/>
+    <rect x="14" y="28.5" width="27" height="7" rx="3.5" fill="#fff" fill-opacity=".72"/>
+    <rect x="14" y="40" width="18" height="7" rx="3.5" fill="#fff" fill-opacity=".45"/>
+  </g>
+  <text x="108" y="63" fill="#f1f5f9" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="46" font-weight="700" letter-spacing="-0.5">Context Keeper</text>
+</svg>

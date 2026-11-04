@@ -14,18 +14,18 @@ judging:
   - {criterion: "Technical execution", weight: 25}
   - {criterion: "Creativity and impact", weight: 25}
   - {criterion: "Presentation and docs", weight: 20}
-readme_sections:   # the final README's headings
-  - The problem
-  - What it does
-  - Where people decide
-  - Use of Switch (30%)
-  - How the channel is set up
-  - Run it (about 15 minutes)
-  - Results (technical execution, 25%)
+readme_sections:   # the final README's headings (long-form detail lives in JUDGES.md and docs/results.md)
+  - Try it in 60 seconds
+  - Why it's different
   - How it works
-  - Limits and what's next
-  - Notes for the Switch team
-  - Built with
+  - Use of Switch
+  - Results
+  - Run it locally
+  - Tests
+  - Known limits
+  - What I liked about Switch, and what I'd improve
+  - Built by voice
+  - More
   - Licence
 video:
   max_seconds: 180
