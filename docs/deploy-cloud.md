@@ -297,12 +297,28 @@ from `tunnel.log` (`CK_TALK_TUNNEL_LOG`), or from `CK_TALK_TOOL_URL` if set.
 **Chosen route: a Cloudflare Tunnel.** `cloudflared` runs on the VM and connects out to
 Cloudflare, so no inbound port is opened; SSH stays the only one.
 
-<!-- TODO(Kash): fill in once set up -->
-- [ ] TODO: install `cloudflared` on the VM (version)
-- [ ] TODO: quick tunnel or named tunnel, and how it's started (systemd unit?)
-- [ ] TODO: how the URL reaches the agent (`tunnel.log` or `CK_TALK_TOOL_URL`)
-- [ ] TODO: check it (`/health` through the tunnel) and what the agent logs
-- [ ] TODO: what happens on a VM reboot
+Done on 4 Nov (about 10 minutes, most of it clicks):
+
+1. **Install the connector on the VM** (a named tunnel, not a quick one): the `.deb` from
+   cloudflared's GitHub releases, `sudo dpkg -i cloudflared-linux-amd64.deb` (2026.10.7 here).
+2. **Create the tunnel** in the Cloudflare dashboard: Networking → Tunnels → Create Tunnel, name it
+   (ours: `ck-switch`), pick Debian. The page shows `sudo cloudflared service install <token>`.
+3. **Run that one line on the VM.** It installs a systemd service (`cloudflared`), so the tunnel
+   comes back after a reboot on its own. Run it yourself rather than through a helper: the token
+   lets anyone run your tunnel. If it ever leaks, use **Rotate token** on the tunnel's page.
+4. **Add a route:** Routes → Add route → Published application → subdomain `ck` on your domain,
+   service URL `http://localhost:8790` (the agent's voice tool server). Cloudflare adds the DNS
+   record and the HTTPS certificate itself.
+5. **Tell the agent the URL:** add `Environment=CK_TALK_TOOL_URL=https://ck.<your-domain>` to the
+   systemd unit, then `daemon-reload` and restart. Within a minute the agent logs
+   `[voice] live tool on: whats_new → https://ck.<your-domain>` and attaches the tool to the
+   ElevenLabs agent.
+6. **Check it from anywhere:** `curl https://ck.<your-domain>/health` → 200; a POST to
+   `/voice/whats_new` without the secret header → 401; any other path → 404.
+
+On a VM reboot both services start by themselves: `cloudflared` (the tunnel) and `ck-agent`. If
+the tunnel is down, the agent detaches the tool and falls back to refreshing the voice agent's
+notes on each change, so a call never waits on a dead URL.
 
 ---
 
