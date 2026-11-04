@@ -250,7 +250,8 @@ async function onEvent(ev: AgentBridgeEvent) {
         return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, since: trig.since, briefText, talk: talk?.talk ?? null });
       };
     } catch (e) { console.error('voice prep failed:', (e as Error).message); }
-    runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts)
+    Promise.resolve()
+      .then(() => runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts))
       .then((t) => console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`))
       .catch((e) => console.error('brief crashed:', (e as Error).message))
       .finally(() => textDone());
