@@ -51,3 +51,4 @@ dist-ssr/
 supabase/.temp/
 .vercel/
 # --- personal and machine files ---
+tunnel.log
