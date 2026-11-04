@@ -15,9 +15,7 @@
   <a href="https://kashifnazir.com/blog/building-context-keeper-on-switch/"><b>Blog</b></a>
 </p>
 
-<p align="center"><a href="https://youtu.be/7x0Uy3UgCZQ"><img src="https://img.youtube.com/vi/7x0Uy3UgCZQ/maxresdefault.jpg" alt="Watch the 3-minute demo on YouTube" width="760"></a></p>
-
-<!-- VIDEO: optionally drag the mp4 into this README on GitHub to embed it inline -->
+https://github.com/user-attachments/assets/69e0a021-4f71-4de7-9153-fa50e1b68211
 
 <p align="center">
   <a href="https://discord.gg/ygPnp7bj5"><img src="https://img.shields.io/badge/%E2%96%B6%20Try%20it%20on%20Discord-discord.gg%2FygPnp7bj5-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Try it on Discord: discord.gg/ygPnp7bj5" height="44"></a>
