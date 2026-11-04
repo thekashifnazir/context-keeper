@@ -59,7 +59,7 @@ The trust rule: it never says "already covered" without a quote that code has ch
 ## Try it
 
 <!-- factual stub; Kash to reword -->
-- A public Discord channel, bridged into the same Switch server as the team's Slack and seeded with the Ledgerly record, is set up by [docs/demo-channel.md](docs/demo-channel.md). Invite link: [NEED live demo invite link]
+- A public Discord channel, bridged into the same Switch server as the team's Slack and seeded with the Ledgerly record, is set up by [docs/demo-channel.md](docs/demo-channel.md). Invite link: https://discord.gg/ygPnp7bj5
 - There it answers, logs decisions and flags clashes, citing the record; Claude Code builds and voice are off in that channel.
 - Each person gets up to 6 replies an hour, and model spend stops at a daily cap (`CK_DAILY_SPEND_CAP_USD`).
 
