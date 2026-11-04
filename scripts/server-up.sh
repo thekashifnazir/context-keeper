@@ -11,6 +11,16 @@
 # already running it only ADDS the mattermost container (`up --no-deps mattermost`): switch, gateway
 # and postgres are never recreated or restarted. CK_ROOT picks whose server/ to use (default: this
 # checkout), so a git worktree can drive the one live server.
+#
+# A second, separate stack on the same machine (a judge's trial run next to a live one): pick its own
+# Compose project and host ports. Each is read only when its setting is first written to server/.env
+# (CK_MM_PORT: on the first --with-mattermost run); after that server/.env is the source of truth.
+#   CK_COMPOSE_PROJECT (default ckswitch)   CK_API_PORT (18000)   CK_GATEWAY_PORT (13000)
+#   CK_POSTGRES_PORT (15432)                CK_MM_PORT (18065, with --with-mattermost)
+# e.g. CK_COMPOSE_PROJECT=ckjudge CK_API_PORT=28000 CK_GATEWAY_PORT=23000 CK_POSTGRES_PORT=25432 \
+#      CK_MM_PORT=28065 scripts/server-up.sh --with-mattermost
+# It refuses to write a fresh server/.env for a project whose containers already exist (new secrets
+# would break that stack), and it points .env's SWITCH_API_URL / SWITCH_GATEWAY_URL at this server.
 set -euo pipefail
 WITH_MM=0
 for a in "$@"; do case "$a" in --with-mattermost) WITH_MM=1 ;; *) echo "usage: $0 [--with-mattermost]" >&2; exit 2 ;; esac; done
@@ -19,7 +29,6 @@ SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 
 VER=0.31.0
 REPO=sandbox-quantum/standalone-compose
-API=http://127.0.0.1:18000
 DIR=server
 COMPOSE="$DIR/standalone-docker-compose.yml"
 mkdir -p "$DIR"
@@ -29,6 +38,7 @@ die() { printf 'server-up: %s\n' "$*" >&2; exit 1; }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 command -v docker >/dev/null || die "Docker isn't installed (Docker Desktop, or Colima on a Mac)"
 docker info >/dev/null 2>&1 || die "Docker isn't running"
+envget() { grep "^$1=" "$DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2-; }
 
 # 1. Fetch Switch's Compose file (an OCI artifact on ghcr.io) and check it against the manifest digest.
 if [ ! -s "$COMPOSE" ]; then
@@ -43,16 +53,19 @@ fi
 
 # 2. The server's own settings, with fresh random secrets. Written once, never overwritten.
 if [ ! -s "$DIR/.env" ]; then
-  say "writing $DIR/.env (random secrets)"
+  PROJECT="${CK_COMPOSE_PROJECT:-ckswitch}"
+  [ -z "$(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT")" ] \
+    || die "Compose project '$PROJECT' already has containers, and this checkout has no $DIR/.env. Writing new secrets would break that stack: set CK_COMPOSE_PROJECT (and the CK_*_PORT variables) for a separate one"
+  say "writing $DIR/.env (random secrets; project $PROJECT)"
   r() { openssl rand -hex "${1:-24}"; }
   ( umask 077; cat > "$DIR/.env" <<EOF
 SWITCH_VERSION=$VER
-COMPOSE_PROJECT_NAME=ckswitch
+COMPOSE_PROJECT_NAME=$PROJECT
 COMPOSE_PROFILES=gateway
-API_HOST_PORT=18000
-GATEWAY_HOST_PORT=13000
-POSTGRES_HOST_PORT=15432
-FRONTEND_BASE_URL=http://localhost:13000
+API_HOST_PORT=${CK_API_PORT:-18000}
+GATEWAY_HOST_PORT=${CK_GATEWAY_PORT:-13000}
+POSTGRES_HOST_PORT=${CK_POSTGRES_PORT:-15432}
+FRONTEND_BASE_URL=http://localhost:${CK_GATEWAY_PORT:-13000}
 DB_NAME=switch
 DB_OWNER_USER=switch_owner
 DB_USER=switch_app
@@ -71,12 +84,26 @@ fi
 if [ "$WITH_MM" = 1 ]; then
   r() { openssl rand -hex "${1:-24}"; }
   add() { grep -q "^$1=" "$DIR/.env" || { printf '%s=%s\n' "$1" "$2" >> "$DIR/.env"; say "server/.env: added $1"; }; }
-  add MATTERMOST_HOST_PORT 18065
+  add MATTERMOST_HOST_PORT "${CK_MM_PORT:-18065}"
   add MATTERMOST_ADMIN_USER sysadmin
   add MATTERMOST_ADMIN_PASSWORD "$(r 16)"
   add MATTERMOST_TEAM_NAME switch
   add MATTERMOST_USER user
   add MATTERMOST_USER_PASSWORD "$(r 16)"
+fi
+
+API="http://127.0.0.1:$(envget API_HOST_PORT)"
+GW="http://127.0.0.1:$(envget GATEWAY_HOST_PORT)"
+[ "$API" != "http://127.0.0.1:" ] || die "$DIR/.env has no API_HOST_PORT"
+# The app reads SWITCH_API_URL / SWITCH_GATEWAY_URL from .env: point them at this server.
+if [ -f .env ]; then
+  for kv in "SWITCH_API_URL=$API" "SWITCH_GATEWAY_URL=$GW"; do
+    k=${kv%%=*}
+    if [ "$(grep "^$k=" .env | tail -1)" != "$kv" ]; then
+      if grep -q "^$k=" .env; then sed -i.bak "s|^$k=.*|$kv|" .env && rm -f .env.bak; else echo "$kv" >> .env; fi
+      say ".env: $kv"
+    fi
+  done
 fi
 
 # 3. Start it and wait for health (about 10 s with cached images, 2-3 min for the first download).
@@ -134,9 +161,9 @@ else
   say "agent registered; id and keys saved to .env.local"
 fi
 
-cat <<'EOF2'
+cat <<EOF2
 
 Next, in Switch Console: server name (top left) -> Add server -> Connect to an existing server
-  -> http://127.0.0.1:18000, then sign in as admin@switch.local. Copy the password with:
+  -> $API, then sign in as admin@switch.local. Copy the password with:
   grep '^GATEWAY_ADMIN_PASSWORD=' server/.env | cut -d= -f2- | tr -d '\n' | pbcopy
 EOF2
