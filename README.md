@@ -1,6 +1,8 @@
 # Context Keeper
 
-Stop re-explaining. Context Keeper answers "didn't we already decide this?" with the source.
+From "didn't we decide this?" to "it's built", right in your team chat.
+
+Your team chat's memory: it answers with the source, catches you up, and turns new ideas into work.
 
 Being built for the Flip the Switch hackathon.
 
