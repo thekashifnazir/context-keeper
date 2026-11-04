@@ -5,7 +5,11 @@
 //   afterBrief()   once the text brief has posted: the ~60 s audio clip (audioBrief) in the same
 //                  thread. Its post goes on the brief's own ck.trace/1 line. If the brief carried a
 //                  talk link, the call is watched for.
-//   tick()         about once a minute while a link is open: first, if the room's live record (recordOf:
+//   syncTool()     at start and each tick: with a cloudflared tunnel answering, the whats_new webhook
+//                  tool (talk-tool.ts) is attached to the talk agent and the prompt tells it to check
+//                  the room live (PR20c's hybrid); no tunnel → the tool is detached and the fallback
+//                  below keeps the prompt fresh instead. answerWhatsNew() serves the tool server.
+//   tick()         about once a minute while a link is open (fallback mode): first, if the room's live record (recordOf:
 //                  RoomMemory, so Switch documents + Channel archive + room history + stream messages)
 //                  or job E's ideas for that room (ideasOf: the hand-off store, read-only) changed
 //                  since the last refresh, or that refresh is over refreshEveryMin old,
@@ -29,6 +33,7 @@ import { audioBrief } from './audio-brief.ts';
 import type { Eleven } from './eleven.ts';
 import type { SwitchMedia } from './post-audio.ts';
 import { fetchCall, formatCallSummary, summariseCall } from './talk-summary.ts';
+import { attachTool, detachTool, probeTunnel, whatsNew, type ToolRequest, type WhatsNewAnswer } from './talk-tool.ts';
 import { IDS_FILE, ideasText, readIds, recordSignature, refreshTalkAgent, snapshotStamp, talkConfigFromEnv, talkLink } from './talk-agent.ts';
 import type { TalkIdea } from './talk-ideas.ts';
 
@@ -57,6 +62,10 @@ export interface VoiceLiveConfig {
   /** Job E's ideas from this room, in plain words, for the prompt's "Ideas in progress" (main.ts:
    *  readTalkIdeas on state/handoff.json, read-only). Absent or null = job E off: no section. */
   ideasOf?: (roomId: string) => TalkIdea[] | null;
+  /** The live whats_new tool (talk-tool.ts). url(): the tunnel's public URL or null; secret: the
+   *  shared header value; probe: does the URL reach our server (default GET /health). Absent = no
+   *  tool, refresh-on-change only. */
+  tool?: { url: () => string | null; secret: string; probe?: (url: string) => Promise<boolean> };
   now?: () => Date;
   log?: (s: string) => void;
 }
@@ -95,7 +104,9 @@ const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) =>
 export class VoiceLive {
   private calls: CallsFile = { watches: [], done: [] };
   /** What the talk agent's prompt was last built from (in memory: after a restart the first tick refreshes). */
-  private lastRefresh: { agentId: string; room: string; sig: string; at: number } | null = null;
+  private lastRefresh: { agentId: string; room: string; sig: string; at: number; live: boolean } | null = null;
+  private toolMode: 'unknown' | 'live' | 'off' = 'unknown';
+  private toolUrl: string | null = null;
   constructor(private c: VoiceLiveConfig) {
     if (c.callsFile && existsSync(c.callsFile)) {
       try { this.calls = { ...this.calls, ...(JSON.parse(readFileSync(c.callsFile, 'utf8')) as CallsFile) }; } catch { /* unreadable: start clean */ }
@@ -123,15 +134,19 @@ export class VoiceLive {
     if (!agentId || !this.c.el) return null;
     const at = snapshotStamp(this.now());
     const ideas = roomId ? this.ideas(roomId) : null;
+    const live = this.live;
     try {
-      await withTimeout(refreshTalkAgent(this.c.el, agentId, record, at, talkConfigFromEnv(roomLabel(roomName)), ideas), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
+      await withTimeout(refreshTalkAgent(this.c.el, agentId, record, at, talkConfigFromEnv(roomLabel(roomName)), ideas, live), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
     } catch (e) {
       this.log(`talk link left out: ${(e as Error).message}`);
       return null;
     }
-    this.lastRefresh = { agentId, room: roomName, sig: signature(record, ideas), at: this.now().getTime() };
+    this.lastRefresh = { agentId, room: roomName, sig: signature(record, ideas), at: this.now().getTime(), live };
     const caller = firstOf(person);
-    return { closing: talkLine(talkLink(agentId, caller, at)), talk: { agentId, caller, at: this.now().toISOString() } };
+    // room_id and since ride in the link (dynamic variables) for whats_new, whichever mode is on now:
+    // a tunnel that comes up later still serves this link.
+    const link = talkLink(agentId, caller, at, roomId ? { roomId, since: this.now().toISOString() } : undefined);
+    return { closing: talkLine(link), talk: { agentId, caller, at: this.now().toISOString() } };
   }
 
   /** After the text brief posted: the audio clip in its thread; start watching for a call. */
@@ -168,8 +183,10 @@ export class VoiceLive {
     return out;
   }
 
-  /** About once a minute. Does nothing (no network) while no link is open. */
+  /** About once a minute. With a tool configured, first checks the tunnel (syncTool); otherwise does
+   *  nothing (no network) while no link is open. */
   async tick(): Promise<TraceLine[]> {
+    await this.syncTool();
     const now = this.now().getTime();
     const ttl = (this.c.watchHours ?? 3) * 3_600_000;
     const open = this.calls.watches.filter((w) => now - Date.parse(w.link_at) < ttl);
@@ -209,18 +226,65 @@ export class VoiceLive {
     const sig = signature(record, ideas);
     const now = this.now();
     const last = this.lastRefresh;
-    const due = !last || last.agentId !== w.agent_id || last.room !== w.room_name || last.sig !== sig
-      || now.getTime() - last.at >= (this.c.refreshEveryMin ?? 15) * 60_000;
+    const live = this.live;
+    // Live (the tool is up): whats_new covers anything after the snapshot, so the prompt is only
+    // rebuilt when the mode or the room changes. Fallback: on every change, and every refreshEveryMin.
+    const due = !last || last.agentId !== w.agent_id || last.room !== w.room_name || last.live !== live
+      || (!live && (last.sig !== sig || now.getTime() - last.at >= (this.c.refreshEveryMin ?? 15) * 60_000));
     if (!due) return false;
     try {
-      await withTimeout(refreshTalkAgent(this.c.el, w.agent_id, record, snapshotStamp(now), talkConfigFromEnv(roomLabel(w.room_name)), ideas), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
+      await withTimeout(refreshTalkAgent(this.c.el, w.agent_id, record, snapshotStamp(now), talkConfigFromEnv(roomLabel(w.room_name)), ideas, live), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
     } catch (e) {
       this.log(`talk agent refresh failed (next tick retries): ${(e as Error).message}`);
       return false;
     }
-    this.lastRefresh = { agentId: w.agent_id, room: w.room_name, sig, at: now.getTime() };
-    this.log(`talk agent refreshed from ${w.room_name}: ${record.messages.length} messages, notes run to ${snapshotStamp(now)}`);
+    this.lastRefresh = { agentId: w.agent_id, room: w.room_name, sig, at: now.getTime(), live };
+    this.log(`talk agent refreshed from ${w.room_name}: ${record.messages.length} messages, notes run to ${snapshotStamp(now)}${live ? ' (live tool on)' : ''}`);
     return true;
+  }
+
+  /** True while the whats_new tool is attached and its tunnel answers. */
+  get live(): boolean { return this.toolMode === 'live'; }
+
+  /** Attach whats_new when the tunnel answers (or its URL changed), detach it when it doesn't, so a
+   *  call never waits on a dead URL. The first call always settles the agent one way or the other
+   *  (a previous run may have left the tool attached). Never throws. */
+  async syncTool(): Promise<void> {
+    const t = this.c.tool;
+    const agentId = this.talkAgentId();
+    if (!t || !agentId || !this.c.el) return;
+    let url: string | null = null;
+    try { url = t.url(); } catch { url = null; }
+    const up = url ? await (t.probe ?? probeTunnel)(url) : false;
+    try {
+      if (up && (this.toolMode !== 'live' || this.toolUrl !== url)) {
+        const r = await attachTool(this.c.el, agentId, url!, t.secret, this.c.idsFile ?? IDS_FILE);
+        this.toolMode = 'live';
+        this.toolUrl = url;
+        this.log(`live tool on: whats_new → ${url}${r.created.length ? ` (made ${r.created.join(', ')})` : ''}`);
+      } else if (!up && this.toolMode !== 'off') {
+        await detachTool(this.c.el, agentId);
+        if (this.toolMode === 'live') this.log(`live tool off: ${url ? `the tunnel at ${url} isn't answering` : 'no tunnel URL'}; back to refreshing the prompt on each change`);
+        else this.log(`live tool off (${url ? `the tunnel at ${url} isn't answering` : 'no tunnel URL: CK_TALK_TOOL_URL or tunnel.log'}); refreshing the prompt on each change instead`);
+        this.toolMode = 'off';
+        this.toolUrl = null;
+      }
+    } catch (e) { this.log(`live tool sync failed (next tick retries): ${(e as Error).message}`); }
+  }
+
+  /** The whats_new answer: the call's room (var_room_id, else the newest open link's), anything after
+   *  its link's snapshot (var_since, else that link's time). */
+  answerWhatsNew(req: ToolRequest): WhatsNewAnswer {
+    const nowMs = this.now().getTime();
+    const given = (s?: string) => (s && s !== 'none' ? s : null);
+    const newest = [...this.calls.watches].sort((a, b) => b.link_at.localeCompare(a.link_at));
+    const roomId = given(req.room_id) ?? newest[0]?.room_id ?? null;
+    const w = newest.find((x) => x.room_id === roomId);
+    let sinceMs = Date.parse(given(req.since) ?? '');
+    if (Number.isNaN(sinceMs)) sinceMs = w ? Date.parse(w.link_at) : nowMs - 3 * 3_600_000;
+    let record: RoomRecord | null = null;
+    try { record = roomId && this.c.recordOf ? this.c.recordOf(roomId) : null; } catch { record = null; }
+    return whatsNew(record, roomId ? this.ideas(roomId) : null, sinceMs, nowMs);
   }
 
   private async postSummary(w: Watch, call: NonNullable<Awaited<ReturnType<typeof fetchCall>>>): Promise<TraceLine> {

@@ -46,6 +46,7 @@ import { AgentState, atomicWriteJson } from './state.ts';
 import { realEleven } from '../voice/eleven.ts';
 import { VoiceLive } from '../voice/live.ts';
 import { readTalkIdeas } from '../voice/talk-ideas.ts';
+import { DEFAULT_PORT as TOOL_PORT, startToolServer, toolSecret, tunnelUrl } from '../voice/talk-tool.ts';
 import { realSwitchMedia } from '../voice/post-audio.ts';
 
 loadEnv();
@@ -157,8 +158,18 @@ const voice = eleven ? new VoiceLive({
   // Job E's ideas from that room, in plain words ("being built by Claude Code"), read from its store's
   // file (read-only). A status change counts as a record change.
   ...(handoff ? { ideasOf: (roomId: string) => readTalkIdeas(`${SD}/handoff.json`, roomId, deps.ownerName) } : {}),
+  // The live whats_new tool, through the cloudflared tunnel Kash starts (docs/handoff-live-test.md §3).
+  // No tunnel URL (CK_TALK_TOOL_URL or tunnel.log), or it stops answering → no tool, refresh-on-change.
+  tool: { url: () => tunnelUrl(), secret: toolSecret(process.env, `${SD}/talk-tool-secret`) },
   log: (s) => console.log(s),
 }) : null;
+if (voice && features.talkLink && voice.talkAgentId()) {
+  const port = Number(process.env.CK_TALK_TOOL_PORT || TOOL_PORT);
+  startToolServer({ port, secret: toolSecret(process.env, `${SD}/talk-tool-secret`), answer: (req) => voice.answerWhatsNew(req), log: (s) => console.log(`[voice] ${s}`) })
+    .then(() => console.log(`[voice] whats_new tool server on 127.0.0.1:${port}; tunnel it with: cloudflared tunnel --no-autoupdate --url http://127.0.0.1:${port} > tunnel.log 2>&1 &`))
+    .catch((e) => console.error(`[voice] whats_new tool server not started (${(e as Error).message}); refresh-on-change only`))
+    .finally(() => { void voice.syncTool(); });
+}
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().catch((e) => console.error('voice tick:', e.message)); }, 60_000).unref();
 console.log(`features: job E ${handoff ? 'on' : 'off'}, audio brief ${voice && features.audioBrief ? 'on' : 'off'}, talk link ${voice?.talkAgentId() ? 'on' : 'off'}`);
 

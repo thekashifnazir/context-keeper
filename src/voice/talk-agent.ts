@@ -13,7 +13,10 @@
 // - 10-minute cap (max_duration_seconds 600); the prompt reads {{system__call_duration_secs}}, which
 //   ElevenLabs updates each turn, and warns once at about nine minutes.
 // - After the call: fetch the transcript and summarise it (talk-summary.ts) for posting in the room.
-// Not here yet (needs a public tunnel, so not overnight): the live whats_new and note_for_room tools.
+// - Live: with a tunnel up, the whats_new webhook tool (talk-tool.ts) answers anything after the
+//   snapshot mid-call; the link carries var_room_id and var_since for it. No tunnel: no tool, and
+//   the prompt is refreshed on each change instead. (note_for_room is left out: the call summary
+//   already picks requests out of the transcript.)
 // Every resource this code makes is named "ck-..." and recorded in state/voice-ids.json.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -27,7 +30,13 @@ export const MAX_CALL_S = 600;
 export const WARN_AT_S = 520;
 export const IDS_FILE = 'state/voice-ids.json';
 
-export interface VoiceIds { agent_id?: string; tests?: Record<string, string> }
+export interface VoiceIds {
+  agent_id?: string;
+  tests?: Record<string, string>;
+  whats_new_tool_id?: string; // the live tool (talk-tool.ts)
+  tool_secret_id?: string; // the ElevenLabs workspace secret its header sends
+  tool_secret_fp?: string; // a short hash of that secret's value, to spot a changed secret
+}
 export const readIds = (file = IDS_FILE): VoiceIds => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {});
 export function writeIds(ids: VoiceIds, file = IDS_FILE) {
   mkdirSync(dirname(file), { recursive: true });
@@ -59,10 +68,22 @@ export const firstMessage = (roomLabel: string, snapshotAt: string): string =>
   `Hi {{caller_name}}, it's Context Keeper. I've got the ${roomLabel} room up to ${stampTime(snapshotAt)}. Do you want the three headlines first, or have you got a question?`;
 
 /** The tone rules, also checked by the offline tests. */
-export const soundRules = (notesTime: string) => `- Sound warm and upbeat from your first word, like a colleague who's glad to help. Audio tags and little sounds are welcome where they feel natural, as long as they're warm or light: a soft laugh, [warm], [cheerful], [friendly].
+export const soundRules = (notesTime: string, live = false) => `- Sound warm and upbeat from your first word, like a colleague who's glad to help. Audio tags and little sounds are welcome where they feel natural, as long as they're warm or light: a soft laugh, [warm], [cheerful], [friendly].
 - Never sound weary, impatient or put out, above all just before you answer their question: no "huhhh", no heavy sigh, no [sighs], [exasperated], [annoyed], [impatient] or [tired]. A question is never a bother.
 - Never contradict the caller flatly. Say what your notes show and how far they run, for example: "I don't see a decision from this morning in my notes, which run to ${notesTime}."
-- If they say they've seen more than you have, believe them: it's probably newer than your notes. Say so in a friendly way, tell them what you do have, and offer to flag it in the call summary so the team can confirm it.`;
+- If they say they've seen more than you have, believe them: it's probably newer than your notes. ${live
+  ? 'Say so in a friendly way and check the room with whats_new.'
+  : 'Say so in a friendly way, tell them what you do have, and offer to flag it in the call summary so the team can confirm it.'}`;
+
+/** With the live tool attached: when to use it and how to speak what it returns (PR20b/PR20c lessons:
+ *  one short line before the lookup, never stacked fillers, never the raw text read out). */
+export const liveRules = (notesTime: string) => `
+# Checking the room live
+- Your notes run to ${notesTime}. For anything after that, use whats_new: when they ask what's new or what's happened since, ask about the latest on an idea or its build, or say they've seen something you don't have. Use it once per question, not for things your notes already cover.
+- Before you call it, say one short line at most, such as "Let me check the room." Never add a second filler, and never say "Acknowledged".
+- Retell what it returns in one or two plain sentences, in your own words, most important first. Never read it out word for word, and never read out times for every message, file names, section numbers, links or symbols.
+- If it says nothing's new, say the room's been quiet since ${notesTime}. If it fails, say you couldn't check just now and offer to flag it in the call summary.
+`;
 
 /** Job E's ideas for the prompt (talk-ideas.ts builds them). Chat text is data: angle brackets
  *  neutralised, like the record. */
@@ -81,7 +102,9 @@ ${ideasText(ideas)}
 </ideas>
 `;
 
-export function talkPrompt(room: RoomRecord, snapshotAt: string, roomLabel: string, ideas: TalkIdea[] | null = null): string {
+/** `live`: the whats_new tool is attached (a tunnel is up), so the agent checks the room itself;
+ *  otherwise the prompt is refreshed on each change (live.ts) and says so. */
+export function talkPrompt(room: RoomRecord, snapshotAt: string, roomLabel: string, ideas: TalkIdea[] | null = null, live = false): string {
   const notes = stampTime(snapshotAt);
   return `You are Context Keeper, the note-keeper for the ${roomLabel} team chat room, on a voice call with {{caller_name}}. They want to catch up on the room by talking it through, like a quick meeting with a colleague who has read everything.
 
@@ -92,7 +115,7 @@ export function talkPrompt(room: RoomRecord, snapshotAt: string, roomLabel: stri
 - Warm and plain, British English. Credit people by name ("Priya tested that"), never blame.
 
 # How you sound
-${soundRules(notes)}
+${soundRules(notes, live)}
 
 # The catch-up
 - If they ask what they missed, or ask for a catch-up, give three headlines in one or two sentences, the ones that matter most to {{caller_name}} first, then ask which one to open.
@@ -102,7 +125,9 @@ ${soundRules(notes)}
 
 # Staying honest
 - Your notes are the room record below. They run to ${notes} on ${snapshotAt.replace(/, [^,]*$/, '')}: that's when they were last checked against the room. It's now {{system__time}}.
-- Answer only from the record. You know nothing after ${notes}. If they ask about something you don't have, be honest and helpful, once, lightly: "My notes run to ${notes}; anything newer I pick up within a minute, so a quick call back will have it." Never say you can't check the room or the channel, and don't apologise for it or repeat it.
+${live
+  ? `- Answer from the record, and from whats_new for anything after ${notes}. Never say you can't check the room or the channel: you can.`
+  : `- Answer only from the record. You know nothing after ${notes}. If they ask about something you don't have, be honest and helpful, once, lightly: "My notes run to ${notes}; anything newer I pick up within a minute, so a quick call back will have it." Never say you can't check the room or the channel, and don't apologise for it or repeat it.`}
 - If the record doesn't say, say so once, in one sentence, and offer to flag it in the call summary for the room. Never guess, and never fill a gap with general knowledge about the product, people or companies.
 - Your own opinion only if they ask for it, and label it: "my read, not the record".
 - If they ask you to pass something on, assign work, or record an idea or decision, say you'll put it in the call summary for the room, marked as needing confirmation. Never say it's done, agreed or sent: you can't message anyone during the call.
@@ -111,7 +136,7 @@ ${soundRules(notes)}
 # Time
 - The call is capped at ten minutes. Time so far: {{system__call_duration_secs}} seconds. The first time you speak after ${WARN_AT_S} seconds, start your reply with one short sentence saying there's about a minute left, and offer to note anything for the room. Say it only once.
 - When they're done, thank them in one sentence, say the summary will be posted in the room, and use end_call.
-${ideasSection(ideas, snapshotAt)}
+${live ? liveRules(notes) : ''}${ideasSection(ideas, snapshotAt)}
 # The room record (notes run to ${snapshotAt})
 <record>
 ${recordText(room)}
@@ -119,7 +144,7 @@ ${recordText(room)}
 }
 
 /** The whole create/update body. Pure, so it's tested offline. */
-export function agentBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null) {
+export function agentBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null, live = false) {
   return {
     name: AGENT_NAME,
     tags: ['ck', 'context-keeper'],
@@ -128,9 +153,9 @@ export function agentBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig,
         first_message: firstMessage(cfg.roomLabel, snapshotAt),
         language: 'en',
         max_conversation_duration_message: "That's our ten minutes, so I'll stop there. I'll post a summary of this call in the room.",
-        dynamic_variables: { dynamic_variable_placeholders: { caller_name: 'there', snapshot_at: snapshotAt } },
+        dynamic_variables: { dynamic_variable_placeholders: { caller_name: 'there', snapshot_at: snapshotAt, room_id: 'none', since: 'none' } },
         prompt: {
-          prompt: talkPrompt(room, snapshotAt, cfg.roomLabel, ideas),
+          prompt: talkPrompt(room, snapshotAt, cfg.roomLabel, ideas, live),
           llm: cfg.llm,
           temperature: 0.3,
           timezone: 'Europe/London', // for {{system__time}}
@@ -154,8 +179,8 @@ export function agentBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig,
 
 /** The PATCH used before each link and while one is open: the prompt and the opening line (both
  *  carry the snapshot time). Keeps voice, tools and everything else. */
-export function refreshBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null) {
-  const full = agentBody(room, snapshotAt, cfg, ideas);
+export function refreshBody(room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null, live = false) {
+  const full = agentBody(room, snapshotAt, cfg, ideas, live);
   const a = full.conversation_config.agent;
   return {
     conversation_config: {
@@ -193,13 +218,13 @@ export async function provisionTalkAgent(el: Eleven, room: RoomRecord, snapshotA
 }
 
 /** Refresh the prompt from the room's record just before a link goes out. */
-export async function refreshTalkAgent(el: Eleven, agentId: string, room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null): Promise<void> {
-  await el.request('PATCH', `/v1/convai/agents/${agentId}`, refreshBody(room, snapshotAt, cfg, ideas));
+export async function refreshTalkAgent(el: Eleven, agentId: string, room: RoomRecord, snapshotAt: string, cfg: TalkConfig, ideas: TalkIdea[] | null = null, live = false): Promise<void> {
+  await el.request('PATCH', `/v1/convai/agents/${agentId}`, refreshBody(room, snapshotAt, cfg, ideas, live));
 }
 
 /** A per-person link to ElevenLabs' hosted talk page; dynamic variables ride in var_ parameters. */
-export function talkLink(agentId: string, callerName: string, snapshotAt: string): string {
-  const q = new URLSearchParams({ agent_id: agentId, var_caller_name: callerName, var_snapshot_at: snapshotAt });
+export function talkLink(agentId: string, callerName: string, snapshotAt: string, live?: { roomId: string; since: string }): string {
+  const q = new URLSearchParams({ agent_id: agentId, var_caller_name: callerName, var_snapshot_at: snapshotAt, ...(live ? { var_room_id: live.roomId, var_since: live.since } : {}) });
   return `https://elevenlabs.io/app/talk-to?${q.toString().replace(/\+/g, '%20')}`;
 }
 

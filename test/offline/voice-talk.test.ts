@@ -52,7 +52,7 @@ describe('agent config', () => {
   });
   it('the caller is a dynamic variable; the snapshot time is written into the prompt; the prompt reads the live call time', () => {
     // snapshot_at stays a known variable: links already posted carry var_snapshot_at.
-    expect(c.agent.dynamic_variables.dynamic_variable_placeholders).toEqual({ caller_name: 'there', snapshot_at: 'Tuesday 3 November, 09:30' });
+    expect(c.agent.dynamic_variables.dynamic_variable_placeholders).toEqual({ caller_name: 'there', snapshot_at: 'Tuesday 3 November, 09:30', room_id: 'none', since: 'none' });
     expect(c.agent.first_message).toContain('{{caller_name}}');
     const p = c.agent.prompt.prompt;
     // a link's var_snapshot_at is fixed when the brief posts; the prompt is refreshed after that

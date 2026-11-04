@@ -24,6 +24,17 @@ npx tsx src/voice/cli.ts wipe
 
 Not resources, but made by the same code: test invocations (`suite_…`, one per `agent-test` run) and call transcripts (one per call to the agent). Deleting the agent removes neither; they hold invented demo data only.
 
+## Made by the live tool (on the first run with a tunnel up)
+
+The first time the live agent finds a cloudflared tunnel answering (docs/handoff-live-test.md §3, step 0), it makes two more resources and records their ids in `state/voice-ids.json`; later runs, with a new tunnel URL, update the tool in place:
+
+| Kind | Name | Recorded as |
+|---|---|---|
+| Workspace secret | `ck-talk-tool-secret-<6 hex>` (the header value the tool sends; the value itself is in `CK_TALK_TOOL_SECRET` or `state/talk-tool-secret`, never in the repo) | `tool_secret_id` (+ `tool_secret_fp`, a short hash to spot a changed value) |
+| Webhook tool | `whats_new` | `whats_new_tool_id` |
+
+`wipe` deletes both. A provisioning check on 4 Nov made one of each against a placeholder URL and deleted them straight away.
+
 The text-to-speech samples are local files in `build/voice/` (gitignored), not account resources.
 
-When this lane merges, copy `state/voice-ids.json` into the checkout that will run the agent, or `agent-setup` there makes a second agent.
+When this lane merges, copy `state/voice-ids.json` into the checkout that will run the agent, or `agent-setup` there makes a second agent. Copy `state/talk-tool-secret` with it once it exists (or set `CK_TALK_TOOL_SECRET` in `.env`), or the next run makes a second workspace secret.

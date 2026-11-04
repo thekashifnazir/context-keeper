@@ -113,18 +113,37 @@ min…" in Rowan's thread; a late "Done" still asks for sign-off).
 
 Uses the brief from step 1 (any time in the 3 hours after it posted).
 
+0. **Run the tunnel (before step 1, 1 min, you):** so the agent can check the room live mid-call
+   (`whats_new`, the practice-run PR20c hybrid). In the repo root, before or after starting the
+   agent:
+
+   ```sh
+   cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8790 > tunnel.log 2>&1 &
+   ```
+
+   (Claude Code's auto mode blocks starting a public tunnel, so this one is yours; prefix it with `!`
+   in a Claude Code prompt. `CK_TALK_TOOL_PORT` changes the port.) Within a minute the agent log
+   shows `[voice] live tool on: whats_new → https://….trycloudflare.com`. It reads the URL from
+   `tunnel.log` (or `CK_TALK_TOOL_URL`), checks it answers, and attaches the tool to the existing talk
+   agent (first time: one ElevenLabs workspace secret and one tool, ids in `state/voice-ids.json`).
+   No tunnel, or it stops answering: `[voice] live tool off …`, the tool is detached and the agent
+   falls back to refreshing its notes on each change (below). Stop it afterwards with
+   `pkill -f "cloudflared tunnel"`.
+
 1. **Play the clip.** In Slack, press play on `catch-up-rowan.mp3` in the brief's thread: about 60 s,
    Rowan by first name, no links or ids read out, ending with an offer to talk it through. The agent
    also keeps a copy: `afplay "$(ls -t build/voice/live/*.mp3 | head -1)"`.
 2. **Open the talk link** from the brief's last line, in Rowan's Chrome profile (or yours: the name in
    the link is Rowan either way). ElevenLabs' talk page opens; allow the microphone. If it asks you
    to sign in, use your ElevenLabs account (the agent lives there).
-   The agent's notes are kept current while the link is open: within a minute of a new message in
-   the room (or every 15 min if nothing changes) its prompt is refreshed, and its first line says how
-   far they run ("I've got the Ledgerly pilot room up to 13:51"). The agent log shows
-   `[voice] talk agent refreshed from <room>: N messages, notes run to …`.
-3. **Talk for a minute or two**: "What did I miss?", then ask about something posted after the brief, or "what's the build status of my idea?"
-   (it should know both), then one question the record can't answer, then one request ("Could Sam
+   Its first line says how far its notes run ("I've got the Ledgerly pilot room up to 12:05").
+   With the tunnel up it checks the room live for anything newer (agent log:
+   `[voice] whats_new for conv_…: N new since 12:05 (… ms)`). Without it, the notes are kept current
+   instead: within a minute of a new message (or every 15 min) the prompt is refreshed
+   (`[voice] talk agent refreshed from <room>: N messages, notes run to …`).
+3. **Talk for a minute or two**: "What did I miss?", then "what's happened since?" or "what's the
+   build status of my idea?" (with the tunnel it should say "let me check the room" once and answer
+   from the live room), then one question the record can't answer, then one request ("Could Sam
    send me the pilot numbers on Friday?"). Say thanks and let it end the call.
 4. **Wait a minute or two.** The call summary posts in the same brief thread: "Context Keeper · Rowan
    talked it through (N min call)", with "Asked about", "The record didn't say (to follow up)" and
