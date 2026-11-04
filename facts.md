@@ -101,3 +101,9 @@ the eval (`npm run eval`), one run at a time, failures included; nobody edits th
 | Eval citations verified, main set, r20261104-1441-8a40 (testset/results/2026-11-04-claude-opus-5-5-9.json) | 55/71 | `npm run eval --` | d63c6d3 | 2026-11-04T14:56:31.917Z |
 | Eval median seconds to a reply, main set, r20261104-1441-8a40 (testset/results/2026-11-04-claude-opus-5-5-9.json) | 34.1 (n=22) | `npm run eval --` | d63c6d3 | 2026-11-04T14:56:31.917Z |
 | Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261104-1441-8a40 (testset/results/2026-11-04-claude-opus-5-5-9.json) | 1.0609 | `npm run eval --` | d63c6d3 | 2026-11-04T14:56:31.917Z |
+| Eval overall, main set, r20261104-1534-eade (testset/results/2026-11-04-claude-opus-5-5-10.json) | 23/24 | `npm run eval --` | acc6222 | 2026-11-04T15:49:30.188Z |
+| Eval job A, main set, r20261104-1534-eade (testset/results/2026-11-04-claude-opus-5-5-10.json) | 16/17 | `npm run eval --` | acc6222 | 2026-11-04T15:49:30.188Z |
+| Eval confident wrong, main set, r20261104-1534-eade (testset/results/2026-11-04-claude-opus-5-5-10.json) | 0 | `npm run eval --` | acc6222 | 2026-11-04T15:49:30.188Z |
+| Eval citations verified, main set, r20261104-1534-eade (testset/results/2026-11-04-claude-opus-5-5-10.json) | 56/72 | `npm run eval --` | acc6222 | 2026-11-04T15:49:30.188Z |
+| Eval median seconds to a reply, main set, r20261104-1534-eade (testset/results/2026-11-04-claude-opus-5-5-10.json) | 34.9 (n=22) | `npm run eval --` | acc6222 | 2026-11-04T15:49:30.188Z |
+| Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261104-1534-eade (testset/results/2026-11-04-claude-opus-5-5-10.json) | 1.0457 | `npm run eval --` | acc6222 | 2026-11-04T15:49:30.188Z |

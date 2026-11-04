@@ -257,7 +257,12 @@ describe('job A → job E: a related idea with a new part is noted too (Kash, 4 
   it('might-be-related + new_part + a verified source → on the desk list, "builds on <ref>: <new part>"; the reply says it\'s logged; the hand-off quotes the part and the cited context', async () => {
     const { l, r, refs, poster, sw } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part: 'a weekly office hour for pilot support.' });
     expect(r.trace!.items[0].new_part).toBe('a weekly office hour for pilot support');
-    expect(poster.pub()[0].body.split('\n')[0]).toBe(`${related} I've logged that part as a new idea: a weekly office hour for pilot support.`);
+    // a bold label, the reply, the quote with its source, then code's own line for the new part (said once)
+    const lines = poster.pub()[0].body.split('\n');
+    expect(lines[0]).toBe(`🔎 **Related** · ${related}`);
+    expect(lines[1]).toMatch(/^> .+ — pilot-plan\.md §3/);
+    expect(lines.at(-1)).toBe('💡 **Logged as a new idea** · a weekly office hour for pilot support');
+    expect(poster.pub()[0].body.match(/weekly office hour/g)).toHaveLength(2); // the reply's "whether" sentence + the line
     expect(refs).toEqual(['I1']);
     expect(l.ownerPosts[0].split('\n')[0]).toBe('**I1 · New idea from Rowan** · #ck-smoke-e-1105, 4 Nov');
     expect(l.ownerPosts[0].split('\n')[2]).toBe('Builds on pilot-plan.md §3. New part: a weekly office hour for pilot support');
@@ -278,7 +283,8 @@ describe('job A → job E: a related idea with a new part is noted too (Kash, 4 
     for (const new_part of ['', 'none']) {
       const { refs, l, r, poster } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part });
       expect(r.trace!.items[0].new_part).toBeNull();
-      expect(poster.pub()[0].body.split('\n')[0]).toBe(related);
+      expect(poster.pub()[0].body.split('\n')[0]).toBe(`🔎 **Related** · ${related}`);
+      expect(poster.pub()[0].body).not.toContain('Logged as a new idea');
       expect(refs).toEqual([]);
       expect(l.ownerPosts).toEqual([]);
     }
@@ -315,7 +321,8 @@ describe('job A → job E: a related idea with a new part is noted too (Kash, 4 
     process.env.CK_ANNOUNCE_NEW = '0';
     try {
       const { refs, poster } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part: 'a weekly office hour' });
-      expect(poster.pub()[0].body.split('\n')[0]).toBe(related);
+      expect(poster.pub()[0].body.split('\n')[0]).toBe(`🔎 **Related** · ${related}`);
+      expect(poster.pub()[0].body).not.toContain('Logged as a new idea');
       expect(refs).toEqual(['I1']);
     } finally { delete process.env.CK_ANNOUNCE_NEW; }
   });

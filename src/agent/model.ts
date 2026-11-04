@@ -2,7 +2,7 @@
 // small interface so offline tests can swap in a scripted fake (test/fake-claude.ts).
 // 30 s per call, no SDK retries: the pipeline decides what a failure means (fail quiet, retry once).
 import Anthropic from '@anthropic-ai/sdk';
-import { BRIEF_NOTES, OWNER_REPLY_SYSTEM, RECORD_VERDICT, REVIEWER_SYSTEM, WRITE_BRIEF, briefRequestText, newMessagesText } from './prompt.ts';
+import { BRIEF_NOTES, OWNER_REPLY_SYSTEM, RECORD_VERDICT, REVIEWER_SYSTEM, SIGNOFF_SYSTEM, WRITE_BRIEF, briefRequestText, newMessagesText } from './prompt.ts';
 import type { RoomContext } from './blocks.ts';
 
 export const CALL_TIMEOUT_MS = 30_000;
@@ -15,6 +15,8 @@ export interface Claude {
 export interface ModelConfig {
   model: string; // main (verdict) model
   reviewerModel: string;
+  /** Job E: reads a free-form reply to a sign-off request (only when the "looks right" fast path can't). */
+  signoffModel?: string;
   effort: 'low' | 'medium' | 'high';
   fallback: boolean; // server-side refusal fallback; off when the eval pins the model
 }
@@ -23,6 +25,7 @@ export function modelConfigFromEnv(): ModelConfig {
   return {
     model: process.env.CK_MODEL || 'claude-opus-5-5',
     reviewerModel: process.env.CK_REVIEWER_MODEL || 'claude-haiku-5-5',
+    signoffModel: process.env.CK_SIGNOFF_MODEL || SIGNOFF_MODEL,
     effort: (process.env.CK_EFFORT as ModelConfig['effort']) || 'medium',
     fallback: process.env.CK_FALLBACK === '1',
   };
@@ -211,4 +214,47 @@ export async function callOwnerReply(claude: Claude, cfg: ModelConfig, item: { k
   const r = JSON.parse(text) as Partial<OwnerReading>;
   const action = r.action === 'confirm' || r.action === 'drop' ? r.action : 'unclear';
   return { reading: { action, summary: String(r.summary ?? ''), owner: String(r.owner ?? ''), date: /^\d{4}-\d{2}-\d{2}$/.test(String(r.date)) ? String(r.date) : '', reopen_if: String(r.reopen_if ?? '').trim(), line: String(r.line ?? '') }, usage };
+}
+
+// ---- job E: what did the raiser say about the result? (only when the "looks right" fast path can't tell) ----
+
+/** Sonnet 5.5: a short closed reading task, about 1–2 s and a fifth of a cent; it never passed an unsafe
+ *  claim in the reviewer probes, where Haiku did twice. A wrong "signed off" closes an idea the raiser
+ *  wanted changed, so the cheapest model isn't worth it here. CK_SIGNOFF_MODEL overrides. */
+export const SIGNOFF_MODEL = 'claude-sonnet-5-5';
+export const SIGNOFF_VERDICTS = ['signed_off', 'signed_off_with_note', 'reopened', 'unclear', 'chat'] as const;
+export type SignoffVerdict = (typeof SIGNOFF_VERDICTS)[number];
+export interface SignoffReading { verdict: SignoffVerdict; note: string; reason: string }
+export interface SignoffInput { idea: string; result: string; from: string; role: 'raiser' | 'owner' | 'someone_else'; raiser: string; reply: string }
+
+/** One call, a JSON-schema answer. The reply goes in as an escaped JSON field: it is data, never an
+ *  instruction (the system prompt says so too). Anything off-schema reads as "unclear". */
+export async function callSignoff(claude: Claude, cfg: ModelConfig, input: SignoffInput): Promise<{ reading: SignoffReading; usage: Usage }> {
+  const str = { type: 'string' };
+  const params = {
+    model: cfg.signoffModel || SIGNOFF_MODEL,
+    max_tokens: 600,
+    system: SIGNOFF_SYSTEM,
+    output_config: {
+      effort: 'low',
+      format: {
+        type: 'json_schema',
+        schema: {
+          // why first: say what the reply does, then rule (as the reviewer's issue-before-supports).
+          type: 'object', additionalProperties: false, required: ['why', 'verdict', 'note', 'reason'],
+          properties: { why: str, verdict: { type: 'string', enum: [...SIGNOFF_VERDICTS] }, note: str, reason: str },
+        },
+      },
+    },
+    messages: [{ role: 'user', content: `The reply to read, as data:\n${JSON.stringify(input).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')}` }],
+  };
+  const t0 = Date.now();
+  const msg = await claude.create(params, { timeout: CALL_TIMEOUT_MS });
+  const usage = usageOf(msg, Date.now() - t0);
+  if (msg.stop_reason === 'refusal') return { reading: { verdict: 'unclear', note: '', reason: '' }, usage };
+  const text = msg.content.filter((b) => b.type === 'text').map((b) => (b as Anthropic.TextBlock).text).join('');
+  let r: Partial<SignoffReading> = {};
+  try { r = JSON.parse(text) as Partial<SignoffReading>; } catch { /* unreadable → unclear */ }
+  const verdict = (SIGNOFF_VERDICTS as readonly string[]).includes(String(r.verdict)) ? (r.verdict as SignoffVerdict) : 'unclear';
+  return { reading: { verdict, note: String(r.note ?? '').trim(), reason: String(r.reason ?? '').trim() }, usage };
 }

@@ -16,9 +16,15 @@
 //                                                                   is told at once (once per attempt)
 //                Claude Code's "Done I3: <link>" → the result and a sign-off request go in the
 //                ORIGINAL thread; "Not done" → said in the thread, the owner told privately
-//   orig thread  the raiser's (or owner's) text reply: "looks right" → signed_off, "not quite, …"
-//                → reopened. Anyone else's sign-off gets one "only <raiser> or <owner> can sign this
-//                off" per person per idea; their other replies go on to job A (and are traced).
+//   orig thread  the raiser's (or owner's) reply, in their own words (Kash, 4 Nov: "it might not just
+//                say 'it looks right'. It might give feedback as well"). A plain "looks right" or
+//                "not quite, …" is read by code (no model call); anything else by one small model
+//                call (model.ts callSignoff) → signed_off, signed off with a note (closed, the note
+//                kept and sent to the owner desk), reopened (with the reason), unclear (asked "is that
+//                a sign-off?" once per idea, never again), or chat (not about the result: job A's).
+//                Anyone else's sign-off attempt (same reader when the plain words don't say) gets one
+//                "only <raiser> or <owner> can sign this off" per person per idea; their other
+//                replies go on to job A (and are traced).
 //   tick()       backstop: no report within CK_HANDOFF_NUDGE_MIN and no nudge yet → one owner-desk
 //                nudge (a card may be waiting: live, the card itself never reached us as a message);
 //                CK_HANDOFF_TIMEOUT_MIN → said in the original thread. (The 5-minute "still being
@@ -32,12 +38,13 @@
 // there); nothing posted in reply to Claude Code at all (no loop); every step writes ck.trace/1.
 import { randomUUID } from 'node:crypto';
 import { writeTrace, type HandoffStep, type TraceItem, type TraceLine, type TracePost } from '../../shared/trace.ts';
+import type { SignoffInput, SignoffReading, Usage } from '../model.ts';
 import { looksInjected } from '../pipeline.ts';
 import type { HandoffSwitch } from './switch.ts';
 import { freshSteps, ideaKey, STEPS, type HandoffStore, type IdeaRecord, type Source, type StageEvent, type Status, type StepName } from './store.ts';
 import {
   announceLine, asksPermission, blockedLine, buildingLine, buildRoomBrief, handoffMessage, isActivity, isBareAnswer, isProgress, looksFinal, notDoneLine, notTheirsLine, nudgeLine,
-  isClearSignoff, ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, signedOffLine, signoffRequest, stripMentions, timeoutLine, unblockedLine,
+  askSignoffLine, isClearSignoff, ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, shortNote, signedOffLine, signedOffWithNoteLine, signoffRequest, stripMentions, timeoutLine, unblockedLine,
 } from './text.ts';
 
 export interface HandoffMsg {
@@ -71,6 +78,9 @@ export interface ChainConfig {
    *  waiting card. Unset or ≤ 0: off. */
   nudgeMs?: number;
   maxFailures?: number;
+  /** Reads a free-form sign-off reply (one model call). Unset: only the plain "looks right" / "not quite"
+   *  words count, and anything else from the raiser is "unclear" (asked once). */
+  readSignoff?: (input: SignoffInput) => Promise<{ reading: SignoffReading; usage: Usage }>;
   traceFile?: string;
   now?: () => Date;
   /** Test seam: runs after each chain step is saved (lets a test stop the "process" between steps). */
@@ -93,7 +103,7 @@ export class HandoffChain {
   isBuildRoom(roomId: string) { return this.c.store.isBuildRoom(roomId); }
 
   // ---- trace ---------------------------------------------------------------------------------------
-  private trace(step: HandoffStep, rec: IdeaRecord | null, room: { id: string; name: string }, inputs: HandoffMsg[], posts: TracePost[], error: string | null = null): TraceLine {
+  private trace(step: HandoffStep, rec: IdeaRecord | null, room: { id: string; name: string }, inputs: HandoffMsg[], posts: TracePost[], error: string | null = null, usage: Usage | null = null): TraceLine {
     const item = (r: IdeaRecord): TraceItem => ({ message_id: r.message_id, job: 'E', verdict: null, restriction: null, clashes_with: null, sources: r.sources, decision_record: null, brief_for: null });
     const line: TraceLine = {
       schema: 'ck.trace/1',
@@ -107,7 +117,7 @@ export class HandoffChain {
       burst: null,
       items: rec ? [item(rec)] : [],
       posts,
-      model: null,
+      model: usage ? { id: usage.model, calls: 1, input_tokens: usage.input, cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite, output_tokens: usage.output, latency_ms: usage.ms } : null,
       error,
       handoff: {
         step, ref: rec?.ref ?? null, key: rec?.key ?? null, attempt: rec?.attempt ?? null, status: rec?.status ?? null,
@@ -203,7 +213,7 @@ export class HandoffChain {
       if (rec.status !== 'noted') {
         rec.attempt += 1;
         rec.steps = { ...freshSteps(), room: rec.build_room ? 'done' : 'pending' };
-        rec.events = {}; rec.report = null; rec.signoff = null; rec.handed_at = null; rec.failures = 0; rec.last_error = null;
+        rec.events = {}; rec.report = null; rec.signoff = null; rec.signoff_asked = false; rec.handed_at = null; rec.failures = 0; rec.last_error = null;
       }
       rec.status = 'approved';
       rec.stage = 'waiting';
@@ -443,6 +453,16 @@ export class HandoffChain {
   }
 
   // ---- 5. the raiser signs it off in the original thread --------------------------------------------
+  /** One reading of a free-form reply. Never throws: no reader, or a failed call, comes back without a reading. */
+  private async readReply(rec: IdeaRecord, msg: HandoffMsg, role: SignoffInput['role']): Promise<{ reading: SignoffReading | null; usage: Usage | null; error: string | null }> {
+    if (!this.c.readSignoff) return { reading: null, usage: null, error: null };
+    const result = rec.report ? (rec.report.links.join(' ') || rec.report.body).slice(0, 400) : '';
+    try {
+      const r = await this.c.readSignoff({ idea: rec.text.slice(0, 600), result, from: msg.sender_name, role, raiser: rec.sender_name, reply: msg.body.slice(0, 1000) });
+      return { reading: r.reading, usage: r.usage, error: null };
+    } catch (e) { return { reading: null, usage: null, error: `sign-off reader failed: ${(e as Error).message}` }; }
+  }
+
   private async onOriginalThread(msg: HandoffMsg): Promise<boolean> {
     if (!msg.thread_id) return false;
     const rec = this.c.store.all().find((r) => r.status === 'awaiting_signoff' && r.room_id === msg.room_id && r.thread_id === msg.thread_id);
@@ -450,45 +470,90 @@ export class HandoffChain {
     const room = this.origin(rec);
     const isRaiser = msg.sender === rec.sender;
     const isOwner = !!this.c.ownerSender && msg.sender === this.c.ownerSender;
-    const p = parseSignoff(msg.body);
-    if (!isRaiser && !isOwner) {
-      if (!p || !isClearSignoff(msg.body)) {
-        this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name})`);
-        return false; // ordinary chat for job A
+    const fast = parseSignoff(msg.body);
+    if (!isRaiser && !isOwner) return this.notTheirs(rec, msg);
+
+    // The raiser or the owner: plain words first, the reader for anything else.
+    let reading: SignoffReading;
+    let usage: Usage | null = null;
+    let note: string | null = null;
+    if (fast) reading = { verdict: fast.verdict, note: '', reason: fast.reason };
+    else {
+      const r = await this.readReply(rec, msg, isRaiser ? 'raiser' : 'owner');
+      usage = r.usage;
+      note = r.error;
+      reading = r.reading ?? { verdict: 'unclear', note: '', reason: '' };
+      // Code only tightens: a "yes" that reads like instructions to an agent closes nothing.
+      if ((reading.verdict === 'signed_off' || reading.verdict === 'signed_off_with_note') && looksInjected(msg.body)) {
+        note = `reader said ${reading.verdict}, but the reply reads like instructions: treated as unclear`;
+        reading = { verdict: 'unclear', note: '', reason: '' };
       }
-      // Kash, 4 Nov: a sign-off from someone else gets one short reply saying who can, not silence.
-      this.c.store.markSeen(msg.message_id);
-      if (rec.signoff_refused?.includes(msg.sender)) {
-        this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name}); already told once`);
-        return true;
-      }
-      rec.signoff_refused = [...(rec.signoff_refused ?? []), msg.sender];
-      this.c.store.put(rec); // before posting: at most one reply per person, even if the post fails
-      const posts: TracePost[] = [];
-      let error: string | null = null;
-      const raiserIsOwner = !!this.c.ownerSender && rec.sender === this.c.ownerSender;
-      try { await this.say(room, rec.thread_id, notTheirsLine(msg.sender_name, rec.sender_name, this.c.ownerName, raiserIsOwner), posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
-      this.trace('signoff_not_theirs', rec, room, [msg], posts, error ?? `not the raiser or the owner (${msg.sender_name})`);
+      if (reading.verdict === 'signed_off_with_note' && !shortNote(reading.note)) reading = { ...reading, verdict: 'signed_off' };
+    }
+    if (rec.status !== 'awaiting_signoff') { // another reply closed it while this one was being read
+      this.trace('signoff_ignored', rec, room, [msg], [], `already ${rec.status}`, usage);
       return true;
     }
-    if (!p) {
-      this.trace('signoff_unclear', rec, room, [msg], []);
-      return true;
+    if (reading.verdict === 'chat') {
+      this.trace('signoff_ignored', rec, room, [msg], [], note ?? 'not about the result: ordinary chat for job A', usage);
+      return false;
     }
     this.c.store.markSeen(msg.message_id);
-    rec.status = p.verdict;
-    rec.signoff = { by: msg.sender, by_name: msg.sender_name, message_id: msg.message_id, verdict: p.verdict, text: msg.body, at: msg.received_at };
+    if (reading.verdict === 'unclear') {
+      if (rec.signoff_asked) { this.trace('signoff_unclear', rec, room, [msg], [], note ?? 'unclear; already asked once', usage); return true; }
+      rec.signoff_asked = true;
+      this.c.store.put(rec); // before posting: never asked twice, even if the post fails
+      const posts: TracePost[] = [];
+      let error = note;
+      try { await this.say(room, rec.thread_id, askSignoffLine(msg.sender_name), posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
+      this.trace('signoff_asked', rec, room, [msg], posts, error, usage);
+      return true;
+    }
+    const verdict = reading.verdict === 'reopened' ? 'reopened' : 'signed_off';
+    const withNote = reading.verdict === 'signed_off_with_note' ? shortNote(reading.note) : '';
+    const reason = reading.reason || (fast ? '' : msg.body);
+    rec.status = verdict;
+    rec.signoff = { by: msg.sender, by_name: msg.sender_name, message_id: msg.message_id, verdict, text: msg.body, at: msg.received_at, ...(withNote ? { note: withNote } : {}) };
     this.c.store.put(rec);
     const posts: TracePost[] = [];
-    let error: string | null = null;
-    try {
-      rec.events.closing = await this.say(room, rec.thread_id, p.verdict === 'signed_off' ? signedOffLine(msg.sender_name) : reopenedLine(msg.sender_name, p.reason), posts);
-    } catch (e) { error = `post failed: ${(e as Error).message}`; }
-    await this.ownerNote(p.verdict === 'signed_off'
-      ? `${rec.ref} signed off by ${msg.sender_name}.`
-      : `${rec.ref} reopened by ${msg.sender_name}: ${p.reason || '(no reason given)'}. Reply "approve ${rec.ref} again" to send it back to Claude Code.`, posts);
+    let error: string | null = note;
+    const line = verdict === 'reopened' ? reopenedLine(msg.sender_name, reason) : withNote ? signedOffWithNoteLine(msg.sender_name, withNote) : signedOffLine(msg.sender_name);
+    try { rec.events.closing = await this.say(room, rec.thread_id, line, posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
+    await this.ownerNote(verdict === 'reopened'
+      ? `${rec.ref} reopened by ${msg.sender_name}: ${shortNote(reason, 300) || '(no reason given)'}. Reply "approve ${rec.ref} again" to send it back to Claude Code.`
+      : withNote ? `${rec.ref} signed off by ${msg.sender_name}, with a note: ${withNote}.` : `${rec.ref} signed off by ${msg.sender_name}.`, posts);
     this.c.store.put(rec);
-    this.trace(p.verdict, rec, room, [msg], posts, error);
+    this.trace(withNote ? 'signed_off_with_note' : verdict, rec, room, [msg], posts, error, usage);
+    return true;
+  }
+
+  /** Someone other than the raiser or the owner. A plain sign-off ("looks right") is one without a model
+   *  call; otherwise the reader decides whether it was an attempt at all. Kash, 4 Nov: an attempt gets one
+   *  short reply saying who can, not silence; anything else is ordinary chat for job A. */
+  private async notTheirs(rec: IdeaRecord, msg: HandoffMsg): Promise<boolean> {
+    const room = this.origin(rec);
+    let usage: Usage | null = null;
+    if (!isClearSignoff(msg.body)) {
+      const r = await this.readReply(rec, msg, 'someone_else');
+      usage = r.usage;
+      const attempt = !!r.reading && ['signed_off', 'signed_off_with_note', 'reopened'].includes(r.reading.verdict);
+      if (!attempt) {
+        this.trace('signoff_ignored', rec, room, [msg], [], r.error ?? `not the raiser or the owner (${msg.sender_name})`, usage);
+        return false; // ordinary chat for job A
+      }
+    }
+    this.c.store.markSeen(msg.message_id);
+    if (rec.signoff_refused?.includes(msg.sender)) {
+      this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name}); already told once`, usage);
+      return true;
+    }
+    rec.signoff_refused = [...(rec.signoff_refused ?? []), msg.sender];
+    this.c.store.put(rec); // before posting: at most one reply per person, even if the post fails
+    const posts: TracePost[] = [];
+    let error: string | null = null;
+    const raiserIsOwner = !!this.c.ownerSender && rec.sender === this.c.ownerSender;
+    try { await this.say(room, rec.thread_id, notTheirsLine(msg.sender_name, rec.sender_name, this.c.ownerName, raiserIsOwner), posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
+    this.trace('signoff_not_theirs', rec, room, [msg], posts, error ?? `not the raiser or the owner (${msg.sender_name})`, usage);
     return true;
   }
 

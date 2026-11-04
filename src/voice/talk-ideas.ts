@@ -52,7 +52,7 @@ export function plainStatus(r: IdeaRecord, ownerName = 'Kash'): string {
     case 'timed_out': return 'with Claude Code, but no result yet after the time limit';
     case 'not_done': return `Claude Code couldn't finish it${r.report?.body ? ` (${short(r.report.body, 100)})` : ''}`;
     case 'awaiting_signoff': return `done${done ? ` (${done})` : ''}, waiting for ${r.sender_name} to sign it off`;
-    case 'signed_off': return `done${done ? ` (${done})` : ''} and signed off by ${by}`;
+    case 'signed_off': return `done${done ? ` (${done})` : ''} and signed off by ${by}${r.signoff?.note ? `, with a note: "${short(r.signoff.note, 100)}"` : ''}`;
     case 'reopened': return `reopened by ${by}${r.signoff?.text ? `: "${short(r.signoff.text, 100)}"` : ''}`;
     default: return String(r.status).replace(/_/g, ' ');
   }

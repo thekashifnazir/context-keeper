@@ -111,12 +111,22 @@ export const unblockedLine = () => `🔨 **Building again** · Claude Code is wo
 /** Stage 5: the result, and the sign-off ask (a separate notification people act on). */
 export function signoffRequest(rec: IdeaRecord, summary: string, links: string[]): string {
   const what = links.length ? `📦 **Done** · Claude Code's result: ${links.join(' ')}` : `📦 **Done** · Claude Code says: ${summary.trim().slice(0, 300)}`;
-  return `${what}\n**${rec.sender_name}**, you raised it, so it's yours to sign off: reply "looks right", or "not quite" and what's missing.`;
+  // Kash, 4 Nov: "it might not just say 'it looks right'. It might give feedback as well." Any reply is read.
+  return `${what}\n**${rec.sender_name}**, you raised it, so it's yours to sign off: just reply here — say if it's right, or what's missing.`;
 }
 
 export const notDoneLine = (rec: IdeaRecord, reason: string) => `⚠️ **Not done** · Claude Code couldn't finish ${rec.ref}: ${reason.trim().slice(0, 300)}. It stays open.`;
 export const timeoutLine = (rec: IdeaRecord, minutes: number) => `⌛ **No result yet** · nothing from Claude Code after ${minutes} min. It stays open; I'll post here if it reports back.`;
 export const signedOffLine = (byName: string) => `✅ **Signed off** by ${byName}. Closed.`;
+/** Signed off, with feedback (a wish or follow-up that doesn't stop it being done): closed, the note kept. */
+export const signedOffWithNoteLine = (byName: string, note: string) => `✅ **Signed off** by ${byName}, with a note: ${note}. Closed.`;
+/** The raiser's (or owner's) reply didn't say whether it's right: asked once per idea, never again. */
+export const askSignoffLine = (byName: string) => `**${byName}**, is that a sign-off? Reply "looks right", or say what's missing.`;
+/** A model-written note or reason from chat, for a public line: one line, no @-mention, capped. */
+export function shortNote(text: string, max = 160): string {
+  const t = defuse(text.replace(/\s+/g, ' ').trim()).replace(/^["'“‘]+|["'”’]+$/g, '').replace(/[.!\s]+$/, '');
+  return t.length > max ? `${t.slice(0, max).replace(/\s+\S*$/, '')}…` : t;
+}
 /** Kash, 4 Nov: "rather [than] do nothing, say only X can sign this off", so people know why they got no sign-off. */
 export const notTheirsLine = (byName: string, raiserName: string, ownerName: string, raiserIsOwner: boolean) =>
   raiserIsOwner ? `Thanks, ${byName}. Only ${ownerName}, who raised it, can sign this off.` : `Thanks, ${byName}. Only ${raiserName}, who raised it, or ${ownerName} can sign this off.`;
@@ -124,7 +134,7 @@ export const notTheirsLine = (byName: string, raiserName: string, ownerName: str
 export const nudgeLine = (rec: IdeaRecord, buildRoom: string, minutes: number | null = null) => (minutes === null
   ? `**${rec.ref} · Needs your OK** · Claude Code is waiting: open its thread under the hand-off in #${buildRoom} and click Allow once.`
   : `**${rec.ref} · May need your OK** · no result from Claude Code after ${minutes} min. If a card is waiting, open its thread under the hand-off in #${buildRoom} and click Allow once.`);
-export const reopenedLine = (byName: string, reason: string) => `↩️ **Reopened** by ${byName}${reason ? `: ${reason.trim().slice(0, 200)}` : ''}.`;
+export const reopenedLine = (byName: string, reason: string) => `↩️ **Reopened** by ${byName}${shortNote(reason, 200) ? `: ${shortNote(reason, 200)}` : ''}.`;
 
 // ---- what we read --------------------------------------------------------------------------------
 
@@ -135,17 +145,24 @@ export function parseApproval(body: string): { ref: string | null; again: boolea
   return { ref: m[1] ?? null, again: !!m[2] };
 }
 
-const POSITIVE = /^\s*(looks (right|good|great|fine)|lgtm|signed? off|sign(ed)? it off|that'?s (right|it|great|perfect)|perfect|great|yes\b|yep|spot on|ship it|all good|approved?)/i;
-const NEGATIVE = /^\s*(not quite|not right|no\b|nope|wrong|needs? |missing|reopen|that'?s not)/i;
-/** The raiser's text reply to a sign-off request. Text only: agents never see reactions. */
 /** A clear sign-off attempt, for people who can't sign off: "Great idea!" or "No worries" in the thread
- *  stays ordinary chat; only these get the "only Rowan can sign this off" reply. */
+ *  stays ordinary chat; these get the "only Rowan can sign this off" reply without a model call. */
 const CLEAR_SIGNOFF = /^\s*(looks (right|good)\b|lgtm\b|signed? (it )?off\b|ship it\b|approved?\b|not quite\b|not right\b|reopen\b)/i;
 export const isClearSignoff = (body: string) => CLEAR_SIGNOFF.test(body);
 
+// The fast path (no model call) takes only replies that can't mean anything else: the WHOLE reply is a
+// plain yes ("Looks right, thanks!", "LGTM 👍"), or it starts "not quite" / "not right" / "reopen".
+// Anything with more in it ("Looks good, but could it also…", "Yep that's what I meant", "Not really,
+// I wanted it per client", "No worries, looks great") goes to the sign-off reader (model.ts callSignoff).
+const YES = String.raw`(looks (right|good|great|fine)|lgtm|signed? (it )?off|sign it off|that'?s (right|it|perfect|great)|perfect|spot on|ship it|all good|approved?|yes|yep|yeah|great)`;
+const TRIVIA = String.raw`(\s*(to me|thanks?( you)?( (?!but\b|not?\b|though\b)\w+)?|ta|cheers|[,.!]+|👍|🙏|✅|🎉|🙌|:\)))*`;
+const PLAIN_YES = new RegExp(String.raw`^\s*${YES}${TRIVIA}\s*$`, 'i');
+const PLAIN_NO = /^\s*(not quite|not right|reopen)\b/i;
+
+/** The raiser's reply when it's unmistakable; null means "read it" (the model decides). */
 export function parseSignoff(body: string): { verdict: 'signed_off' | 'reopened'; reason: string } | null {
-  if (NEGATIVE.test(body)) return { verdict: 'reopened', reason: body.replace(/^\s*(not quite|not right|no|nope|wrong|reopen)\b[\s,:;.!-]*/i, '').trim() };
-  if (POSITIVE.test(body)) return { verdict: 'signed_off', reason: '' };
+  if (PLAIN_NO.test(body)) return { verdict: 'reopened', reason: body.replace(/^\s*(not quite|not right|reopen)\b[\s,:;.!-]*/i, '').trim() };
+  if (PLAIN_YES.test(body)) return { verdict: 'signed_off', reason: '' };
   return null;
 }
 

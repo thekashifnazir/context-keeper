@@ -351,6 +351,7 @@ describe('Ideas in progress: job E hand-off status in the talk prompt (read-only
     expect(plainStatus(idea({ status: 'awaiting_signoff', report }))).toBe('done (GitHub issue 7), waiting for Rowan to sign it off');
     const signoff = { by: '@rowan', by_name: 'Rowan', message_id: 's', verdict: 'signed_off' as const, text: 'looks right', at: '2026-11-04T13:40:00Z' };
     expect(plainStatus(idea({ status: 'signed_off', report, signoff }))).toBe('done (GitHub issue 7) and signed off by Rowan');
+    expect(plainStatus(idea({ status: 'signed_off', report, signoff: { ...signoff, note: 'also list the phone number' } }))).toBe('done (GitHub issue 7) and signed off by Rowan, with a note: "also list the phone number"');
     expect(plainStatus(idea({ status: 'some_new_stage' as never }))).toBe('some new stage'); // job E grows stages: never a crash
     const [t] = talkIdeas([idea({ status: 'signed_off', report, signoff, approved: { by: 'k', message_id: 'a', at: '2026-11-04T12:30:00Z' } })], 'room1');
     expect(t).toEqual({ ref: 'I1', idea: 'What if the overdue reminder emails had a pay-now link?', raiser: 'Rowan', status: 'done (GitHub issue 7) and signed off by Rowan', changed: 'Wednesday 4 November, 13:40' });

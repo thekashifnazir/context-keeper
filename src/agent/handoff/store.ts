@@ -60,7 +60,10 @@ export interface IdeaRecord {
   target_status: string | null;
   handed_at: string | null;
   report: { message_id: string; body: string; links: string[]; outcome: 'done' | 'not_done'; at: string } | null;
-  signoff: { by: string; by_name: string; message_id: string; verdict: 'signed_off' | 'reopened'; text: string; at: string } | null;
+  /** note: the feedback in a "signed off, with a note" reply (Kash, 4 Nov: "it might give feedback as well"). */
+  signoff: { by: string; by_name: string; message_id: string; verdict: 'signed_off' | 'reopened'; text: string; at: string; note?: string } | null;
+  /** The raiser (or owner) got "is that a sign-off?" once for this idea: never asked again. */
+  signoff_asked?: boolean;
   /** Sender ids already told "only <raiser> or <owner> can sign this off" (once per person per idea). */
   signoff_refused?: string[];
 }
