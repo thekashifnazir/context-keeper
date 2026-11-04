@@ -24,10 +24,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // The compose file's Mattermost is amd64-only; under qemu on an Apple Silicon Mac it dies at random
 // ("fatal error: fault") every few minutes of load, which would lose a whole run. On a timeout or a
 // refused connection the harness restarts that one container (CK_EVAL_MM_CONTAINER, default
-// ckswitch-mattermost-1; CK_EVAL_RESTART_MM=0 turns this off), waits for it, checks whether the call
+// <COMPOSE_PROJECT_NAME from server/.env>-mattermost-1, so a second stack never restarts another
+// stack's Mattermost; CK_EVAL_RESTART_MM=0 turns this off), waits for it, checks whether the call
 // already landed, and retries once. Every outage is logged and kept in capture.json as an incident.
 // It never touches the switch, gateway or postgres containers.
-const MM_CONTAINER = process.env.CK_EVAL_MM_CONTAINER || 'ckswitch-mattermost-1';
+const MM_CONTAINER = process.env.CK_EVAL_MM_CONTAINER || `${serverEnv(ROOT).COMPOSE_PROJECT_NAME || 'ckswitch'}-mattermost-1`;
 const incidents: string[] = [];
 let recovering: Promise<boolean> | null = null;
 const isOutage = (e: unknown) => /timeout|aborted|fetch failed|ECONNREFUSED|ECONNRESET|socket hang up|other side closed/i.test(String((e as Error)?.message ?? e));
