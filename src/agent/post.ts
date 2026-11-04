@@ -95,7 +95,17 @@ const traceItem = (it: ModelItem, verdict: string | null, sources: Verified[]): 
   sources: sources.map((s) => ({ ref: s.ref, quote: s.quote })),
   decision_record: it.decision_record ?? null,
   brief_for: null,
+  new_part: buildsOnPart(it, verdict, sources),
 });
+
+/** Job A's new part counts only on its own might-be-related verdict (never a gate or reviewer
+ *  downgrade: parseVerdict keeps new_part for that verdict alone) that kept a verified source. */
+const buildsOnPart = (it: ModelItem, verdict: string | null, sources: Verified[]) =>
+  (it.job === 'A' && it.verdict === 'might-be-related' && verdict === 'might-be-related' && sources.length ? it.new_part : null);
+
+/** Job A's reply, plus code's line that the new part is logged, when it builds on the record (Kash, 4 Nov). */
+const replyFor = (it: ModelItem) =>
+  (it.job === 'A' && it.verdict === 'might-be-related' && it.new_part && announceNew() ? `${it.reply.trim()} I've logged that part as a new idea: ${it.new_part}.` : it.reply);
 
 export async function postPublic(
   deps: { claude: Claude; cfg: ModelConfig; poster: Poster; state: AgentState; pending?: PendingStore },
@@ -119,7 +129,7 @@ export async function postPublic(
         verdict = 'might-be-related';
         body = compose(MIGHT_BE, verified);
       } else if (verified.length) {
-        body = compose(it.reply, verified);
+        body = compose(replyFor(it), verified);
       } else if (STRONG.has(verdict) && refsSeen.length) {
         events.push(`gate: ${it.message_id} ${verdict}→might-be-related (no verified quote)`);
         verdict = 'might-be-related';

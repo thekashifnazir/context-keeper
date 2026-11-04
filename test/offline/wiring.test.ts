@@ -232,7 +232,7 @@ describe('job E wired: the listener path over the live op() adapter', () => {
 
 // ---- job A → job E: which ideas reach the owner's list ------------------------------------------------
 
-describe('job A → job E: a related idea whose reply logged the new part is noted too (Kash, 4 Nov)', () => {
+describe('job A → job E: a related idea with a new part is noted too (Kash, 4 Nov)', () => {
   const idea = msg('m-oh', 'What if pilot support had a weekly office hour?', ROWAN, 'Rowan');
   /** Job A decides one message with a cited might-be-related (or other) verdict; run() then calls noteNewIdeas. */
   async function decideAndNote(over: Record<string, unknown>, cite = [{ blockId: 'pilot-plan.md §3.1' }], extraCalls: { model: string; respond: any }[] = []) {
@@ -247,40 +247,70 @@ describe('job A → job E: a related idea whose reply logged the new part is not
     const refs = await noteNewIdeas(l.chain, PILOT.id, PILOT.name, [idea], [r], l.handles);
     return { sw, l, r, refs, poster };
   }
+  const related = "Priya runs onboarding calls and pilot support. Nothing in the record says whether there's a weekly office hour, so that part is still open.";
 
-  it('might-be-related + "that part would be new. I\'ve logged it." → on the desk list, "builds on" the cited ref; the hand-off carries the quote', async () => {
-    const { l, refs, poster, sw } = await decideAndNote({ verdict: 'might-be-related', reply: 'Priya runs onboarding calls and pilot support. A weekly office hour isn\'t in the record, so that part would be new. I\'ve logged it.' });
-    expect(poster.pub()[0].body).toContain("I've logged it.");
+  it('might-be-related + new_part + a verified source → on the desk list, "builds on <ref>: <new part>"; the reply says it\'s logged; the hand-off quotes the part and the cited context', async () => {
+    const { l, r, refs, poster, sw } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part: 'a weekly office hour for pilot support.' });
+    expect(r.trace!.items[0].new_part).toBe('a weekly office hour for pilot support');
+    expect(poster.pub()[0].body.split('\n')[0]).toBe(`${related} I've logged that part as a new idea: a weekly office hour for pilot support.`);
     expect(refs).toEqual(['I1']);
-    expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov), builds on pilot-plan.md §3:');
+    expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov), builds on pilot-plan.md §3: a weekly office hour for pilot support');
     expect(l.chain.store.byRef('I1')!.builds_on).toEqual(['pilot-plan.md §3']);
+    expect(l.chain.store.byRef('I1')!.new_part).toBe('a weekly office hour for pilot support');
     await l.event(DESK.id, { message_id: '$d', sender: OWNER, sender_name: 'owner_demo', body: 'approve I1' }, 'Kash');
     const body = String(sw.named('send_targeted_message')[0].args.body);
-    expect(body).toContain('It builds on what the record already has (pilot-plan.md §3)');
+    expect(body).toContain('It builds on what the record already has (pilot-plan.md §3). Only this part is new:\n> a weekly office hour for pilot support');
     expect(body).toContain('Cited context from the record:\n- pilot-plan.md §3:\n> Priya: onboarding calls and pilot support.');
   });
 
-  it('might-be-related that only says what exists (nothing logged) stays off the list', async () => {
-    const { refs, l } = await decideAndNote({ verdict: 'might-be-related', reply: 'Priya runs onboarding calls and pilot support. Nothing in the record says whether there are office hours, so that part is still open.' });
-    expect(refs).toEqual([]);
-    expect(l.ownerPosts).toEqual([]);
+  it('the live pay-now reply (says the part is open, no "logged" wording) is noted once job A names the new part', async () => {
+    const { refs } = await decideAndNote({ verdict: 'might-be-related', reply: 'Nothing in the record says whether the reminder emails carry a pay-now link, so that part is still open.', new_part: 'a pay-now link in the reminder emails' });
+    expect(refs).toEqual(['I1']);
   });
 
-  it("a covered verdict the reviewer drops to might-be-related isn't job A's own call: not noted, even if its reply said logged", async () => {
-    const { refs, r } = await decideAndNote(
-      { verdict: 'covered', reply: "I've logged it." },
+  it('might-be-related without a new part ("" or "none") stays off the list, and its reply is left alone', async () => {
+    for (const new_part of ['', 'none']) {
+      const { refs, l, r, poster } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part });
+      expect(r.trace!.items[0].new_part).toBeNull();
+      expect(poster.pub()[0].body.split('\n')[0]).toBe(related);
+      expect(refs).toEqual([]);
+      expect(l.ownerPosts).toEqual([]);
+    }
+  });
+
+  it('a new part with no source that passes the quote gate: silence, not noted', async () => {
+    const { refs, r } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part: 'a weekly office hour' }, [{ blockId: 'pilot-plan.md §3.1', text: 'words that are not in the record' }]);
+    expect(r.trace!.items[0].verdict).toBeNull();
+    expect(refs).toEqual([]);
+  });
+
+  it("a covered verdict the reviewer drops to might-be-related isn't job A's own call: not noted, even with a new part", async () => {
+    const { refs, r, poster } = await decideAndNote(
+      { verdict: 'covered', reply: 'Priya runs pilot support.', new_part: 'a weekly office hour' },
       [{ blockId: 'pilot-plan.md §3.1' }],
       [{ model: HAIKU, respond: reviewerMessage(HAIKU, [{ id: 'm-oh', supports: false, issue: 'different thing' }]) }],
     );
     expect(r.trace!.items[0].verdict).toBe('might-be-related');
+    expect(r.trace!.items[0].new_part).toBeNull();
+    expect(poster.pub()[0].body).not.toContain('logged');
     expect(refs).toEqual([]);
   });
 
-  it('a new idea is noted as before, with no "builds on"', async () => {
-    const { refs, l } = await decideAndNote({ verdict: 'new', reply: "Thanks, Rowan: I've logged it as a new idea." }, []);
+  it('a new idea is noted as before, with no "builds on" (a stray new_part is ignored)', async () => {
+    const { refs, l, r } = await decideAndNote({ verdict: 'new', reply: "Thanks, Rowan: I've logged it as a new idea.", new_part: 'office hours' }, []);
+    expect(r.trace!.items[0].new_part).toBeNull();
     expect(refs).toEqual(['I1']);
     expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov):');
     expect(l.chain.store.byRef('I1')!.builds_on).toBeUndefined();
+  });
+
+  it('CK_ANNOUNCE_NEW=0: no "logged" line in the reply, but the idea still reaches the desk', async () => {
+    process.env.CK_ANNOUNCE_NEW = '0';
+    try {
+      const { refs, poster } = await decideAndNote({ verdict: 'might-be-related', reply: related, new_part: 'a weekly office hour' });
+      expect(poster.pub()[0].body.split('\n')[0]).toBe(related);
+      expect(refs).toEqual(['I1']);
+    } finally { delete process.env.CK_ANNOUNCE_NEW; }
   });
 });
 

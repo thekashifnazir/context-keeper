@@ -38,6 +38,10 @@ const Item = z.object({
   sources: z.array(Source),
   decision_record: z.preprocess(upgradeDecisionRecord, DecisionRecord.nullable()),
   brief_for: z.string().nullable(),
+  // Job A: set only when job A itself chose might-be-related, named the part the record doesn't have
+  // yet, and the verdict came through the gate with a verified source. Job E notes such an idea for
+  // the owner, labelled "builds on <ref>". Absent on lines before 5 Nov.
+  new_part: z.string().nullable().optional(),
 });
 const Post = z.object({
   route: z.enum(['public_thread', 'public_top', 'owner_private']),

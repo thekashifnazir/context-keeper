@@ -71,10 +71,7 @@ function modelSummary(cfg: ModelConfig, usages: Usage[]): TraceLine['model'] {
 
 const quietItem = (id: string): TraceItem => ({ message_id: id, job: 'none', verdict: null, restriction: null, clashes_with: null, sources: [], decision_record: null, brief_for: null });
 
-/** Job A's own words per message (its record_verdict verdict and reply, before the gate), for job E:
- *  a might-be-related reply that logged the new part goes on the owner's list too. */
-export interface ModelReply { message_id: string; verdict: string | null; reply: string }
-export interface DecideResult extends Outcome { usages: Usage[]; replies?: ModelReply[] }
+export interface DecideResult extends Outcome { usages: Usage[] }
 
 /** One attempt at a decision. `notifyOwnerOnError` is false on the retry, so the owner gets one note. */
 export async function decide(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, rawInputs: Input[], opts: { notifyOwnerOnError?: boolean } = {}): Promise<DecideResult> {
@@ -155,8 +152,7 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
   const posts = [...jobs.posts, ...pub.posts];
   const kind = posts.some((p) => p.route !== 'owner_private') ? 'reply' : posts.length ? 'owner_note' : 'silence';
   const trace = write({ kind, items: pub.items, posts, model: modelSummary(deps.cfg, usages), error });
-  const replies = items.filter((it) => it.job === 'A').map((it) => ({ message_id: it.message_id, verdict: it.verdict, reply: it.reply }));
-  return { trace, retry: false, fatal: false, usages, replies };
+  return { trace, retry: false, fatal: false, usages };
 }
 
 async function failQuiet(

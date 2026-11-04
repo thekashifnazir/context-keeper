@@ -32,10 +32,14 @@ export const isBareAnswer = (body: string) => BARE.test(body);
 /** "product.md §4" (or two refs) for an idea that builds on something in the record; null for a new one. */
 export const buildsOnLabel = (rec: IdeaRecord) => (rec.builds_on?.length ? rec.builds_on.slice(0, 2).join(', ') : null);
 
+/** Job A's name for the part the record doesn't have yet, as one defused line (chat-derived text). */
+const newPartLine = (rec: IdeaRecord) => (rec.new_part ? defuse(rec.new_part.replace(/\s+/g, ' ').trim()).slice(0, 200) : null);
+
 export function ownerIdeaNote(rec: IdeaRecord, flagged: boolean): string {
   const on = buildsOnLabel(rec);
+  const part = newPartLine(rec);
   return [
-    `New idea ${rec.ref} from ${rec.sender_name} in #${rec.room_name} (${fmtDay(rec.at)})${on ? `, builds on ${on}` : ''}:`,
+    `New idea ${rec.ref} from ${rec.sender_name} in #${rec.room_name} (${fmtDay(rec.at)})${on ? `, builds on ${on}${part ? `: ${part}` : ':'}` : ':'}`,
     quoteBlock(rec.text, 400),
     ...(flagged ? ['Note: it contains text that reads like instructions to an agent. It will go to Claude Code as quoted data only.'] : []),
     `Reply "approve ${rec.ref}" to hand it to Claude Code. Nothing happens until you do.`,
@@ -46,7 +50,9 @@ function contextLines(rec: IdeaRecord): string[] {
   if (!rec.sources.length) return ['Cited context: none found in the record (it was logged as a new idea).'];
   const on = buildsOnLabel(rec);
   return [
-    ...(on ? [`It builds on what the record already has (${on}): only the part that isn't there yet is new.`] : []),
+    ...(on ? (rec.new_part
+      ? [`It builds on what the record already has (${on}). Only this part is new:`, quoteBlock(rec.new_part, 200)]
+      : [`It builds on what the record already has (${on}): only the part that isn't there yet is new.`]) : []),
     'Cited context from the record:', ...rec.sources.slice(0, 4).map((s) => `- ${s.ref}:\n${quoteBlock(s.quote, 300)}`),
   ];
 }
@@ -137,14 +143,3 @@ export const looksFinal = (body: string) => {
 export const refIn = (body: string) => body.match(/\b(I\d+)\b/)?.[1] ?? null;
 /** Switch's permission card text in Claude Code's thread ("Permission needed … Allow once"). */
 export const asksPermission = (body: string) => /permission needed/i.test(body);
-
-/** A might-be-related reply that tells the raiser the new part is logged ("that part would be new.
- *  I've logged it."). Job A's tool output has no field for "partly new", so this reads its reply,
- *  conservatively: only the agent's own first-person "I've logged / recorded it" (or "it's logged")
- *  counts; "nothing in the record says…, so that part is still open" does not. */
-export const replyLogsIt = (reply: string) => {
-  const r = reply.replace(/[\u2018\u2019]/g, "'");
-  return /\b(?:i'?ve|i have|i'll|i will)\s+(?:also\s+|now\s+)?(?:logged|recorded|log|record)\b/i.test(r)
-    || /\b(?:it'?s|it is|that'?s|this is)\s+(?:now\s+)?(?:logged|recorded)\b/i.test(r)
-    || /\blogged (?:it|this|that)?\s*as (?:a )?new\b/i.test(r);
-};
