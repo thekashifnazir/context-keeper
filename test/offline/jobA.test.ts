@@ -11,6 +11,7 @@ import type { Poster } from '../../src/agent/post.ts';
 import type { RoomRecord } from '../../src/agent/room.ts';
 import { AgentState, readJsonl } from '../../src/agent/state.ts';
 import { quoteVerified } from '../../src/shared/quote.ts';
+import { rawIdsIn } from '../../src/shared/refs.ts';
 import { readTrace, type TraceLine } from '../../src/shared/trace.ts';
 import { FakeClaude, item, reviewerMessage, verdictMessage } from '../fake-claude.ts';
 
@@ -67,6 +68,38 @@ describe('block layout', () => {
     expect(ctx.documents.at(-1)!.title).toBe('Channel archive');
     expect(ctx.documents.at(-2)!.cache_control).toEqual({ type: 'ephemeral' });
     expect(ctx.documents.filter((d) => d.cache_control)).toHaveLength(2);
+  });
+});
+
+describe('sources people can read (Kash, 4 Nov: the Also line ended in a raw sw_ id)', () => {
+  const SW = 'sw_bea89ca130292f159077b4889ec095d3';
+  const live = buildRoomContext({ ...room, messages: [...room.messages, { id: SW, at: '2026-11-04T12:08:00Z', author: 'Rowan', text: 'Could the reminder emails link straight to payment?' }] });
+
+  it('a room-history message in the Also line is named by who and when, never by its Switch id', async () => {
+    const claude = new FakeClaude([
+      { model: OPUS, respond: verdictMessage(OPUS, live, [item('m1')], [{ blockId: 'product.md §2.1' }, { blockId: 'led-002' }, { blockId: SW }]) },
+      { model: HAIKU, respond: reviewerMessage(HAIKU, [{ id: 'm1', supports: true }]) },
+    ]);
+    const poster = new FakePoster();
+    await decide(deps(claude, poster), 'room1', 'ck-test', live, [msg('m1', "Why don't we add automatic payment reminders?")]);
+    claude.done();
+    expect(poster.sent).toHaveLength(1);
+    expect(rawIdsIn(poster.sent[0].body)).toEqual([]);
+    expect(poster.sent[0].body.split('\n').at(-1)).toBe('Also: led-002, Rowan, 4 Nov');
+    // the trace keeps the real ref: the scorer and the hand-off still know exactly which message it was
+    expect(traces()[0].items[0].sources.map((x) => x.ref)).toEqual(['product.md §2', 'led-002', SW]);
+  });
+
+  it('a room-history message as the main source: "— Rowan, 4 Nov", without the id', async () => {
+    const claude = new FakeClaude([
+      { model: OPUS, respond: verdictMessage(OPUS, live, [item('m1')], [{ blockId: SW }, { blockId: 'product.md §2.1' }]) },
+      { model: HAIKU, respond: reviewerMessage(HAIKU, [{ id: 'm1', supports: true }]) },
+    ]);
+    const poster = new FakePoster();
+    await decide(deps(claude, poster), 'room1', 'ck-test', live, [msg('m1', "Why don't we add automatic payment reminders?")]);
+    claude.done();
+    expect(rawIdsIn(poster.sent[0].body)).toEqual([]);
+    expect(poster.sent[0].body).toContain('\n— Rowan, 4 Nov\nAlso: product.md §2');
   });
 });
 

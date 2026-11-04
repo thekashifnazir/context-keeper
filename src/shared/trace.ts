@@ -62,6 +62,8 @@ export const HANDOFF_STEPS = [
   'build_room_chat', 'progress', 'report_unmatched', 'signoff_requested', 'not_done', 'timed_out',
   'signoff_ignored', 'signoff_unclear', 'signed_off', 'reopened',
   'nudged', 'still_building', 'signoff_not_theirs',
+  // the raiser's stage lines (5 Nov); 'still_building' stays so older trace lines still read
+  'building', 'blocked', 'unblocked',
 ] as const;
 export type HandoffStep = (typeof HANDOFF_STEPS)[number];
 const Handoff = z.object({

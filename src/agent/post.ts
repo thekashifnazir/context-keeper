@@ -13,6 +13,7 @@
 // checked for leaked details), and job C's brief goes through postBrief: the same gate and reviewer.
 // Code rules here only ever tighten a verdict, never loosen it.
 import { quoteVerified } from '../shared/quote.ts';
+import { isRawMessageId } from '../shared/refs.ts';
 import type { TraceItem, TracePost } from '../shared/trace.ts';
 import { reviewText, type BlockInfo, type RoomContext } from './blocks.ts';
 import { decisionId, reopenIf, reopenLine, reopenNote } from './jobs/reopen.ts';
@@ -52,17 +53,23 @@ export function gateSources(cited: Cited[], ctx: RoomContext): { verified: Verif
     if (verified.some((v) => v.ref === b.ref && v.quote === quote)) continue;
     const day = fmtDay(b.at);
     const where = b.kind === 'message' ? b.ref : b.blockId.replace(/^(\S+ §\d+)\.\d+$/, '$1');
-    const who = b.author ? `${b.author}, ${day} (${where})` : `${where}${day ? `, ${day}` : ''}`;
+    // A message from the room's own history has a raw Switch id (sw_…) for a ref: name it by who and when only.
+    const raw = isRawMessageId(where);
+    const who = b.author ? (raw ? `${b.author}${day ? `, ${day}` : ''}` : `${b.author}, ${day} (${where})`) : raw ? `an earlier message${day ? `, ${day}` : ''}` : `${where}${day ? `, ${day}` : ''}`;
     verified.push({ ref: b.ref, quote, display: b.display, who, full: c.citedText, block: b });
   }
   return { verified, refsSeen };
 }
 
-function compose(reply: string, sources: Verified[]): string {
+/** How the "Also:" line names a source: its record ref, or for a message with a raw Switch id (sw_…),
+ *  who said it and when ("Rowan, 4 Nov"). Kash, 4 Nov: a raw id leaked into a reply's Also line. */
+export const alsoLabel = (s: Pick<Verified, 'ref' | 'who'>) => (isRawMessageId(s.ref) ? s.who : s.ref);
+
+export function compose(reply: string, sources: Pick<Verified, 'ref' | 'display' | 'who'>[]): string {
   const [first, ...rest] = sources;
   const lines = [reply.trim()];
   if (first) lines.push(`> ${first.display}`, `— ${first.who}`);
-  const others = [...new Set(rest.map((s) => s.ref).filter((r) => r !== first?.ref))];
+  const others = [...new Set(rest.filter((s) => s.ref !== first?.ref).map(alsoLabel))].filter((l) => l !== (first && alsoLabel(first)));
   if (others.length) lines.push(`Also: ${others.join(', ')}`);
   return lines.filter(Boolean).join('\n');
 }
