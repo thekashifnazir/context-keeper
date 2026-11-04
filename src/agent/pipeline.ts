@@ -10,6 +10,7 @@ import { callVerdict, errorKind, type Claude, type ModelConfig, type Usage } fro
 import { planJobs } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
 import { postPublic, type Poster } from './post.ts';
+import type { MissesSink, RetractStore } from './retract.ts';
 import type { AgentState } from './state.ts';
 import { parseVerdict, ParseError } from './verdict.ts';
 
@@ -41,6 +42,11 @@ export interface Deps {
   /** Job B: a decision was logged; the live agent writes it to the room's Decision log document in
    *  Switch (src/agent/memory.ts). Returns a note for the trace. */
   onDecisionLogged?: (d: LoggedDecision) => Promise<string>;
+  /** Public job A answers, and the ones the owner retracted (src/agent/retract.ts): a withdrawn answer
+   *  isn't posted again for the same question. Off when not given. */
+  retract?: RetractStore;
+  /** Where a retraction's miss entry goes (src/agent/retract.ts missesSinkFromEnv). */
+  misses?: MissesSink;
 }
 
 export interface Outcome { trace: TraceLine | null; retry: boolean; fatal: boolean }
@@ -56,7 +62,7 @@ export function actionable(deps: Pick<Deps, 'selfSenders' | 'state'>, roomId: st
   return inputs.filter((m) => !deps.selfSenders.has(m.sender) && !deps.state.isProcessed(roomId, m.message_id) && m.body.trim());
 }
 
-function modelSummary(cfg: ModelConfig, usages: Usage[]): TraceLine['model'] {
+export function modelSummary(cfg: ModelConfig, usages: Usage[]): TraceLine['model'] {
   if (!usages.length) return null;
   return {
     id: [...new Set(usages.map((u) => u.model))].join('+'),
@@ -132,7 +138,7 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
 
   // Everything public goes through postPublic (gate → reviewer → idempotent send).
   const threadId = inputs[0].thread_id ?? inputs[0].message_id;
-  const pub = await postPublic({ claude: deps.claude, cfg: deps.cfg, poster: deps.poster, state: deps.state, pending: (deps.pending ??= new PendingStore(null)) }, ctx, {
+  const pub = await postPublic({ claude: deps.claude, cfg: deps.cfg, poster: deps.poster, state: deps.state, pending: (deps.pending ??= new PendingStore(null)), withdrawn: deps.retract }, ctx, {
     roomId, roomName, threadId, items,
     messages: inputs.map((m) => ({ message_id: m.message_id, sender: m.sender, sender_name: m.sender_name, body: m.body, received_at: m.received_at })),
   });
@@ -153,6 +159,18 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
     const m = inputs.find((x) => x.message_id === it.message_id)!;
     const note = await noteDecision(deps, { roomId, roomName, record: it.decision_record, why: it.details?.why ?? '', sourceMessageId: m.message_id, raisedBy: m.sender_name });
     if (note) notes.push(note);
+  }
+  // A public job A answer is remembered, so the owner can retract it with "wrong" in its thread.
+  const answerPost = pub.posts.find((p) => p.route === 'public_thread');
+  const answered = pub.items.filter((i) => i.job === 'A' && i.verdict);
+  if (deps.retract && answerPost && answered.length) {
+    deps.retract.noteAnswer({
+      room_id: roomId, room_name: roomName, thread_id: threadId, decision_id: base.decision_id, event_id: answerPost.event_id, body: answerPost.body, at: new Date().toISOString(),
+      items: answered.map((i) => {
+        const m = inputs.find((x) => x.message_id === i.message_id);
+        return { message_id: i.message_id, question: m?.body ?? '', asked_by: m?.sender_name ?? '', verdict: i.verdict, refs: [...new Set(i.sources.map((s) => s.ref))] };
+      }),
+    });
   }
   deps.state.markProcessed(roomId, inputs.map((m) => m.message_id));
   const events = [...notes, ...pub.events];

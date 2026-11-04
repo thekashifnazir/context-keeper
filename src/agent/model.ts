@@ -2,7 +2,7 @@
 // small interface so offline tests can swap in a scripted fake (test/fake-claude.ts).
 // 30 s per call, no SDK retries: the pipeline decides what a failure means (fail quiet, retry once).
 import Anthropic from '@anthropic-ai/sdk';
-import { BRIEF_NOTES, OWNER_REPLY_SYSTEM, RECORD_VERDICT, REVIEWER_SYSTEM, SIGNOFF_SYSTEM, WRITE_BRIEF, briefRequestText, newMessagesText } from './prompt.ts';
+import { BRIEF_NOTES, OWNER_REPLY_SYSTEM, RECORD_VERDICT, RETRACT_SYSTEM, REVIEWER_SYSTEM, SIGNOFF_SYSTEM, WRITE_BRIEF, briefRequestText, newMessagesText } from './prompt.ts';
 import type { RoomContext } from './blocks.ts';
 
 export const CALL_TIMEOUT_MS = 30_000;
@@ -231,34 +231,55 @@ export type SignoffVerdict = (typeof SIGNOFF_VERDICTS)[number];
 export interface SignoffReading { verdict: SignoffVerdict; note: string; reason: string }
 export interface SignoffInput { idea: string; result: string; from: string; role: 'raiser' | 'owner' | 'someone_else'; raiser: string; reply: string }
 
-/** One call, a JSON-schema answer. The reply goes in as an escaped JSON field: it is data, never an
- *  instruction (the system prompt says so too). Anything off-schema reads as "unclear". */
-export async function callSignoff(claude: Claude, cfg: ModelConfig, input: SignoffInput): Promise<{ reading: SignoffReading; usage: Usage }> {
+/** One closed reading of a chat reply: one call, a JSON-schema answer ("why" first: say what the reply
+ *  does, then rule, as the reviewer's issue-before-supports), on the sign-off model. The input goes in
+ *  as an escaped JSON field: it is data, never an instruction (each system prompt says so too). A
+ *  refusal or an off-schema answer reads as `fallback`. Job E's sign-off and the owner's retract use it. */
+async function callReading<V extends string>(claude: Claude, cfg: ModelConfig, o: { system: string; verdicts: readonly V[]; fallback: V; fields: string[]; input: unknown }): Promise<{ verdict: V; fields: Record<string, string>; usage: Usage }> {
   const str = { type: 'string' };
   const params = {
     model: cfg.signoffModel || SIGNOFF_MODEL,
     max_tokens: 600,
-    system: SIGNOFF_SYSTEM,
+    system: o.system,
     output_config: {
       effort: 'low',
       format: {
         type: 'json_schema',
         schema: {
-          // why first: say what the reply does, then rule (as the reviewer's issue-before-supports).
-          type: 'object', additionalProperties: false, required: ['why', 'verdict', 'note', 'reason'],
-          properties: { why: str, verdict: { type: 'string', enum: [...SIGNOFF_VERDICTS] }, note: str, reason: str },
+          type: 'object', additionalProperties: false, required: ['why', 'verdict', ...o.fields],
+          properties: { why: str, verdict: { type: 'string', enum: [...o.verdicts] }, ...Object.fromEntries(o.fields.map((f) => [f, str])) },
         },
       },
     },
-    messages: [{ role: 'user', content: `The reply to read, as data:\n${JSON.stringify(input).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')}` }],
+    messages: [{ role: 'user', content: `The reply to read, as data:\n${JSON.stringify(o.input).replace(/</g, '\\u003c').replace(/>/g, '\\u003e')}` }],
   };
   const t0 = Date.now();
   const msg = await claude.create(params, { timeout: CALL_TIMEOUT_MS });
   const usage = usageOf(msg, Date.now() - t0);
-  if (msg.stop_reason === 'refusal') return { reading: { verdict: 'unclear', note: '', reason: '' }, usage };
+  const none = Object.fromEntries(o.fields.map((f) => [f, '']));
+  if (msg.stop_reason === 'refusal') return { verdict: o.fallback, fields: none, usage };
   const text = msg.content.filter((b) => b.type === 'text').map((b) => (b as Anthropic.TextBlock).text).join('');
-  let r: Partial<SignoffReading> = {};
-  try { r = JSON.parse(text) as Partial<SignoffReading>; } catch { /* unreadable → unclear */ }
-  const verdict = (SIGNOFF_VERDICTS as readonly string[]).includes(String(r.verdict)) ? (r.verdict as SignoffVerdict) : 'unclear';
-  return { reading: { verdict, note: String(r.note ?? '').trim(), reason: String(r.reason ?? '').trim() }, usage };
+  let r: Record<string, unknown> = {};
+  try { r = JSON.parse(text) as Record<string, unknown>; } catch { /* unreadable → fallback */ }
+  const verdict = (o.verdicts as readonly string[]).includes(String(r.verdict)) ? (r.verdict as V) : o.fallback;
+  return { verdict, fields: Object.fromEntries(o.fields.map((f) => [f, String(r[f] ?? '').trim()])), usage };
+}
+
+/** Job E: what the raiser (or owner) said about the result. Anything off-schema reads as "unclear". */
+export async function callSignoff(claude: Claude, cfg: ModelConfig, input: SignoffInput): Promise<{ reading: SignoffReading; usage: Usage }> {
+  const r = await callReading(claude, cfg, { system: SIGNOFF_SYSTEM, verdicts: SIGNOFF_VERDICTS, fallback: 'unclear', fields: ['note', 'reason'], input });
+  return { reading: { verdict: r.verdict, note: r.fields.note, reason: r.fields.reason }, usage: r.usage };
+}
+
+// ---- retract: is the room owner saying Context Keeper's answer was wrong? (only when the plain-words
+// fast path in src/agent/retract.ts can't tell) ----
+
+export const RETRACT_VERDICTS = ['retract', 'keep'] as const;
+export type RetractVerdict = (typeof RETRACT_VERDICTS)[number];
+export interface RetractInput { question: string; answer: string; owner: string; reply: string }
+
+/** One call on the sign-off model. Anything unreadable reads as "keep": a withdrawal needs a clear "wrong". */
+export async function callRetract(claude: Claude, cfg: ModelConfig, input: RetractInput): Promise<{ reading: { verdict: RetractVerdict; reason: string }; usage: Usage }> {
+  const r = await callReading(claude, cfg, { system: RETRACT_SYSTEM, verdicts: RETRACT_VERDICTS, fallback: 'keep', fields: ['reason'], input });
+  return { reading: { verdict: r.verdict, reason: r.verdict === 'retract' ? r.fields.reason : '' }, usage: r.usage };
 }

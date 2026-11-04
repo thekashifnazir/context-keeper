@@ -18,7 +18,9 @@
 // every live message as it arrives. Its own "Decision log" room document is written by job B.
 // Nothing is read from demo/ (that is only the seed's source and the offline tests').
 // Owner desk (state/owner.json, or CK_OWNER_SENDER / CK_OWNER_DESK_ROOM): its messages never go to
-// job A; the owner's text reply there confirms a decision (B) or rules on a clash (D). A room_join
+// job A; the owner's text reply there confirms a decision (B) or rules on a clash (D). In a room, the
+// owner's "wrong" under one of our answers retracts it (src/agent/retract.ts, state/retracted.json;
+// the miss goes to CK_MISSES_FILE, else state/misses.jsonl). A room_join
 // (Switch sends it just before the person's first message) marks them for a catch-up brief (C).
 // Stream: a heartbeat_lapsed or closed eviction is logged and the runtime reconnects from its position;
 // only a takeover or rejected credentials stop it (exit 3). CK_STREAM_WATCHDOG_SEC (default 120, 0 = off):
@@ -50,6 +52,7 @@ import { HandleMemo, heardAfterJobA, isAgentSender, noteNewIdeas, toHandoffMsg }
 import { handoffFromEnv } from './handoff/wire.ts';
 import { handleOwnerDesk } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
+import { handleRetract, missesSinkFromEnv, RetractStore } from './retract.ts';
 import { loadEnv } from './env.ts';
 import { callSignoff, callVerdict, modelConfigFromEnv, realClaude } from './model.ts';
 import { actionable, decideWithRetry, type Deps, type Input, type PrefetchedVerdict } from './pipeline.ts';
@@ -145,6 +148,7 @@ const deps: Deps = {
   claude, cfg: modelConfigFromEnv(), system: systemPrompt('.'), poster,
   state: new AgentState(`${SD}/agent-state.json`), selfSenders,
   ownerSender: owner.owner_sender ?? null, ownerName: process.env.CK_OWNER_NAME || 'Kash', pending: new PendingStore(`${SD}/pending.json`),
+  retract: new RetractStore(`${SD}/retracted.json`), misses: missesSinkFromEnv(SD),
   onFatal: (why) => { stopped = true; console.error('fatal, stopping:', why); setTimeout(() => process.exit(2), 2000); },
 };
 
@@ -418,6 +422,18 @@ async function onEvent(ev: AgentBridgeEvent) {
   const live = { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null };
   // Another agent's post (Claude Code's, say) is room context, never a proposal (PR11).
   if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { memory.addLive(ev.room_id, live); return; }
+  // The owner's reply under one of our answers saying it was wrong: withdrawn, corrected in the thread,
+  // logged as a miss (src/agent/retract.ts). Anything else, and anyone else's "wrong", goes on to job A.
+  if (!stopped && m.thread_id && owner.owner_sender && m.sender === owner.owner_sender) {
+    try {
+      const t = await handleRetract(deps, ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, input);
+      if (t) {
+        memory.addLive(ev.room_id, live);
+        console.log(`retract ${t.decision_id}: withdrew ${t.retract?.answer_decision_id} (${t.retract?.refs.join(', ') || 'no refs'})${t.error ? ` (${t.error})` : ''}`);
+        return;
+      }
+    } catch (e) { console.error('retract handler crashed:', (e as Error).message); }
+  }
   // The daily spend cap (everywhere), then a public demo room's limits: one line at most, then silence.
   // The message still joins the room's record.
   const demoRoom = isDemo(ev.room_id);

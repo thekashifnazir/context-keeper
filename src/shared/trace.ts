@@ -85,13 +85,26 @@ const Handoff = z.object({
 });
 export type TraceHandoff = z.infer<typeof Handoff>;
 
+const Retract = z.object({
+  answer_decision_id: z.string(), // the decision line whose public post was withdrawn
+  answer_event_id: z.string().nullable(),
+  thread_id: z.string(),
+  messages: z.array(z.string()), // the message ids the answer replied to
+  refs: z.array(z.string()), // its cited record refs, now withdrawn for those questions
+  reason: z.string(), // the owner's reason, "" when none was given
+  read_by: z.enum(['words', 'model']), // the plain-words fast path, or the reader model
+  misses_file: z.string().nullable(), // where the miss entry went; null if writing it failed
+});
+export type TraceRetract = z.infer<typeof Retract>;
+
 export const TraceLine = z.object({
   schema: z.literal('ck.trace/1'),
   ts: Iso,
   decision_id: z.string(),
   room_id: z.string(),
   room_name: z.string(),
-  kind: z.enum(['reply', 'silence', 'brief', 'owner_note']),
+  // retract: the room owner said one of Context Keeper's answers was wrong (src/agent/retract.ts).
+  kind: z.enum(['reply', 'silence', 'brief', 'owner_note', 'retract']),
   trigger: z.enum(['message', 'room_join']),
   inputs: z.array(z.object({ message_id: z.string(), sender: z.string(), body: z.string(), received_at: Iso })),
   burst: z.object({ size: z.number(), gap_s: z.number(), first_at: Iso, last_at: Iso }).nullable(),
@@ -104,6 +117,9 @@ export const TraceLine = z.object({
   error: z.string().nullable(),
   /** Job E lines only; absent on every other line (and on job E lines written before 5 Nov). */
   handoff: Handoff.nullable().optional(),
+  /** Retract lines only (kind "retract"): the answer withdrawn, the sources it may not be cited for
+   *  again on the same question, and where the miss was logged. Absent on every other line. */
+  retract: Retract.nullable().optional(),
 });
 export type TraceLine = z.infer<typeof TraceLine>;
 export type TraceItem = z.infer<typeof Item>;
