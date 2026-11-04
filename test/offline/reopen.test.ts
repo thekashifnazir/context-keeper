@@ -46,7 +46,7 @@ describe('reopen route', () => {
     expect(poster.pub()).toHaveLength(1);
     const pub = poster.pub()[0];
     expect(pub.thread).toBe('m1');
-    expect(pub.body.split('\n')[0]).toBe("Thanks, Rowan. That's new information on a recorded decision, so I've asked the owner whether to reopen it. Until they decide, the plan stays as it is. Reopen if: Support capacity changes.");
+    expect(pub.body.split('\n')[0]).toBe("↩️ **Reopen request** · Thanks, Rowan. That's new information on a recorded decision, so I've asked the owner whether to reopen it. Until they decide, the plan stays as it is. Reopen if: Support capacity changes.");
     expect(pub.body).toContain('> **Three agencies, max 25 clients each**');
     expect(pub.body).not.toContain("It's reopened."); // the model's own words are never the public line
 
@@ -76,7 +76,7 @@ describe('reopen route', () => {
     const poster = new FakePoster();
     await decide(t.deps(claude, poster), 'room1', 'ck-test', ctx, [msg('m1', TEXT)]);
     expect(poster.desk()).toEqual([]);
-    expect(poster.pub()[0].body).toMatch(/^This might be related/);
+    expect(poster.pub()[0].body).toMatch(/^🔎 \*\*Might be related\*\* · I can't confirm it answers your question\.\n> /);
     expect(t.traces()[0].items[0].verdict).toBe('might-be-related');
   });
 

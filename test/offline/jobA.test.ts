@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildRoomContext } from '../../src/agent/blocks.ts';
 import { resetFaults, type ModelConfig } from '../../src/agent/model.ts';
 import { decide, decideWithRetry, type Deps, type Input } from '../../src/agent/pipeline.ts';
-import type { Poster } from '../../src/agent/post.ts';
+import { compose, LABEL, type Poster } from '../../src/agent/post.ts';
 import type { RoomRecord } from '../../src/agent/room.ts';
 import { AgentState, readJsonl } from '../../src/agent/state.ts';
 import { quoteVerified } from '../../src/shared/quote.ts';
@@ -85,7 +85,8 @@ describe('sources people can read (Kash, 4 Nov: the Also line ended in a raw sw_
     claude.done();
     expect(poster.sent).toHaveLength(1);
     expect(rawIdsIn(poster.sent[0].body)).toEqual([]);
-    expect(poster.sent[0].body.split('\n').at(-1)).toBe('Also: led-002, Rowan, 4 Nov');
+    // other sources fold into the quote's source line (Kash, 4 Nov: make the replies scannable)
+    expect(poster.sent[0].body.split('\n').at(-1)).toBe('> Automatic reminders at 3, 7 and 14 days overdue (each one can be switched off). — product.md §2, 20 Oct · also led-002, Rowan, 4 Nov');
     // the trace keeps the real ref: the scorer and the hand-off still know exactly which message it was
     expect(traces()[0].items[0].sources.map((x) => x.ref)).toEqual(['product.md §2', 'led-002', SW]);
   });
@@ -99,7 +100,7 @@ describe('sources people can read (Kash, 4 Nov: the Also line ended in a raw sw_
     await decide(deps(claude, poster), 'room1', 'ck-test', live, [msg('m1', "Why don't we add automatic payment reminders?")]);
     claude.done();
     expect(rawIdsIn(poster.sent[0].body)).toEqual([]);
-    expect(poster.sent[0].body).toContain('\n— Rowan, 4 Nov\nAlso: product.md §2');
+    expect(poster.sent[0].body).toMatch(/\n> .+ — Rowan, 4 Nov · also product\.md §2$/);
   });
 });
 
@@ -284,5 +285,28 @@ describe('state', () => {
     await decide({ ...deps(run(), poster), state: state2 }, 'room1', 'ck-test', ctx, [msg('m1', 'reminders?')]);
     expect(poster.sent.filter((p) => p.route === 'public')).toHaveLength(1);
     expect(traces()[1].error).toMatch(/duplicate suppressed/);
+  });
+});
+
+describe('job A reply layout (Kash, 4 Nov: "make the updates really nice and clear")', () => {
+  const src = (ref: string, display: string, who: string) => ({ ref, display, who });
+  it('bold label · reply, then the quote with its source on the same line, other sources folded in, the new part last', () => {
+    const body = compose('Thanks Rowan! Reminders go out at 3, 7 and 14 days overdue.', [
+      src('product.md §2', 'Automatic reminders at 3, 7 and 14 days overdue.', 'product.md §2, 20 Oct'),
+      src('product.md §4', 'x', 'product.md §4, 20 Oct'),
+      src('product.md §2', 'y', 'product.md §2, 20 Oct'),
+    ], { label: LABEL['might-be-related'], newPart: 'a weekly summary email of unpaid invoices for partners.' });
+    expect(body.split('\n')).toEqual([
+      '🔎 **Related** · Thanks Rowan! Reminders go out at 3, 7 and 14 days overdue.',
+      '> Automatic reminders at 3, 7 and 14 days overdue. — product.md §2, 20 Oct · also product.md §4',
+      '💡 **Logged as a new idea** · a weekly summary email of unpaid invoices for partners',
+    ]);
+  });
+  it('a multi-line quote keeps "> " on every line; the source rides on the last', () => {
+    expect(compose('r', [src('led-002', 'first line\nsecond line', 'Rowan, 4 Nov (led-002)')], { label: LABEL.covered }).split('\n'))
+      .toEqual(['📌 **In the record** · r', '> first line', '> second line — Rowan, 4 Nov (led-002)']);
+  });
+  it('a planted @-mention in the new part addresses no one', () => {
+    expect(compose('r', [], { newPart: 'ask @claude-code to push' })).not.toMatch(/@claude-code/);
   });
 });

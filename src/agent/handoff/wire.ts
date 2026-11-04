@@ -8,9 +8,11 @@
 //   CK_HANDOFF_NUDGE_MIN     backstop: minutes with no report before the owner desk is told a card may be
 //                            waiting (default 2; 0 = off). A "Waiting for OK" post from Claude Code tells it at once.
 //   CK_AGENT_NAME            our own agent name (default context-keeper)
+//   CK_SIGNOFF_MODEL         reads a free-form sign-off reply (default claude-sonnet-5-5; model.ts)
 import { HandoffChain } from './chain.ts';
 import { HandoffStore } from './store.ts';
 import { liveHandoffSwitch, type OpFn, type RoomRef } from './switch.ts';
+import type { SignoffInput, SignoffReading, Usage } from '../model.ts';
 
 export interface WireOpts {
   op: OpFn;
@@ -25,6 +27,8 @@ export interface WireOpts {
   ownerName?: string;
   file?: string;
   traceFile?: string;
+  /** model.ts callSignoff bound to the agent's client and config; unset → plain words only. */
+  readSignoff?: (input: SignoffInput) => Promise<{ reading: SignoffReading; usage: Usage }>;
 }
 
 export function handoffFromEnv(o: WireOpts): HandoffChain {
@@ -46,6 +50,7 @@ export function handoffFromEnv(o: WireOpts): HandoffChain {
     timeoutMs: Number(env.CK_HANDOFF_TIMEOUT_MIN ?? 30) * 60_000,
     nudgeMs: Number(env.CK_HANDOFF_NUDGE_MIN ?? 2) * 60_000,
     traceFile: o.traceFile,
+    readSignoff: o.readSignoff,
     log: (s) => console.log(`[job E] ${s}`),
   });
 }

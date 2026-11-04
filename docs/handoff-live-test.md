@@ -24,8 +24,8 @@ Where each hook sits in `main.ts`:
 - after each job A decision, each `new` idea is noted for you (`noteNewIdeas`, once per idea). So is a
   `might-be-related` one when job A itself chose that verdict, its cited record passed the quote gate,
   and it filled record_verdict's `new_part` (the part the record doesn't have yet, e.g. "a pay-now
-  link in the reminder emails"; it lands in the trace item as `new_part`). Code then adds "I've logged
-  that part as a new idea: <new part>." to the public reply. The desk note's third line reads "Builds on
+  link in the reminder emails"; it lands in the trace item as `new_part`). Code then ends the public
+  reply with "💡 **Logged as a new idea** · <new part>" (the model is told not to say that part itself). The desk note's third line reads "Builds on
   product.md §2. New part: <new part>", and the hand-off quotes the new part before "**Context from the
   record:**".
 - after the rooms are joined, once per process: `handoff.resume()`. Every 60 s: `handoff.tick()`
@@ -109,14 +109,14 @@ second message, so its thread is only about the idea.
 | # | Who, where | Do | Expect |
 |---|---|---|---|
 | 1 | **Rowan**, `#ck-smoke-e-<MMDD>` | Post "Morning all, back today." | In its thread: "Welcome back, Rowan. Here's what changed while you were away:", a few bullets, and a last line "Want to talk it through? … https://elevenlabs.io/app/talk-to?…". Within about a minute, an audio clip `catch-up-rowan.mp3` in the same thread. Leave it for §3. |
-| 2 | **Rowan**, same room, a new top-level message, a minute after step 1 | Post a new idea, e.g. "What if the overdue reminder emails had a pay-now link?" | Context Keeper replies in its thread that it's recorded (job A `new`). If job A finds it related (live on 4 Nov it said reminders exist, "that part would be new. I've logged it."), it still goes on your list, labelled. |
+| 2 | **Rowan**, same room, a new top-level message, a minute after step 1 | Post a new idea, e.g. "What if the overdue reminder emails had a pay-now link?" | Context Keeper replies in its thread, in the stage lines' shape: a bold label first ("💡 **New idea** · Thanks, Rowan…" for job A `new`). If job A finds it related: "🔎 **Related** · <what exists>", then the quote with its source on the same line ("> Automatic reminders at 3, 7 and 14 days overdue… — product.md §2, 20 Oct · also product.md §4"), then "💡 **Logged as a new idea** · <new part>" last, the new part said once. It still goes on your list, labelled. |
 | 3 | **You**, owner desk | Read the note: a bold first line "**I1 · New idea from Rowan** · #ck-smoke-e-<MMDD>, <date>", the idea quoted, (for a related one) "Builds on product.md §4. New part: …", then "Reply `approve I1` to hand it to Claude Code. Nothing happens until you do." Type `approve I1` | Desk: "Handing I1 (Rowan's idea) to Claude Code in #ck-smoke-build-<MMDD>." |
 | 4 | Slack sidebar | A new channel `#ck-smoke-build-<MMDD>` appears with you in it (Rowan too, if Switch could add him) | A 3-line top-level header: "**I1 · Approved** · Rowan's idea from #ck-smoke-e-<MMDD>, approved by Kash", the idea quoted, "Result goes back to Rowan's thread for sign-off. …" (no context block). Then "@claude-code **Hand-off I1** from Context Keeper · approved by Kash" with **Task**, **Idea**, **Context from the record** (one line per source, its quotes under it) and **When finished**. Rowan's idea thread, at once: "✅ **Approved** by Kash · waiting for Claude Code to start building it in #ck-smoke-build-<MMDD>. …" Seconds later, on Claude Code's "On it": "🔨 **Building** · Claude Code has started on it in #ck-smoke-build-<MMDD>." |
 | 5 | **Restart check** | Before clicking anything: Ctrl-C the agent, start it again with the same command | **No second "@claude-code Hand-off I1"** in the build room. (A `resumed` trace line appears only if a step was mid-send when it stopped.) |
 | 6 | **You**, build room, Claude Code's thread | Claude Code shows permission cards. Click **Allow once** each time (about 3; never "Allow for this session") | If Claude Code posts "Waiting for OK I1: …" first: Rowan's thread gets "⏸️ **Waiting for Kash** · …" and your desk "**I1 · Needs your OK** · …", once each; after your click, Rowan's thread gets "🔨 **Building again** · …" once. Later cards add nothing. If it doesn't (watch for this: new, unproven), only the backstop: 2 min after the hand-off with no report, your desk gets "**I1 · May need your OK** · …" once, and Rowan's thread stays at "Building". No "Still being built" line any more. Then Claude Code posts "Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/N" (top-level). |
-| 7 | Rowan's idea thread | — | "📦 **Done** · Claude Code's result: <issue link>", then "**Rowan**, you raised it, so it's yours to sign off: reply "looks right", or "not quite" and what's missing." In all, Rowan's thread holds one line per stage: Approved, Building, (Waiting for Kash, Building again,) Done. |
-| 8 | **Sam**, same thread | Reply `looks right`, then `looks right` again | No sign-off (only the raiser or you count). One reply in the thread: "Thanks, Sam. Only Rowan, who raised it, or Kash can sign this off." The second try gets nothing (once per person per idea). Neither goes to job A. Anything else Sam says there (not a sign-off) is ordinary chat for job A, as before. |
-| 9 | **Rowan**, same thread | Reply `looks right` | "✅ **Signed off** by Rowan. Closed." Desk: "I1 signed off by Rowan." |
+| 7 | Rowan's idea thread | — | "📦 **Done** · Claude Code's result: <issue link>", then "**Rowan**, you raised it, so it's yours to sign off: just reply here — say if it's right, or what's missing." In all, Rowan's thread holds one line per stage: Approved, Building, (Waiting for Kash, Building again,) Done. |
+| 8 | **Sam**, same thread | Reply `Nice work, that's exactly it`, then `looks right` | No sign-off (only the raiser or you count). One reply in the thread: "Thanks, Sam. Only Rowan, who raised it, or Kash can sign this off." The second try gets nothing (once per person per idea). Neither goes to job A. A plain "looks right" is caught without a model call; free-form words go to the sign-off reader, and anything it doesn't read as a sign-off attempt ("Great idea!") is ordinary chat for job A, as before. |
+| 9 | **Rowan**, same thread | Reply in your own words, e.g. `hmm not sure`, then `Nice one, could the email also list the client's phone number?` | First: "**Rowan**, is that a sign-off? Reply "looks right", or say what's missing." (once per idea; a second unclear reply gets nothing). Then: "✅ **Signed off** by Rowan, with a note: <the phone-number wish, in a few words>. Closed." Desk, once: "I1 signed off by Rowan, with a note: …". A plain `looks right` gives "✅ **Signed off** by Rowan. Closed."; "Not really, I wanted it per client" gives "↩️ **Reopened** by Rowan: <what's missing>." |
 
 Optional extras, once the main run passes: a second idea where you click **Decline** on the card
 (expect "⚠️ **Not done** · Claude Code couldn't finish I2: …" in Rowan's thread and "approve I2 again" in
@@ -180,8 +180,10 @@ Expected for I1, in order: `noted`, `approved`, `build_room_created`, `context_p
 `building` (stage 2, once), then if Claude Code posted "Waiting for OK": `nudged` and `blocked`, later
 `unblocked` (each once); otherwise `nudged` once from the 2-minute backstop if the report took longer.
 `progress` for every other Claude Code post (repeats of a stage, its greeting). Then
-`signoff_requested`, `signoff_not_theirs` (Sam's first `looks right`), `signoff_ignored` (his second),
-`signed_off`. Exactly **one** `handed_off` line, and at most one of each stage line. People chatting in
+`signoff_requested`, `signoff_not_theirs` (Sam's first try), `signoff_ignored` (his second),
+`signoff_asked` (Rowan's "hmm not sure"), `signed_off_with_note` (or `signed_off` / `reopened`). A line
+where the sign-off reader ran carries its usage in `model` (`claude-sonnet-5-5` unless
+`CK_SIGNOFF_MODEL` says otherwise). Exactly **one** `handed_off` line, and at most one of each stage line. People chatting in
 the build room show as `build_room_chat`. (`still_building` appears only in traces from before 5 Nov.)
 
 The brief and the call summary:

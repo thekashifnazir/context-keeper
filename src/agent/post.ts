@@ -4,7 +4,9 @@
 //      might-be-related with the link; with no citation at all it becomes silence + gate_blocked.
 //   2. the reviewer (one Haiku call for the decision; sees only each claim and its quotes). A block
 //      drops covered / parked / contradicts-record / reopen / parked-recall to might-be-related.
-//   3. compose: the model's reply, then the quote and who/when, built by code from verified text.
+//   3. compose: a bold label for the verdict, the model's reply, then the quote with who/when on one
+//      line, built by code from verified text, and for an idea that builds on the record, code's
+//      "💡 Logged as a new idea" line (Kash, 4 Nov: "make the updates really nice and clear").
 //   4. idempotency (room + thread + text hash, in state/), then send; a failed send retries once,
 //      then the owner desk gets the exact draft.
 // A reopen (D4-2) that passes the reviewer goes to the owner desk first (src/agent/jobs/reopen.ts);
@@ -21,6 +23,7 @@ import { leaksClash } from './jobs/restriction.ts';
 import { PendingStore } from './pending.ts';
 import { callReviewer, type BriefLine, type Claude, type ModelConfig, type Usage } from './model.ts';
 import { postKey, type AgentState } from './state.ts';
+import { shortNote } from './handoff/text.ts';
 import type { Cited, ModelItem } from './verdict.ts';
 
 export interface Poster {
@@ -65,12 +68,36 @@ export function gateSources(cited: Cited[], ctx: RoomContext): { verified: Verif
  *  who said it and when ("Rowan, 4 Nov"). Kash, 4 Nov: a raw id leaked into a reply's Also line. */
 export const alsoLabel = (s: Pick<Verified, 'ref' | 'who'>) => (isRawMessageId(s.ref) ? s.who : s.ref);
 
-export function compose(reply: string, sources: Pick<Verified, 'ref' | 'display' | 'who'>[]): string {
+// Job A's reply in the stage lines' shape (Kash liked those: "bold label first, short"): one bold label
+// for the verdict code settled on, the reply, the quote with its source on the same line, and the
+// "logged as a new idea" line last. The label follows the final verdict (after the gate and the
+// reviewer), so it never claims more than what survived them.
+export const LABEL: Record<string, string> = {
+  covered: '📌 **In the record**',
+  parked: '🗂️ **Parked**',
+  'parked-recall': '🗂️ **Parked for later**',
+  'contradicts-record': '⚠️ **The record says otherwise**',
+  'might-be-related': '🔎 **Related**',
+  reopen: '↩️ **Reopen request**',
+  new: '💡 **New idea**',
+};
+export const MIGHT_BE_LABEL = '🔎 **Might be related**';
+export const loggedLine = (newPart: string) => `💡 **Logged as a new idea** · ${newPart}`;
+
+/** "> quote — product.md §2, 20 Oct · also product.md §4": every quoted line keeps its "> ", the
+ *  source rides on the last one, other sources folded in after it. */
+export function compose(reply: string, sources: Pick<Verified, 'ref' | 'display' | 'who'>[], opts: { label?: string; newPart?: string | null } = {}): string {
   const [first, ...rest] = sources;
-  const lines = [reply.trim()];
-  if (first) lines.push(`> ${first.display}`, `— ${first.who}`);
+  const text = reply.trim();
+  const lines = [opts.label ? `${opts.label}${text ? ` · ${text}` : ''}` : text];
   const others = [...new Set(rest.filter((s) => s.ref !== first?.ref).map(alsoLabel))].filter((l) => l !== (first && alsoLabel(first)));
-  if (others.length) lines.push(`Also: ${others.join(', ')}`);
+  if (first) {
+    const quote = first.display.split('\n').map((l) => l.trim()).filter(Boolean);
+    const src = `— ${first.who}${others.length ? ` · also ${others.join(', ')}` : ''}`;
+    lines.push(...quote.map((l, i) => `> ${l}${i === quote.length - 1 ? ` ${src}` : ''}`));
+  }
+  const part = opts.newPart ? shortNote(opts.newPart, 200) : '';
+  if (part) lines.push(loggedLine(part));
   return lines.filter(Boolean).join('\n');
 }
 
@@ -83,7 +110,9 @@ export interface PublicDraft {
   messages?: { message_id: string; sender: string; sender_name: string; body: string; received_at: string }[];
 }
 
-const MIGHT_BE = `This might be related, though I can't confirm it answers your question:`;
+const MIGHT_BE = `I can't confirm it answers your question.`;
+/** A downgraded verdict (gate or reviewer): the might-be-related label and the hedge, then the quote. */
+const mightBe = (sources: Verified[]) => compose(MIGHT_BE, sources, { label: MIGHT_BE_LABEL });
 
 export interface PublicResult {
   items: TraceItem[];
@@ -110,9 +139,8 @@ const traceItem = (it: ModelItem, verdict: string | null, sources: Verified[]): 
 const buildsOnPart = (it: ModelItem, verdict: string | null, sources: Verified[]) =>
   (it.job === 'A' && it.verdict === 'might-be-related' && verdict === 'might-be-related' && sources.length ? it.new_part : null);
 
-/** Job A's reply, plus code's line that the new part is logged, when it builds on the record (Kash, 4 Nov). */
-const replyFor = (it: ModelItem) =>
-  (it.job === 'A' && it.verdict === 'might-be-related' && it.new_part && announceNew() ? `${it.reply.trim()} I've logged that part as a new idea: ${it.new_part}.` : it.reply);
+/** Job A's own might-be-related with a named new part: code adds "💡 Logged as a new idea · <part>" (Kash, 4 Nov). */
+const newPartOf = (it: ModelItem) => (it.job === 'A' && it.verdict === 'might-be-related' && it.new_part && announceNew() ? it.new_part : null);
 
 export async function postPublic(
   deps: { claude: Claude; cfg: ModelConfig; poster: Poster; state: AgentState; pending?: PendingStore },
@@ -134,19 +162,19 @@ export async function postPublic(
         // A reopen must quote the decision row it reopens (code checks; the model's word isn't enough).
         events.push(`gate: ${it.message_id} reopen→might-be-related (no decision row quoted)`);
         verdict = 'might-be-related';
-        body = compose(MIGHT_BE, verified);
+        body = mightBe(verified);
       } else if (verified.length) {
-        body = compose(replyFor(it), verified);
+        body = compose(it.reply, verified, { label: LABEL[verdict], newPart: newPartOf(it) });
       } else if (STRONG.has(verdict) && refsSeen.length) {
         events.push(`gate: ${it.message_id} ${verdict}→might-be-related (no verified quote)`);
         verdict = 'might-be-related';
-        body = `This might be related: ${refsSeen.join(', ')}.`;
+        body = `${MIGHT_BE_LABEL} · see ${refsSeen.join(', ')}.`;
       } else {
         events.push(`gate_blocked: ${it.message_id} ${verdict} had no verified quote`);
         verdict = null;
       }
     } else if (it.job === 'A' && verdict === 'new' && announceNew() && it.reply.trim()) {
-      body = it.reply.trim();
+      body = compose(it.reply, [], { label: LABEL.new });
     } else if ((it.job === 'B' || it.job === 'D') && it.reply.trim()) {
       body = it.reply.trim();
       const quotes = [...verified.map((v) => v.quote), ...it.cited.map((c) => c.block.body)];
@@ -175,7 +203,7 @@ export async function postPublic(
         if (rv?.supports) continue;
         events.push(`reviewer: ${p.it.message_id} ${p.verdict}→might-be-related (${rv?.issue || 'no result'})`);
         p.verdict = 'might-be-related';
-        p.body = compose(MIGHT_BE, p.sources);
+        p.body = mightBe(p.sources);
       }
     } catch (e) {
       // Fail quiet: nothing reaches the room without a passed review.
@@ -194,11 +222,11 @@ export async function postPublic(
     if (routed) {
       deskPosts.push(...routed);
       p.sources = [rowSrc, ...p.sources.filter((s) => s !== rowSrc)];
-      p.body = compose(reopenLine(m.sender_name, reopenIf(rowSrc.block)), p.sources);
+      p.body = compose(reopenLine(m.sender_name, reopenIf(rowSrc.block)), p.sources, { label: LABEL.reopen });
     } else {
       events.push(`reopen: ${p.it.message_id} reopen→might-be-related (owner note not sent)`);
       p.verdict = 'might-be-related';
-      p.body = compose(MIGHT_BE, p.sources);
+      p.body = mightBe(p.sources);
     }
   }
 

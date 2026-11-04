@@ -41,7 +41,7 @@ import { handoffFromEnv } from './handoff/wire.ts';
 import { handleOwnerDesk } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
 import { loadEnv } from './env.ts';
-import { modelConfigFromEnv, realClaude } from './model.ts';
+import { callSignoff, modelConfigFromEnv, realClaude } from './model.ts';
 import { decideWithRetry, type Deps, type Input } from './pipeline.ts';
 import type { Poster } from './post.ts';
 import { systemPrompt } from './prompt.ts';
@@ -141,6 +141,7 @@ const handoff = features.jobE ? handoffFromEnv({
   ownerUsername: process.env.CK_OWNER_HANDLE || ownerFile.owner_handle || null,
   ownerDeskRoom: owner.owner_desk_room ?? null,
   file: `${SD}/handoff.json`,
+  readSignoff: (input) => callSignoff(deps.claude, deps.cfg, input),
 }) : null;
 const handles = new HandleMemo();
 if (handoff) setInterval(() => { if (!stopped) handoff.tick().catch((e) => console.error('job E tick:', e.message)); }, 60_000).unref();
