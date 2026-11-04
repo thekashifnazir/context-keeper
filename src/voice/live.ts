@@ -12,7 +12,8 @@
 // Flags (src/agent/features.ts): CK_AUDIO_BRIEF, CK_TALK_LINK. No ELEVENLABS_API_KEY, no talk agent id
 // in state/voice-ids.json, or any ElevenLabs error → text only, never a crash (fail quiet).
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { atomicWriteJson, type AgentState } from '../agent/state.ts';
 import type { Claude, Usage } from '../agent/model.ts';
 import { sendPublic, type Poster } from '../agent/post.ts';
@@ -35,6 +36,7 @@ export interface VoiceLiveConfig {
   idsFile?: string; // the talk agent's id (state/voice-ids.json)
   callsFile?: string | null; // watched calls; null = in memory
   traceFile?: string;
+  saveDir?: string | null; // keep a local copy of each clip here (main.ts: build/voice/live, gitignored)
   watchHours?: number; // how long a posted link is watched for a call (default 3)
   refreshTimeoutMs?: number; // the prompt refresh must not hold up the text brief (default 10 s)
   now?: () => Date;
@@ -126,6 +128,14 @@ export class VoiceLive {
     );
     out.usage.push(...res.usage);
     if (!res.ok) { out.events.push(`audio_failed: ${res.reason}`); return out; }
+    if (this.c.saveDir) {
+      try {
+        mkdirSync(this.c.saveDir, { recursive: true });
+        const f = join(this.c.saveDir, `${this.now().toISOString().replace(/[-:]/g, '').slice(0, 13)}-${res.filename}`);
+        writeFileSync(f, res.mp3);
+        this.log(`clip saved: ${f}`);
+      } catch (e) { this.log(`clip not saved: ${(e as Error).message}`); }
+    }
     if (res.post) out.posts.push(res.post);
     else out.events.push(`audio not posted: ${b.roomName} not in CK_POST_ROOMS (${Math.round(res.durationS)} s clip made)`);
     this.log(`audio brief for ${firstOf(b.person)}: ${res.durationS.toFixed(1)} s, ${res.words} words${res.post ? '' : ' (not posted)'}`);

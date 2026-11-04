@@ -144,6 +144,7 @@ const voice = eleven ? new VoiceLive({
     return realSwitchMedia({ endpoint, agentId, token, connectionId, sessionId: sessions.get(roomId)! });
   },
   callsFile: `${SD}/voice-calls.json`,
+  saveDir: process.env.CK_VOICE_SAVE_DIR || 'build/voice/live',
   log: (s) => console.log(s),
 }) : null;
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().catch((e) => console.error('voice tick:', e.message)); }, 60_000).unref();
