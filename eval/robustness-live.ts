@@ -335,6 +335,8 @@ async function scenarioCaps(s: Scenario, cases: Case[]): Promise<RResult[]> {
   await sleep(5000);
   for (const m of b.slice(1)) { await s.post('rowan', m.label, m.body); await sleep(15_000); }
   await sleep(10_000);
+  const spend = join(s.stateDir, 'spend.json');
+  s.marks.metered_calls = existsSync(spend) ? (JSON.parse(readFileSync(spend, 'utf8')) as { calls?: number }).calls ?? 0 : 0;
   await s.stop();
   const capB = await s.capture();
   return [r7a, checkR7b(capB, b.map((m) => m.label), PAUSED_LINE)];

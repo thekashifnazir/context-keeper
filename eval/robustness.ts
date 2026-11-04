@@ -193,19 +193,24 @@ export function checkR7b(c: RCapture, labels: string[], pausedLine: string): RRe
   const capAt = capped[0]?.create_at ?? Infinity;
   const [q1, q2, ...rest] = labels;
   const replies = (lb: string) => inThread(c, lb).filter((p) => p.channel_id === c.channel);
-  const later = c.trace.filter((l) => l.model && Date.parse(l.ts) > capAt);
+  // Messages posted after the cap note never reach the model; and since the cap is below one call's
+  // cost, the agent's own meter must show exactly one answered call (the one that crossed it).
+  const after = labels.filter((lb) => (c.cases[lb]?.create_at ?? 0) > capAt);
+  const decidedAfter = after.filter((lb) => linesFor(c, lb).some((l) => l.model));
+  const q1Lines = linesFor(c, q1);
+  const calls = c.marks.metered_calls;
   return result({
     id: 'R7b', title: 'Caps → daily spend cap',
-    how: `the room is a demo room; CK_DAILY_SPEND_CAP_USD=${c.marks.cap_usd ?? '?'} (below one decision's cost); ${labels.length} messages from one person`,
-    pass_when: 'the owner desk gets the 80% note and the cap note once each; nothing public for the message whose call crossed the cap; the room gets the paused line once; later messages get silence and no model call',
+    how: `the room is a demo room; CK_DAILY_SPEND_CAP_USD=${c.marks.cap_usd ?? '?'} (below one model call's cost); ${labels.length} messages from one person, the 2nd and 3rd after the cap note`,
+    pass_when: "the owner desk gets the 80% note and the cap note once each; no model call is sent after the cap (the meter shows only the call that crossed it); the room gets the paused line once; later messages get silence. The first message's own call was sent before the cap, so its answer may post (spend.ts refuses only further calls); that is reported, not scored",
     adapted: 'CK_CAPS no longer exists; the spend cap (src/agent/spend.ts) is the current global limit, so this checks it alongside R7a.',
   }, [
     [warn.length === 1 && capped.length === 1, `owner desk: ${warn.length} "Spend at 80%" and ${capped.length} "Daily spend cap reached" note(s)`],
-    [replies(q1).length === 0, `${q1}: ${replies(q1).length} public post(s)`],
+    [calls === 1, `the agent's meter: ${calls ?? '?'} answered model call(s) under the cap (want 1: the call that crossed it)`],
+    [after.length === labels.length - 1 && decidedAfter.length === 0, `${after.join(', ') || 'none'} posted after the cap note; ${decidedAfter.length} of them reached the model`],
     [JSON.stringify(replies(q2).map((p) => p.message)) === JSON.stringify([pausedLine]), `${q2}: ${replies(q2).map((p) => `"${short(p.message, 50)}"`).join(', ') || 'silent'} (want the paused line once)`],
     [rest.every((lb) => replies(lb).length === 0), `${rest.join(', ')}: ${rest.map((lb) => replies(lb).length).join(', ')} public post(s)`],
-    [later.length === 0, `${later.length} trace line(s) with a model call after the cap note`],
-  ]);
+  ], [`${q1} (its call crossed the cap): ${q1Lines.length ? `${q1Lines.map((l) => `${l.kind} ${verdictOf(l)}`).join('; ')}, ${replies(q1).length} public post(s)` : `not decided, ${replies(q1).length} public post(s)`}`]);
 }
 
 /** R8 missed while down: the agent stopped, T08 posted, the agent started again. */

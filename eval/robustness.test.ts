@@ -149,11 +149,19 @@ describe('R7 (adapted)', () => {
   const PAUSED = 'paused';
   const Q = Object.fromEntries([1, 2, 3].map((i) => [`Q${i}`, { post_id: `q${i}`, create_at: at(i * 30), body: `q ${i}` }]));
   const notes = [post('w', '💸 **Spend at 80%** · …', at(40), { channel_id: DESK }), post('c', '⏸️ **Daily spend cap reached** · …', at(41), { channel_id: DESK })];
-  it('R7b passes: both notes once, nothing for Q1, the paused line once, then silence', () => {
-    expect(checkR7b(cap({ cases: Q, posts: [...notes, post('p', PAUSED, at(70), { root_id: 'q2' })] }), ['Q1', 'Q2', 'Q3'], PAUSED).status).toBe('pass');
+  const opus = { id: 'claude-opus-5-5', calls: 1, input_tokens: 1, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 1, latency_ms: 1 };
+  const ok = { cases: Q, marks: { metered_calls: 1 }, posts: [...notes, post('p', PAUSED, at(70), { root_id: 'q2' })] };
+  it('R7b passes: both notes once, one metered call, the paused line once, then silence', () => {
+    expect(checkR7b(cap(ok), ['Q1', 'Q2', 'Q3'], PAUSED).status).toBe('pass');
   });
-  it('R7b fails on a model call after the cap', () => {
-    expect(checkR7b(cap({ cases: Q, posts: [...notes, post('p', PAUSED, at(70), { root_id: 'q2' })], trace: [{ ...line({ ts: new Date(at(95)).toISOString(), inputs: ['q 3'] }), model: { id: 'claude-opus-5-5', calls: 1, input_tokens: 1, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 1, latency_ms: 1 } }] }), ['Q1', 'Q2', 'Q3'], PAUSED).status).toBe('fail');
+  it('R7b: Q1 answered from the call already in flight when the cap was hit is reported, not failed', () => {
+    const r = checkR7b(cap({ ...ok, trace: [{ ...line({ ts: new Date(at(42)).toISOString(), inputs: ['q 1'], posts: [pub()] }), model: opus }], posts: [...ok.posts, post('a', 'Flagged…', at(42), { root_id: 'q1' })] }), ['Q1', 'Q2', 'Q3'], PAUSED);
+    expect(r.status).toBe('pass');
+    expect(r.evidence.at(-1)).toMatch(/Q1 \(its call crossed the cap\): reply .*1 public post/);
+  });
+  it('R7b fails on a model call after the cap: a later message decided, or a second metered call', () => {
+    expect(checkR7b(cap({ ...ok, trace: [{ ...line({ ts: new Date(at(95)).toISOString(), inputs: ['q 3'] }), model: opus }] }), ['Q1', 'Q2', 'Q3'], PAUSED).status).toBe('fail');
+    expect(checkR7b(cap({ ...ok, marks: { metered_calls: 2 } }), ['Q1', 'Q2', 'Q3'], PAUSED).status).toBe('fail');
   });
 });
 
