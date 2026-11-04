@@ -1,0 +1,148 @@
+{
+  "schema": "ck.robustness/1",
+  "run_id": "r20261104-1906-01f3",
+  "model": "claude-opus-5-5",
+  "reviewer_model": "claude-opus-5-5",
+  "started_at": "2026-11-04T19:06:10.537Z",
+  "ended_at": "2026-11-04T19:14:41.027Z",
+  "results": [
+    {
+      "id": "R1",
+      "title": "Quote gate",
+      "how": "offline unit test: npx vitest run test/offline/jobA.test.ts -t \"R1 quote gate\" (a fake model returns a quote that is not in the source, no citation, and a quote the reviewer rejects)",
+      "pass_when": "no public covered; the trace shows gate_blocked or a downgrade to might-be-related",
+      "adapted": null,
+      "status": "pass",
+      "evidence": [
+        "vitest: 3 passed | 17 skipped (20)"
+      ]
+    },
+    {
+      "id": "R2",
+      "title": "Restart mid-burst",
+      "how": "post burst B1 (T01, T02, T03); SIGKILL the agent once T01 is in its saved burst queue; restart it at once; the rest of B1 is posted on schedule",
+      "pass_when": "exactly one combined reply; no duplicate posts; the returner brief appears once",
+      "adapted": null,
+      "status": "fail",
+      "evidence": [
+        "ok: 1 decision line(s) with a public post for B1; one covering all 3 (A/covered,A/covered,A/covered)",
+        "ok: 1 agent reply post(s) in B1's threads (landed in T01's thread)",
+        "ok: no duplicate agent posts (9 in all)",
+        "FAIL: returner brief: 0 post(s) in the channel, 0 brief trace line(s)",
+        "queued 19:06:45, killed 19:06:45, restarted 19:06:46, connected 19:06:48",
+        "agent log: \"re-queued 1 message(s) from before the restart\""
+      ]
+    },
+    {
+      "id": "R3",
+      "title": "Own posts ignored",
+      "how": "the R4–R8 room: T05, T08 and T12 replayed, with owner-desk notes, replies and restarts in between; every trace input checked",
+      "pass_when": "no trace input is one of the agent's own posts (by Switch event id, body or sender)",
+      "adapted": null,
+      "status": "pass",
+      "evidence": [
+        "ok: 14 agent post(s) to ignore, 6 trace input(s) in 6 line(s)",
+        "ok: no trace input is an agent post"
+      ]
+    },
+    {
+      "id": "R4",
+      "title": "Fail quiet",
+      "how": "agent started with CK_FAULT=model_500 (CK_FAULT_TIMES=1: the first model call fails with a 500), then T05 posted",
+      "pass_when": "no public post until the retry; one owner-desk \"couldn't check this one\" note; the retry after 60 s posts the right reply (covered)",
+      "adapted": null,
+      "status": "pass",
+      "evidence": [
+        "ok: first decision: owner_note, error \"model_error(retryable): injected fault: model_500 (CK_FAULT)\"",
+        "ok: 1 \"Couldn't check this one\" note(s) in the owner desk",
+        "ok: first public post 70 s after the desk note",
+        "ok: retry: reply, verdict covered (expected covered), sources pilot-plan.md §2, led-011"
+      ]
+    },
+    {
+      "id": "R5",
+      "title": "Retract",
+      "how": "after T05's reply, the owner (kash) replies \"wrong\" in that thread",
+      "pass_when": "a correction appears in that thread; the trace item is retracted; testset/misses.yaml gains an entry",
+      "adapted": "Not built: no code in src/agent reads a \"wrong\" reply, writes a retraction or appends to testset/misses.yaml. Run as written, to record what the agent does today.",
+      "status": "fail",
+      "evidence": [
+        "FAIL: no agent post in the thread after \"wrong\"",
+        "FAIL: no trace line records a retraction (the owner's message: silence none/-)",
+        "FAIL: testset/misses.yaml entries: 0 before, 0 after"
+      ]
+    },
+    {
+      "id": "R6",
+      "title": "Pending items survive",
+      "how": "T12 posted (a clash: owner-desk note + neutral thread line); the agent restarted (SIGTERM, start) before the owner answers; the owner then replies \"#1 plan stands\" in the desk note's thread",
+      "pass_when": "the owner's answer is posted back in T12's thread after the restart",
+      "adapted": null,
+      "status": "pass",
+      "evidence": [
+        "ok: desk note 19:10:30, before the restart at 19:10:42",
+        "ok: 1 agent post(s) in T12's thread before the restart: \"Thanks, rowan. Noted, and I've flagged it to the owner. The…\"",
+        "ok: after the answer (19:10:49): \"Update from Kash: The plan stands.\""
+      ]
+    },
+    {
+      "id": "R7a",
+      "title": "Caps → per-person demo limit",
+      "how": "the room is a demo room (CK_DEMO_ROOMS), CK_DEMO_PER_PERSON_HOUR=3; one person posts 5 eligible cases one at a time",
+      "pass_when": "the first 3 replied messages are answered; the next gets the limit line once; later ones get silence; each gated message is still seen",
+      "adapted": "CK_CAPS (3 posts per room, a batched owner-desk note for the rest) no longer exists. The current design caps per person in public demo rooms (src/agent/demo.ts): one limit line, then silence, no owner note; so this checks that instead.",
+      "status": "pass",
+      "evidence": [
+        "ok: L1: decided (reply A/covered), 1 reply post(s)",
+        "ok: L2: decided (reply A/parked), 1 reply post(s)",
+        "ok: L3: decided (reply A/covered), 1 reply post(s)",
+        "ok: L4: 0 decision line(s); thread \"You've hit the demo limit for now — try again in a bit.\" (want the limit line once)",
+        "ok: L5: 0 decision line(s); thread silent (want silence)",
+        "ok: 2 message(s) arrived over the limit",
+        "ok: agent log: 1 \"told once\" and 1 \"silent\" demo_limit line(s): every gated message was seen and kept in the room's record, none dropped unseen"
+      ]
+    },
+    {
+      "id": "R7b",
+      "title": "Caps → daily spend cap",
+      "how": "the room is a demo room; CK_DAILY_SPEND_CAP_USD=0.001 (below one decision's cost); 3 messages from one person",
+      "pass_when": "the owner desk gets the 80% note and the cap note once each; nothing public for the message whose call crossed the cap; the room gets the paused line once; later messages get silence and no model call",
+      "adapted": "CK_CAPS no longer exists; the spend cap (src/agent/spend.ts) is the current global limit, so this checks it alongside R7a.",
+      "status": "fail",
+      "evidence": [
+        "ok: owner desk: 1 \"Spend at 80%\" and 1 \"Daily spend cap reached\" note(s)",
+        "FAIL: Q1: 1 public post(s)",
+        "ok: Q2: \"The demo has paused for today — back tomorrow.\" (want the paused line once)",
+        "ok: Q3: 0 public post(s)",
+        "FAIL: 1 trace line(s) with a model call after the cap note"
+      ]
+    },
+    {
+      "id": "R8",
+      "title": "Missed while down",
+      "how": "agent stopped (SIGTERM), T08 posted, agent started again ~10 s later",
+      "pass_when": "T08 gets its reply after the restart (resumed from the saved stream position), once",
+      "adapted": "The plan also says \"marked late\". The agent has no late marker (nothing in src/agent labels a resumed reply), so that part is reported, not scored.",
+      "status": "pass",
+      "evidence": [
+        "ok: T08 posted 19:09:36, while the agent was down (19:09:32–19:09:46)",
+        "ok: 1 reply post(s), first at 19:10:01 (25 s after the post)",
+        "ok: 1 decision line(s): reply A/new",
+        "marked late: no (not built)"
+      ]
+    }
+  ],
+  "cost": {
+    "trace_usd": 0.329,
+    "trace_calls": 14,
+    "metered_usd": 0.462,
+    "metered_calls": 16,
+    "note": "Metered = the agent's own spend meter (every answered model call, priced by src/agent/model.ts); the trace figure misses calls that never reached a trace line (killed mid-flight, replaced prefetches, the cap-crossing call)."
+  },
+  "incidents": [],
+  "versions": {
+    "sha": "a6c78206031155d916a8ac8a69fd6ea2cb506965",
+    "switch": "ok",
+    "mattermost": "11.9.0.28847360617.c473b66b835687963ea56067351ebc1fa6ee1bcfeab088033350f370a34020a5.false"
+  }
+}
