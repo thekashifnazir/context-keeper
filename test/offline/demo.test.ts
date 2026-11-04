@@ -1,11 +1,11 @@
 // Public demo rooms and the daily spend cap, offline: per-person and per-room hourly limits (and the
 // owner never limited), the cap's notes and refusals, both kept across a restart, feature gating in a
 // demo room, and nothing changed when the flags are unset. No network, no cost.
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { demoConfigFromEnv, DemoLimiter, gateMessage, LIMIT_LINE, matchesRoom, PAUSED_LINE, roomFeatures, type DemoConfig } from '../../src/agent/demo.ts';
+import { briefVoice, demoConfigFromEnv, DemoLimiter, gateMessage, LIMIT_LINE, matchesRoom, PAUSED_LINE, roomFeatures, VOICE_CAP_LINE, type DemoConfig } from '../../src/agent/demo.ts';
 import { costUsd, errorKind, usageOf } from '../../src/agent/model.ts';
 import { decide, decideWithRetry } from '../../src/agent/pipeline.ts';
 import { isSpendCapError, meteredClaude, SpendCapError, SpendMeter, spendMeterFromEnv, spendNote, type Crossing } from '../../src/agent/spend.ts';
@@ -53,6 +53,74 @@ describe('which rooms are demo rooms', () => {
     const all = { jobE: true, audioBrief: true, talkLink: true };
     expect(roomFeatures(all, true)).toEqual({ jobE: false, audioBrief: false, talkLink: false });
     expect(roomFeatures(all, false)).toBe(all);
+  });
+});
+
+describe('voice in demo rooms (CK_DEMO_VOICE)', () => {
+  it('off unless CK_DEMO_VOICE=1; default 15 clips + links a day', () => {
+    expect(demoConfigFromEnv({ CK_DEMO_ROOMS: 'x' })).toMatchObject({ voice: false, voicePerDay: 15 });
+    expect(demoConfigFromEnv({ CK_DEMO_ROOMS: 'x', CK_DEMO_VOICE: '0' })!.voice).toBe(false);
+    expect(demoConfigFromEnv({ CK_DEMO_ROOMS: 'x', CK_DEMO_VOICE: '1', CK_DEMO_VOICE_PER_DAY: '4' })).toMatchObject({ voice: true, voicePerDay: 4 });
+  });
+
+  it('with the flag, voice follows the global flags in a demo room; job E stays off', () => {
+    const all = { jobE: true, audioBrief: true, talkLink: true };
+    expect(roomFeatures(all, true, false)).toEqual({ jobE: false, audioBrief: false, talkLink: false });
+    expect(roomFeatures(all, true, true)).toEqual({ jobE: false, audioBrief: true, talkLink: true });
+    expect(roomFeatures({ jobE: true, audioBrief: false, talkLink: true }, true, true)).toEqual({ jobE: false, audioBrief: false, talkLink: true });
+    expect(roomFeatures(all, false, true)).toBe(all);
+  });
+
+  it('one voice brief per person per UTC day; the next day it is open again', () => {
+    const c = clock();
+    const l = new DemoLimiter(cfg({ voice: true, voicePerDay: 15 }), null, c.now);
+    expect(l.takeVoice(ROWAN, 2)).toBe(true);
+    expect(l.takeVoice(ROWAN, 2)).toBe(false);
+    expect(l.takeVoice(SAM, 2)).toBe(true);
+    expect(l.voiceUsedToday()).toBe(4);
+    c.t += 24 * HOUR;
+    expect(l.voiceUsedToday()).toBe(0);
+    expect(l.takeVoice(ROWAN, 2)).toBe(true);
+  });
+
+  it('the day total caps clips + links across everyone; the owner is not per-person limited but counts', () => {
+    const c = clock();
+    const l = new DemoLimiter(cfg({ voice: true, voicePerDay: 5, exempt: new Set(['owner_discord']) }), null, c.now);
+    expect(l.takeVoice(KASH, 2, null, KASH)).toBe(true);
+    expect(l.takeVoice(KASH, 2, null, KASH)).toBe(true); // owner: no per-person limit
+    expect(l.takeVoice(ROWAN, 2)).toBe(false); // 4 + 2 > 5
+    expect(l.takeVoice(ROWAN, 1)).toBe(true); // a link only fits
+    expect(l.takeVoice(SAM, 1)).toBe(false);
+    expect(l.takeVoice('x', 1, 'owner_discord')).toBe(false); // exempt, but the day is full
+    expect(l.voiceUsedToday()).toBe(5);
+  });
+
+  it('the voice counts survive a restart, next to the hourly limits in the same file', () => {
+    const file = join(tmp(), 'demo-limits.json');
+    const c = clock();
+    const a = new DemoLimiter(cfg({ voice: true, voicePerDay: 3 }), file, c.now);
+    expect(a.takeVoice(ROWAN, 2)).toBe(true);
+    a.noteReply('r', ROWAN);
+    const b = new DemoLimiter(cfg({ voice: true, voicePerDay: 3 }), file, c.now);
+    expect(b.voiceUsedToday()).toBe(2);
+    expect(b.takeVoice(ROWAN, 1)).toBe(false); // had today's voice brief before the restart
+    expect(b.takeVoice(SAM, 2)).toBe(false); // 2 + 2 > 3
+    expect(b.takeVoice(SAM, 1)).toBe(true);
+    expect(JSON.parse(readFileSync(file, 'utf8')).voice).toMatchObject({ day: '2026-11-05', total: 3 });
+  });
+
+  it('what a brief gets: no voice and no talk line without the flag; voice under the caps; the cap line over them; Slack rooms untouched', () => {
+    const all = { jobE: true, audioBrief: true, talkLink: true };
+    const l = new DemoLimiter(cfg({ voice: true, voicePerDay: 3 }), null, clock().now);
+    const b = (sender: string, voice = true, demo = true) => briefVoice({ demo, rf: roomFeatures(all, demo, voice), talkAgent: true, limiter: l, sender });
+    expect(b(ROWAN, false)).toEqual({ voice: false, closing: '' });
+    expect(l.voiceUsedToday()).toBe(0); // nothing taken without the flag
+    expect(b(ROWAN)).toEqual({ voice: true, closing: '' }); // the talk link replaces the closing
+    expect(b(ROWAN)).toEqual({ voice: false, closing: VOICE_CAP_LINE, capped: true }); // second today
+    expect(b(SAM)).toEqual({ voice: false, closing: VOICE_CAP_LINE, capped: true }); // 2 + 2 > 3
+    expect(VOICE_CAP_LINE).toBe("Voice catch-ups have hit today's demo limit — back tomorrow.");
+    expect(b(SAM, true, false)).toEqual({ voice: true }); // a Slack room: no cap, usual closing
+    expect(l.voiceUsedToday()).toBe(2);
   });
 });
 
