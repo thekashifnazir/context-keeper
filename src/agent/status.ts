@@ -299,14 +299,17 @@ export function ago(fromIso: string, nowIso: string): string {
 // done, amber is waiting on someone, red is a problem, and grey-blue hatching is idle time. Two
 // changes forced by the page's CSP (no fonts or images from anywhere): type falls back to the system
 // sans, condensed for display, and the hatching is a CSS gradient rather than an SVG mask.
+// Three hues added for this page, each with one job too: teal (from the design repo's apricot-teal
+// palette) is context handed to people (catch-up briefs, "Related"), and plum and blurple tag a room's
+// platform (Slack, Discord). A tone class sets --c; tiles, bars, badges and chips read it.
 const CSS = `
-:root{color-scheme:light;--ds-color-background:#EDEFF2;--ds-color-foreground:#14171C;--ds-color-card:#F7F8FA;--ds-color-muted:#E4E6E9;--ds-color-muted-foreground:#4B525C;--ds-color-primary:#1F5BD0;--ds-color-primary-foreground:#FFFFFF;--ds-color-secondary:#DFE3E9;--ds-color-border:#BFC3C9;--ds-color-input:#7B838E;--ds-color-ring:#1F5BD0;--ds-color-destructive:#B91C1C;--ds-color-highlight:#DFE3E9;--ds-color-raised:#FFFFFF;--ds-color-success:#17703F;--ds-color-warning:#8C5300;--ds-color-signal:#95A1B3;
+:root{color-scheme:light;--ds-color-background:#EDEFF2;--ds-color-foreground:#14171C;--ds-color-card:#F7F8FA;--ds-color-muted:#E4E6E9;--ds-color-muted-foreground:#4B525C;--ds-color-primary:#1F5BD0;--ds-color-primary-foreground:#FFFFFF;--ds-color-secondary:#DFE3E9;--ds-color-border:#BFC3C9;--ds-color-input:#7B838E;--ds-color-ring:#1F5BD0;--ds-color-destructive:#B91C1C;--ds-color-highlight:#DFE3E9;--ds-color-raised:#FFFFFF;--ds-color-success:#17703F;--ds-color-warning:#8C5300;--ds-color-signal:#95A1B3;--ck-teal:#0E655F;--ck-slack:#7C2D6B;--ck-discord:#4650C8;--ck-red-text:#B91C1C;
 --ds-font-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--ds-font-display:"IBM Plex Sans","IBM Plex Sans Condensed",system-ui,-apple-system,"Segoe UI",sans-serif;
 --ds-font-size-xs:12px;--ds-font-size-sm:14px;--ds-font-size-base:16px;--ds-font-size-lg:18px;--ds-font-size-xl:20px;--ds-font-size-2xl:24px;--ds-font-size-3xl:30px;--ds-font-size-4xl:36px;--ds-font-size-5xl:48px;--ds-font-size-6xl:60px;
 --ds-spacing-1:4px;--ds-spacing-2:8px;--ds-spacing-3:12px;--ds-spacing-4:16px;--ds-spacing-6:24px;--ds-spacing-8:32px;--ds-spacing-12:48px;--ds-spacing-16:64px;
 --ds-radius-control:4px;--ds-radius-full:9999px;--ds-border-width:1px;--ds-duration-slow:320ms;--ds-easing-standard:cubic-bezier(0.2,0,0,1);
 --hatch:repeating-linear-gradient(135deg,transparent 0 6px,var(--ds-color-signal) 6px 7px)}
-@media (prefers-color-scheme:dark){:root{color-scheme:dark;--ds-color-background:#09090B;--ds-color-foreground:#F4F4F5;--ds-color-card:#18181B;--ds-color-muted:#232327;--ds-color-muted-foreground:#94949C;--ds-color-primary:#5C9BFF;--ds-color-primary-foreground:#0A0F1A;--ds-color-secondary:#232327;--ds-color-border:#4D4D53;--ds-color-input:#6E6E76;--ds-color-ring:#5C9BFF;--ds-color-destructive:#EF4444;--ds-color-highlight:#242931;--ds-color-raised:#232327;--ds-color-success:#4CC38A;--ds-color-warning:#E6B450;--ds-color-signal:#5E6B7F}}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--ds-color-background:#09090B;--ds-color-foreground:#F4F4F5;--ds-color-card:#18181B;--ds-color-muted:#232327;--ds-color-muted-foreground:#94949C;--ds-color-primary:#5C9BFF;--ds-color-primary-foreground:#0A0F1A;--ds-color-secondary:#232327;--ds-color-border:#4D4D53;--ds-color-input:#6E6E76;--ds-color-ring:#5C9BFF;--ds-color-destructive:#EF4444;--ds-color-highlight:#242931;--ds-color-raised:#232327;--ds-color-success:#4CC38A;--ds-color-warning:#E6B450;--ds-color-signal:#5E6B7F;--ck-teal:#6CC8BC;--ck-slack:#E39AD3;--ck-discord:#A3AAFF;--ck-red-text:#F87171}}
 *,*::before,*::after{box-sizing:border-box}
 html{background:var(--ds-color-background);color:var(--ds-color-foreground);font:var(--ds-font-size-base)/1.55 var(--ds-font-sans);-webkit-font-smoothing:antialiased}
 body{margin:0;overflow-x:hidden}
@@ -320,7 +323,14 @@ a{color:var(--ds-color-primary);text-underline-offset:3px}
 .card{background:var(--ds-color-card);border:var(--ds-border-width) solid var(--ds-color-border);border-radius:var(--ds-radius-control)}
 .muted{color:var(--ds-color-muted-foreground);font-size:var(--ds-font-size-sm)}
 .mark{display:inline-block;flex:none;width:.9em;height:.9em;vertical-align:-.08em;border:var(--ds-border-width) solid var(--ds-color-foreground);background:var(--hatch)}
-.solid{display:inline-block;flex:none;width:.9em;height:.9em;vertical-align:-.08em;background:var(--ds-color-foreground)}
+.solid{display:inline-block;flex:none;width:.9em;height:.9em;vertical-align:-.08em;background:var(--ds-color-success)}
+.c-blue{--c:var(--ds-color-primary)}.c-teal{--c:var(--ck-teal)}.c-green{--c:var(--ds-color-success)}.c-amber{--c:var(--ds-color-warning)}.c-red{--c:var(--ds-color-destructive);--ct:var(--ck-red-text)}.c-idle{--c:var(--ds-color-signal)}.c-slack{--c:var(--ck-slack)}.c-discord{--c:var(--ck-discord)}
+.sw{display:inline-block;flex:none;width:.75em;height:.75em;background:var(--c,var(--ds-color-border))}
+.sw.c-idle{background:var(--hatch);border:var(--ds-border-width) solid var(--ds-color-signal)}
+.bar{position:relative}
+.bar::before{content:"";position:absolute;left:-1px;top:-1px;bottom:-1px;width:var(--ds-spacing-1);background:var(--c,var(--ds-color-border));border-radius:var(--ds-radius-control) 0 0 var(--ds-radius-control)}
+.intro{max-width:68ch;color:var(--ds-color-muted-foreground);margin-bottom:var(--ds-spacing-6)}
+h3.sub{font-size:var(--ds-font-size-base);font-weight:600;margin:var(--ds-spacing-8) 0 var(--ds-spacing-3)}
 .top{display:flex;align-items:center;gap:var(--ds-spacing-3);min-height:72px;border-bottom:var(--ds-border-width) solid var(--ds-color-border)}
 .logo{display:inline-flex;align-items:center;gap:var(--ds-spacing-2);font-size:var(--ds-font-size-2xl);color:var(--ds-color-foreground)}
 .logo svg{width:28px;height:28px}.logo .t{fill:var(--ds-color-primary)}.logo .b{fill:var(--ds-color-primary-foreground)}
@@ -350,26 +360,44 @@ a{color:var(--ds-color-primary);text-underline-offset:3px}
 .rows div{display:flex;justify-content:space-between;gap:var(--ds-spacing-4);padding:var(--ds-spacing-3) 0;border-top:var(--ds-border-width) solid var(--ds-color-border);font-size:var(--ds-font-size-sm)}
 .rows dt{color:var(--ds-color-muted-foreground)}.rows dd{font-weight:600;text-align:right;overflow-wrap:anywhere}
 section.wrap{padding-block:var(--ds-spacing-12)}
+.band{background:var(--ds-color-highlight);border-block:var(--ds-border-width) solid var(--ds-color-border)}
+.band .wrap{padding-block:var(--ds-spacing-8) var(--ds-spacing-12)}
+.band h2{font-size:var(--ds-font-size-2xl)}
+.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--ds-spacing-6);margin-top:var(--ds-spacing-6)}
+.step{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:var(--ds-spacing-3);align-content:start;border-top:3px solid var(--c,var(--ds-color-foreground));padding-top:var(--ds-spacing-3)}
+.step-n{grid-row:span 2;font-size:var(--ds-font-size-4xl);color:var(--c,var(--ds-color-foreground))}
+.step h3{font-size:var(--ds-font-size-base);font-weight:600;line-height:1.3;padding-top:var(--ds-spacing-1)}
+.step p{font-size:var(--ds-font-size-sm);color:var(--ds-color-muted-foreground);margin-top:var(--ds-spacing-1)}
 .wrap.split{padding-block:var(--ds-spacing-12) var(--ds-spacing-8)}
-.head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--ds-spacing-4);flex-wrap:wrap;margin-bottom:var(--ds-spacing-6)}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--ds-spacing-4);flex-wrap:wrap;margin-bottom:var(--ds-spacing-2)}
 .head h2{font-size:var(--ds-font-size-3xl)}
-.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.7fr)}
-.kpi{padding:var(--ds-spacing-6);border-left:var(--ds-border-width) solid var(--ds-color-border)}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.7fr);overflow:hidden}
+.kpi{position:relative;padding:var(--ds-spacing-8) var(--ds-spacing-6) var(--ds-spacing-6);border-left:var(--ds-border-width) solid var(--ds-color-border);background:color-mix(in srgb,var(--c) 6%,var(--ds-color-card))}
+.kpi::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--c)}
+.kpi.c-idle{background:var(--ds-color-card)}
+.kpi.c-idle::before{background:repeating-linear-gradient(135deg,transparent 0 3px,var(--ds-color-signal) 3px 4px);border-bottom:var(--ds-border-width) solid var(--ds-color-signal)}
 .kpi:first-child{border-left:0}
 .kpi-l{display:flex;align-items:center;gap:var(--ds-spacing-2);font-size:var(--ds-font-size-sm);font-weight:600;color:var(--ds-color-muted-foreground)}
-.kpi-n{font-size:var(--ds-font-size-6xl);margin-top:var(--ds-spacing-3)}
+.kpi-n{font-size:var(--ds-font-size-6xl);margin-top:var(--ds-spacing-3);color:var(--c)}
+.kpi.c-idle .kpi-n{color:var(--ds-color-foreground)}
 .kpi-n small{font-size:var(--ds-font-size-xl);font-weight:400;color:var(--ds-color-muted-foreground);margin-left:var(--ds-spacing-2);letter-spacing:0}
 .kpi-d{margin-top:var(--ds-spacing-2);font-size:var(--ds-font-size-sm);color:var(--ds-color-muted-foreground)}
-.spend{background:var(--ds-color-raised)}
 .meter{height:var(--ds-spacing-2);background:var(--ds-color-muted);border-radius:var(--ds-radius-control);margin-top:var(--ds-spacing-4);overflow:hidden}
-.meter i{display:block;height:100%;background:var(--ds-color-primary)}
-.meter.warn i{background:var(--ds-color-warning)}.meter.bad i{background:var(--ds-color-destructive)}
+.meter{background:color-mix(in srgb,var(--c) 18%,var(--ds-color-muted))}.meter i{display:block;height:100%;background:var(--c)}
 .rule{position:relative;height:var(--ds-spacing-3)}
 .rule::before{content:"";position:absolute;left:0;right:0;top:50%;height:var(--ds-border-width);background:linear-gradient(to right,var(--ds-color-input) 0 64%,transparent 64% 82%,var(--ds-color-input) 82%)}
 .rule::after{content:"";position:absolute;top:0;bottom:0;left:64%;width:18%;border:var(--ds-border-width) solid var(--ds-color-signal);background:var(--hatch)}
 .ideas{overflow:hidden}
 .idea{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:var(--ds-spacing-8);align-items:center;padding:var(--ds-spacing-6)}
 .idea+.idea{border-top:var(--ds-border-width) solid var(--ds-color-border)}
+.idea.bar{background:color-mix(in srgb,var(--c) 4%,var(--ds-color-card))}.idea.bar::before{left:0;top:0;bottom:0;border-radius:0}
+.key{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--ds-spacing-4);font-size:var(--ds-font-size-sm)}
+.key div{position:relative;padding-top:var(--ds-spacing-4)}
+.key div::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--c);border-radius:var(--ds-radius-control)}
+.key dt{font-weight:600}.key dd{color:var(--ds-color-muted-foreground);margin-top:var(--ds-spacing-1)}
+.key .who{font-size:var(--ds-font-size-xs);color:var(--ds-color-foreground);margin-top:var(--ds-spacing-2)}
+.tones{display:flex;flex-wrap:wrap;gap:var(--ds-spacing-2) var(--ds-spacing-6);margin-top:var(--ds-spacing-4);font-size:var(--ds-font-size-sm);color:var(--ds-color-muted-foreground)}
+.tones span{display:inline-flex;align-items:center;gap:var(--ds-spacing-2)}
 .idea-t{display:flex;gap:var(--ds-spacing-3);align-items:baseline}
 .ref{font-size:var(--ds-font-size-xl);flex:none;min-width:2.2em}
 .idea-t p{font-weight:600;overflow-wrap:anywhere}
@@ -383,12 +411,15 @@ section.wrap{padding-block:var(--ds-spacing-12)}
 .track li.now::before{top:0;height:10px;--c:var(--ds-color-primary);background:var(--c);border-color:var(--c)}
 .t-wait li.now::before{--c:var(--ds-color-warning)}.t-ok li.now::before{--c:var(--ds-color-success)}.t-bad li.now::before{--c:var(--ds-color-destructive)}
 .answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--ds-spacing-4)}
-.ans{padding:var(--ds-spacing-6);display:flex;flex-direction:column;gap:var(--ds-spacing-3);overflow-wrap:anywhere}
+.ans{padding:var(--ds-spacing-6);display:flex;flex-direction:column;gap:var(--ds-spacing-3);overflow-wrap:anywhere;background:color-mix(in srgb,var(--c,var(--ds-color-card)) 5%,var(--ds-color-card))}
 .ans-top{display:flex;justify-content:space-between;align-items:center;gap:var(--ds-spacing-3);flex-wrap:wrap}
-.badge{display:inline-flex;align-items:center;gap:var(--ds-spacing-1);padding:2px var(--ds-spacing-3);border:var(--ds-border-width) solid var(--ds-color-border);border-radius:var(--ds-radius-full);font-size:var(--ds-font-size-sm);font-weight:600;background:var(--ds-color-raised)}
-.b-ok{color:var(--ds-color-success)}.b-wait{color:var(--ds-color-warning)}
-.w{text-decoration:line-through;color:var(--ds-color-muted-foreground)}
+.badge{display:inline-flex;align-items:center;gap:var(--ds-spacing-1);padding:2px var(--ds-spacing-3);border:var(--ds-border-width) solid color-mix(in srgb,var(--c,var(--ds-color-border)) 50%,var(--ds-color-border));border-radius:var(--ds-radius-full);font-size:var(--ds-font-size-sm);font-weight:600;background:color-mix(in srgb,var(--c,var(--ds-color-raised)) 10%,var(--ds-color-raised));color:var(--ct,var(--c,var(--ds-color-foreground)))}
+.badge.c-idle{color:var(--ds-color-foreground)}
+.vkey{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--ds-spacing-3) var(--ds-spacing-6);font-size:var(--ds-font-size-sm)}
+.vkey dt{display:flex;align-items:center;gap:var(--ds-spacing-2);font-weight:600;color:var(--ct,var(--c))}.vkey .c-idle dt{color:var(--ds-color-foreground)}.vkey dd{padding-left:calc(.75em + var(--ds-spacing-2));color:var(--ds-color-muted-foreground)}
+.badge.w{text-decoration:line-through;color:var(--ds-color-muted-foreground);background:var(--ds-color-raised);border-color:var(--ds-color-border)}
 .chip{display:inline-flex;align-items:center;padding:2px var(--ds-spacing-2);border-radius:var(--ds-radius-full);background:var(--ds-color-highlight);font-size:var(--ds-font-size-xs);font-weight:600;white-space:nowrap}
+.chip[class*=" c-"]{background:color-mix(in srgb,var(--c) 13%,var(--ds-color-card));color:var(--c)}
 .q{font-size:var(--ds-font-size-lg);line-height:1.45}
 .src{margin-top:auto;padding-top:var(--ds-spacing-3);border-top:var(--ds-border-width) solid var(--ds-color-border)}
 .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--ds-spacing-12)}
@@ -396,9 +427,10 @@ section.wrap{padding-block:var(--ds-spacing-12)}
 .list li{display:flex;align-items:baseline;gap:var(--ds-spacing-3);flex-wrap:wrap;padding:var(--ds-spacing-3) 0;border-top:var(--ds-border-width) solid var(--ds-color-border);overflow-wrap:anywhere}
 .list li:last-child{border-bottom:var(--ds-border-width) solid var(--ds-color-border)}
 .list .name{font-weight:600;margin-right:auto}
-.pieces li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--ds-spacing-3);align-items:baseline}
-.pieces .d{grid-column:2/-1}
-.state{font-size:var(--ds-font-size-sm);font-weight:600}
+.list .sw{align-self:center}
+.pieces li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--ds-spacing-3);row-gap:var(--ds-spacing-1);align-items:baseline}
+.pieces .d{grid-column:2/-1}.pieces .plain{grid-column:2/-1}
+.state{font-size:var(--ds-font-size-sm);font-weight:600;color:var(--ds-color-success)}.state.muted{color:var(--ds-color-muted-foreground)}
 .after{margin-top:var(--ds-spacing-4)}
 .foot{border-top:var(--ds-border-width) solid var(--ds-color-border);padding-block:var(--ds-spacing-8) var(--ds-spacing-12);display:flex;justify-content:space-between;gap:var(--ds-spacing-6);flex-wrap:wrap;align-items:flex-start}
 .foot nav{display:flex;gap:var(--ds-spacing-6);flex-wrap:wrap;font-weight:600}
@@ -406,9 +438,13 @@ section.wrap{padding-block:var(--ds-spacing-12)}
 @media (max-width:960px){.hero{grid-template-columns:minmax(0,1fr);gap:var(--ds-spacing-8)}.wrap.hero{padding-top:var(--ds-spacing-12)}
 .hero::before{top:auto;left:min(0px,calc((100% - 100vw)/2));height:36%}.hero::after{display:none}
 .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.spend{grid-column:1/-1;border-left:0;border-top:var(--ds-border-width) solid var(--ds-color-border)}
+.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.key{grid-template-columns:repeat(3,minmax(0,1fr))}.vkey{grid-template-columns:repeat(2,minmax(0,1fr))}
 .idea{grid-template-columns:minmax(0,1fr);gap:var(--ds-spacing-4)}.split{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.wrap{padding:0 var(--ds-spacing-4)}.top .muted{display:none}.hero h1{font-size:var(--ds-font-size-4xl)}
-.kpi{padding:var(--ds-spacing-4)}.kpi-n{font-size:var(--ds-font-size-4xl)}.kpi-d{display:none}.spend .kpi-d{display:block}
+.steps{grid-template-columns:minmax(0,1fr);gap:var(--ds-spacing-4)}.key{grid-template-columns:repeat(2,minmax(0,1fr))}.vkey{grid-template-columns:minmax(0,1fr)}
+.kpis{grid-template-columns:minmax(0,1fr)}.kpi{display:grid;grid-template-columns:5.5ch minmax(0,1fr);column-gap:var(--ds-spacing-4);align-items:start;padding:var(--ds-spacing-6) var(--ds-spacing-4) var(--ds-spacing-4);border-left:0}.kpi+.kpi{border-top:var(--ds-border-width) solid var(--ds-color-border)}
+.kpi>*{grid-column:2}.kpi .kpi-n{grid-column:1;grid-row:1/span 3;font-size:var(--ds-font-size-4xl);line-height:1;margin:0}.kpi-l{margin-top:0}
+.spend{display:block}.spend .kpi-n{font-size:var(--ds-font-size-4xl);margin-top:var(--ds-spacing-2)}
 .answers{grid-template-columns:minmax(0,1fr)}.idea,.ans{padding:var(--ds-spacing-4)}.idea-m{margin-left:0}
 .track{padding-bottom:var(--ds-spacing-4)}.track li{padding-top:var(--ds-spacing-3)}.track li:not(.now) span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .track li.now span{position:absolute;left:0;white-space:nowrap}.track li.now:nth-child(n+4) span{left:auto;right:0}}
@@ -431,9 +467,50 @@ export function stageStep(stage: string): { at: number; tone: StageTone } {
   return { at: -1, tone: 'go' };
 }
 
-/** A posted label's meaning: confirmed from the record (green), needs a look (amber), or neither. */
-const verdictTone = (label: string) =>
-  /in the record|decision/i.test(label) ? ' b-ok' : /otherwise|reopen/i.test(label) ? ' b-wait' : '';
+/** A posted label's colour, by what it means: settled in the record (green), clashes with the record
+ *  (red), waits on a person (amber), set aside (the idle grey-blue), context nearby (teal), or a new
+ *  entry it wrote down (blue). */
+export function verdictTone(label: string): string {
+  if (/in the record/i.test(label)) return 'c-green';
+  if (/otherwise/i.test(label)) return 'c-red';
+  if (/reopen|new idea/i.test(label)) return 'c-amber';
+  if (/parked/i.test(label)) return 'c-idle';
+  if (/related|preference|constraint/i.test(label)) return 'c-teal';
+  if (/decision/i.test(label)) return 'c-blue';
+  return '';
+}
+const TONE_CLASS: Record<StageTone, string> = { go: 'c-blue', wait: 'c-amber', ok: 'c-green', bad: 'c-red' };
+
+/** The tracker's stages in plain words: what each means and who acts next. */
+const STAGE_KEY: [stage: (typeof TRACK)[number], tone: StageTone, means: string, who: string][] = [
+  ['Noted', 'wait', 'Someone suggested it. It waits for the owner to approve.', 'The owner'],
+  ['Approved', 'go', 'The owner said yes. It is being handed to Claude Code.', 'The agent'],
+  ['Building', 'go', 'Claude Code is building it in its own channel.', 'Claude Code'],
+  ['Waiting for Kash', 'wait', 'Claude Code needs an OK before its next step.', 'Kash, the owner'],
+  ['Done', 'ok', 'Built. The person who asked checks the result.', 'The person who asked'],
+  ['Signed off', 'ok', 'The person who asked says it works. Finished.', 'Nobody'],
+];
+
+/** The answer labels in plain words (the legend under Latest answers). */
+const VERDICT_KEY: [label: string, means: string][] = [
+  ['In the record', 'Already decided. The reply links to where.'],
+  ['The record says otherwise', 'What was said clashes with an earlier decision.'],
+  ['Reopen request', 'Someone wants to change a decision. The owner decides.'],
+  ['New idea', 'Something new. It goes to the owner to approve.'],
+  ['Related', 'Not settled, but something close was discussed.'],
+  ['Parked', 'Raised before and set aside for later.'],
+  ['Decision', 'A new decision it has written into the record.'],
+];
+
+/** Each Switch piece in plain words, for someone who has never used Switch. */
+const PIECE_PLAIN: Record<string, string> = {
+  'Rooms and the agent event stream': 'Switch passes it every message in its rooms, so it can follow the whole conversation.',
+  Bridges: 'The same agent in Slack and Discord at once, not a copy for each.',
+  'Room documents and the Decision log': "Where the team's decisions are kept. Its answers link back here.",
+  'Claude Code, by targeted message': 'How it hands an approved idea to Claude Code to build.',
+  'Switch Trust': 'Rules on the server that limit what the agent may do. It cannot change them.',
+};
+const PLATFORM_CLASS: Record<string, string> = { Slack: 'c-slack', Discord: 'c-discord' };
 
 const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect class="t" width="64" height="64" rx="15"/><rect class="b" x="14" y="17" width="36" height="7" rx="3.5"/><rect class="b" x="14" y="28.5" width="27" height="7" rx="3.5" fill-opacity=".72"/><rect class="b" x="14" y="40" width="18" height="7" rx="3.5" fill-opacity=".45"/></svg>';
 const REPO = 'https://github.com/thekashifnazir/context-keeper';
@@ -450,36 +527,50 @@ export function renderStatusHtml(s: StatusSnapshot): string {
     return `<ol class="track t-${tone}${all ? ' all' : ''}" aria-label="Stage">${TRACK.map((name, i) =>
       `<li${i < at ? ' class="past"' : i === at ? ' class="now" aria-current="step"' : ''}><span>${esc(name)}</span></li>`).join('')}</ol>`;
   };
-  const idea = (i: StatusSnapshot['ideas'][number]) =>
-    `<li class="idea"><div><div class="idea-t"><span class="ref display num">${esc(i.ref)}</span><p>${esc(i.idea)}</p></div>` +
+  const idea = (i: StatusSnapshot['ideas'][number]) => {
+    const { at, tone } = stageStep(i.stage);
+    return `<li class="idea${at < 0 ? '' : ` bar ${TONE_CLASS[tone]}`}"><div><div class="idea-t"><span class="ref display num">${esc(i.ref)}</span><p>${esc(i.idea)}</p></div>` +
     `<p class="idea-m">${esc(i.raiser)}'s idea. ${esc(i.stage)}${i.changed_at ? `, since ${esc(when(i.changed_at))}` : ''}.` +
     `${i.issue_url ? ` ${link(i.issue_url, i.issue_url.replace(/^https:\/\/github\.com\//, ''))}` : ''}</p></div>${track(i.stage)}</li>`;
+  };
+  const stageKey = `<h3 class="sub">What the stages mean</h3><dl class="key">${STAGE_KEY.map(([name, tone, means, who]) =>
+    `<div class="${TONE_CLASS[tone]}"><dt>${esc(name)}</dt><dd>${esc(means)}</dd><dd class="who">Who acts: ${esc(who)}</dd></div>`).join('')}</dl>` +
+    `<p class="tones"><span><i class="sw c-blue"></i>Blue: moving</span><span><i class="sw c-amber"></i>Amber: waiting on a person</span>` +
+    `<span><i class="sw c-green"></i>Green: done</span><span><i class="sw c-red"></i>Red: stuck, needs a look</span></p>`;
+  const verdictKey = `<h3 class="sub">What the labels mean</h3><dl class="vkey">${VERDICT_KEY.map(([label, means]) =>
+    `<div class="${verdictTone(label)}"><dt><i class="sw ${verdictTone(label)}" aria-hidden="true"></i>${esc(label)}</dt><dd>${esc(means)}</dd></div>`).join('')}</dl>`;
 
   const answer = (a: StatusSnapshot['recent'][number]) => {
     const src = a.source ? (a.source.url ? link(a.source.url, a.source.label) : esc(a.source.label)) : '';
-    return `<li class="ans card"><p class="ans-top"><span class="badge${a.withdrawn ? ' w' : verdictTone(a.label)}">${esc(a.label)}</span>` +
+    const tone = a.withdrawn ? '' : verdictTone(a.label);
+    return `<li class="ans card bar${tone ? ` ${tone}` : ''}"><p class="ans-top"><span class="badge${a.withdrawn ? ' w' : tone ? ` ${tone}` : ''}">${esc(a.label)}</span>` +
       `${a.withdrawn ? '<span class="chip">withdrawn by the owner</span>' : `<span class="muted num">${esc(when(a.at))}</span>`}</p>` +
       `<p class="q">“${esc(a.question)}”</p><p class="muted">In ${esc(a.room)}${a.withdrawn ? `, ${esc(when(a.at))}` : ''}</p>` +
       `${src ? `<p class="muted src">Source: ${src}</p>` : ''}</li>`;
   };
 
-  const room = (r: StatusSnapshot['rooms']['named'][number]) =>
-    `<li><span class="name">${esc(r.name)}</span>${r.bridge ? `<span class="chip">${esc(r.bridge)}</span>` : ''}${r.kind === 'build' ? '<span class="chip">build room, Claude Code</span>' : ''}</li>`;
+  const room = (r: StatusSnapshot['rooms']['named'][number]) => {
+    const tone = r.kind === 'build' ? 'c-blue' : r.bridge ? PLATFORM_CLASS[r.bridge] ?? '' : '';
+    return `<li><i class="sw${tone ? ` ${tone}` : ''}" aria-hidden="true"></i><span class="name">${esc(r.name)}</span>` +
+      `${r.bridge ? `<span class="chip ${PLATFORM_CLASS[r.bridge] ?? ''}">${esc(r.bridge)}</span>` : ''}${r.kind === 'build' ? '<span class="chip c-blue">build room, Claude Code</span>' : ''}</li>`;
+  };
   const extra = [
     s.rooms.test_rooms ? plural(s.rooms.test_rooms, 'test room') : '',
     s.rooms.listening_only ? `${plural(s.rooms.listening_only, 'room')} it listens to without posting` : '',
   ].filter(Boolean).join(' and ');
   const piece = (p: StatusSnapshot['switch_pieces'][number]) =>
     `<li><span class="${p.in_use ? 'solid' : 'mark'}" aria-hidden="true"></span><span class="name">${esc(p.piece)}</span>` +
-    `<span class="state${p.in_use ? '' : ' muted'}">${p.in_use ? 'In use' : 'Off'}</span><span class="muted d">${esc(p.detail)}</span></li>`;
+    `<span class="state${p.in_use ? '' : ' muted'}">${p.in_use ? 'In use' : 'Off'}</span>` +
+    `${PIECE_PLAIN[p.piece] ? `<span class="plain">${esc(PIECE_PLAIN[p.piece])}</span>` : ''}<span class="muted d">${esc(p.detail)}</span></li>`;
 
   const sp = s.spend;
   const pct = sp.metered && sp.cap_usd ? Math.min(100, Math.round(((sp.usd ?? 0) / sp.cap_usd) * 100)) : null;
   const spend = !sp.metered
-    ? '<p class="kpi-n display num">–</p><p class="kpi-d">Not metered on this run (no daily cap set).</p>'
+    ? '<p class="kpi-n display num">–</p><p class="kpi-d">What today\'s Claude calls cost. Not metered on this run (no daily cap set).</p>'
     : `<p class="kpi-n display num">$${(sp.usd ?? 0).toFixed(2)}<small>${sp.cap_usd !== null ? `of the $${sp.cap_usd.toFixed(2)} daily cap` : 'no cap set'}</small></p>` +
-      `${pct !== null ? `<div class="meter${sp.capped ? ' bad' : pct >= 80 ? ' warn' : ''}" role="img" aria-label="${pct}% of the daily cap used"><i style="width:${pct}%"></i></div>` : ''}` +
-      `<p class="kpi-d">${sp.capped ? 'Cap reached: no model calls until 00:00 UTC. ' : ''}${plural(sp.calls ?? 0, 'model call')}. An upper-bound estimate from the model price table.</p>`;
+      `${pct !== null ? `<div class="meter" role="img" aria-label="${pct}% of the daily cap used"><i style="width:${pct}%"></i></div>` : ''}` +
+      `<p class="kpi-d">What today's Claude calls cost. ${sp.capped ? 'Cap reached: it stays quiet until 00:00 UTC.' : 'A daily cap stops it overspending.'} ` +
+      `${plural(sp.calls ?? 0, 'model call')}, priced high so this is an upper bound.</p>`;
 
   const lastAnswer = s.recent[0]?.at ?? null;
   return `<!doctype html>
@@ -502,22 +593,33 @@ export function renderStatusHtml(s: StatusSnapshot): string {
 <div><dt>Last public answer</dt><dd>${lastAnswer ? esc(when(lastAnswer)) : 'none yet'}</dd></div><div><dt>Figures as of</dt><dd>${esc(when(s.generated_at))}</dd></div></dl>
 </aside>
 </div>
+<section class="band" aria-labelledby="h-how"><div class="wrap"><h2 id="h-how" class="display">How it works</h2><ol class="steps">
+<li class="step"><span class="step-n display num">1</span><h3>It reads every message</h3><p>People talk in Slack or Discord. Through Switch it reads every message in the room, tagged or not.</p></li>
+<li class="step c-blue"><span class="step-n display num">2</span><h3>It answers with the source, or stays quiet</h3><p>When someone raises something already decided, it replies with where it was decided. Otherwise it says nothing.</p></li>
+<li class="step c-amber"><span class="step-n display num">3</span><h3>New ideas wait for a yes</h3><p>A new idea goes to the owner to approve. Then Claude Code builds it in a new channel.</p></li>
+<li class="step c-green"><span class="step-n display num">4</span><h3>The person who asked signs it off</h3><p>They check the result in the room and say it works.</p></li>
+</ol></div></section>
 <section class="wrap" aria-labelledby="h-today"><div class="head"><h2 id="h-today" class="display">Today</h2><p class="muted">UTC day, ${esc(day)}</p></div>
+<p class="intro">What it did in its rooms since midnight UTC. Staying quiet is most of the job, so a big quiet number is a good sign.</p>
 <div class="card kpis">
-<div class="kpi"><p class="kpi-l">Replies</p><p class="kpi-n display num">${s.today.replies}</p><p class="kpi-d">posted in public rooms</p></div>
-<div class="kpi"><p class="kpi-l">Catch-up briefs</p><p class="kpi-n display num">${s.today.briefs}</p><p class="kpi-d">for people back in a thread</p></div>
-<div class="kpi"><p class="kpi-l"><span class="mark" aria-hidden="true"></span>Stayed quiet</p><p class="kpi-n display num">${s.today.silences}</p><p class="kpi-d">heard it, judged no reply was needed</p></div>
-<div class="kpi spend"><p class="kpi-l">Model spend</p>${spend}</div>
+<div class="kpi c-blue"><p class="kpi-l">Replies</p><p class="kpi-n display num">${s.today.replies}</p><p class="kpi-d">Times it spoke up in a room: an answer with its source, a decision written down or an idea logged.</p></div>
+<div class="kpi c-teal"><p class="kpi-l">Catch-up briefs</p><p class="kpi-n display num">${s.today.briefs}</p><p class="kpi-d">Short summaries for someone coming back to a thread they missed.</p></div>
+<div class="kpi c-idle"><p class="kpi-l"><span class="mark" aria-hidden="true"></span>Stayed quiet</p><p class="kpi-n display num">${s.today.silences}</p><p class="kpi-d">Times it read the chat and decided no reply was needed, like small talk and thanks.</p></div>
+<div class="kpi spend${!sp.metered ? '' : sp.capped ? ' c-red' : ' c-amber'}"><p class="kpi-l">Model spend</p>${spend}</div>
 </div></section>
 <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
-<section class="wrap" aria-labelledby="h-ideas"><div class="head"><h2 id="h-ideas" class="display">Ideas in progress</h2><p class="muted">Each step waits for an approval card in the room</p></div>
-${s.ideas.length ? `<ul class="card ideas">${s.ideas.map(idea).join('')}</ul>` : '<p class="card idea">No ideas on the list yet. When someone suggests one in a room, it shows here once it is noted.</p>'}</section>
+<section class="wrap" aria-labelledby="h-ideas"><div class="head"><h2 id="h-ideas" class="display">Ideas in progress</h2><p class="muted">Newest change first</p></div>
+<p class="intro">Ideas people suggested in a room, and how far each has got. Nothing moves to the next stage until a person says yes on an approval card in the room.</p>
+${s.ideas.length ? `<ul class="card ideas">${s.ideas.map(idea).join('')}</ul>` : '<p class="card idea">No ideas on the list yet. When someone suggests one in a room, it shows here once it is noted.</p>'}
+${stageKey}</section>
 <section class="wrap" aria-labelledby="h-answers"><div class="head"><h2 id="h-answers" class="display">Latest answers</h2><p class="muted">Posted in public rooms, newest first</p></div>
-${s.recent.length ? `<ul class="answers">${s.recent.map(answer).join('')}</ul>` : '<p class="muted">No answers posted in public rooms yet.</p>'}</section>
+<p class="intro">When someone asks about something the team already settled, it answers in the thread and links to where it was decided. The label says what kind of answer it was.</p>
+${s.recent.length ? `<ul class="answers">${s.recent.map(answer).join('')}</ul>` : '<p class="muted">No answers posted in public rooms yet.</p>'}
+${verdictKey}</section>
 <div class="wrap"><div class="rule" aria-hidden="true"></div></div>
 <section class="wrap split">
-<div><h2 id="h-rooms" class="display">Rooms</h2>${s.rooms.named.length ? `<ul class="list">${s.rooms.named.map(room).join('')}</ul>` : '<p class="muted">Not in any public rooms yet.</p>'}${extra ? `<p class="muted after">Also ${esc(extra)}.</p>` : ''}</div>
-<div><h2 id="h-switch" class="display">Switch pieces in use</h2><ul class="list pieces">${s.switch_pieces.map(piece).join('')}</ul></div>
+<div><h2 id="h-rooms" class="display">Rooms</h2><p class="intro">The team chats it is in. One agent covers Slack and Discord at the same time.</p>${s.rooms.named.length ? `<ul class="list">${s.rooms.named.map(room).join('')}</ul>` : '<p class="muted">Not in any public rooms yet.</p>'}${extra ? `<p class="muted after">Also ${esc(extra)}.</p>` : ''}</div>
+<div><h2 id="h-switch" class="display">Switch pieces in use</h2><p class="intro">Switch is the platform the agent runs on. These are the parts it uses, in plain words.</p><ul class="list pieces">${s.switch_pieces.map(piece).join('')}</ul></div>
 </section>
 </main>
 <footer class="wrap"><div class="foot">

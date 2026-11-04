@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { buildStatus, ideaStage, postLabel, RateLimiter, scrub, sourceOf, stageStep, StatusPage, TRACK, type StatusSource } from '../../src/agent/status.ts';
+import { buildStatus, ideaStage, postLabel, RateLimiter, scrub, sourceOf, stageStep, StatusPage, TRACK, verdictTone, type StatusSource } from '../../src/agent/status.ts';
 import type { TraceLine } from '../../src/shared/trace.ts';
 import { startToolServer, whatsNew } from '../../src/voice/talk-tool.ts';
 
@@ -190,6 +190,10 @@ describe('helpers', () => {
     expect(at('reopened')).toEqual({ at: 0, tone: 'wait' });
     expect(at('some_new_status')).toEqual({ at: -1, tone: 'go' });
   });
+  it('verdictTone gives each kind of answer its colour', () => {
+    expect(['📌 In the record', '⚠️ The record says otherwise', '↩️ Reopen request', '💡 New idea', '🗂️ Parked for later', '🔎 Related', '🧱 Constraint', '🗳️ Decision', 'Something else'].map(verdictTone))
+      .toEqual(['c-green', 'c-red', 'c-amber', 'c-amber', 'c-idle', 'c-teal', 'c-teal', 'c-blue', '']);
+  });
   it('the rate limiter allows 30 a minute per key, then resets', () => {
     let t = 0;
     const r = new RateLimiter(30, () => t);
@@ -233,6 +237,13 @@ describe('served by the tool server, over real HTTP on 127.0.0.1', () => {
     expect(html).toContain('href="https://github.com/thekashifnazir/context-keeper"');
     expect(html).not.toMatch(/<link|@import|url\(|https?:\/\/[^"]*\.(css|js|woff2?)/i);
     expect(Buffer.byteLength(html)).toBeLessThan(60_000);
+  });
+  it('the page explains itself: how it works, each tile, the stages, the labels and the Switch pieces, coloured by meaning', async () => {
+    const html = await (await get('/status', '203.0.113.9')).text();
+    for (const s of ['How it works', 'It reads every message', 'The person who asked signs it off', 'Short summaries for someone coming back', 'What the stages mean', 'Who acts: The owner', 'What the labels mean', 'The same agent in Slack and Discord at once']) expect(html).toContain(s);
+    for (const tile of ['kpi c-blue', 'kpi c-teal', 'kpi c-idle', 'kpi spend c-amber']) expect(html).toContain(tile);
+    expect(html).toContain('<span class="chip c-discord">Discord</span>');
+    expect(html).not.toMatch(/ — |—/);
   });
   it('never shows desk content, private notes, ids, handles or emails, in the HTML or the JSON', async () => {
     const html = await (await get('/status')).text();
