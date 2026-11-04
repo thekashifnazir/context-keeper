@@ -133,6 +133,11 @@ async function wipe() {
     if (String(a.name).startsWith('ck-')) { await el.request('DELETE', `/v1/convai/agents/${ids.agent_id}`); console.log(`deleted agent ${a.name} ${ids.agent_id}`); }
     else console.log(`skipped ${ids.agent_id}: name "${a.name}" isn't ck-`);
   }
+  if (ids.whats_new_tool_id) {
+    const t = await el.request('GET', `/v1/convai/tools/${ids.whats_new_tool_id}`).then((r) => r.json(), () => null);
+    if (t?.tool_config?.name === 'whats_new') await el.request('DELETE', `/v1/convai/tools/${ids.whats_new_tool_id}`).then(() => console.log(`deleted tool whats_new ${ids.whats_new_tool_id}`), (e) => console.log(`tool: ${e.message}`));
+  }
+  if (ids.tool_secret_id) await el.request('DELETE', `/v1/convai/secrets/${ids.tool_secret_id}`).then(() => console.log(`deleted secret ${ids.tool_secret_id}`), (e) => console.log(`secret: ${e.message}`));
   for (const [name, id] of Object.entries(ids.tests ?? {})) {
     if (!name.startsWith('ck-')) { console.log(`skipped test ${id}`); continue; }
     await el.request('DELETE', `/v1/convai/agent-testing/${id}`).then(() => console.log(`deleted test ${name}`), (e) => console.log(`test ${id}: ${e.message}`));
