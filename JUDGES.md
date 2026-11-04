@@ -11,7 +11,7 @@ The [README](README.md) is the short version. This page has a five-minute tour, 
 5. **Known limits.** [Limits and what's next](#limits-and-whats-next), below.
 
 
-**Contents:** [What it does](#what-it-does) · [Try it](#try-it) · [Where people decide](#where-people-decide) · [Use of Switch](#use-of-switch-in-detail) · [How the channels are set up](#how-the-channels-are-set-up) · [Why we run our own Switch server](#why-we-run-our-own-switch-server) · [Run it](#run-it) · [Run it in the cloud](#run-it-in-the-cloud) · [How it works](#how-it-works-step-by-step) · [Safety](#safety) · [Limits and what's next](#limits-and-whats-next) · [Notes for the Switch team](#notes-for-the-switch-team) · [Built by voice](#built-by-voice) · [Built with](#built-with)
+**Contents:** [What it does](#what-it-does) · [Try it](#try-it) · [Where people decide](#where-people-decide) · [Use of Switch](#use-of-switch-in-detail) · [How the channels are set up](#how-the-channels-are-set-up) · [Why we run our own Switch server](#why-we-run-our-own-switch-server) · [Run it](#run-it) · [Run it in the cloud](#run-it-in-the-cloud) · [How it works](#how-it-works-step-by-step) · [Safety](#safety) · [Limits and what's next](#limits-and-whats-next) · [What I liked about Switch](#what-i-liked-about-switch-and-what-id-improve) · [Notes for the Switch team](#notes-for-the-switch-team) · [Built by voice](#built-by-voice) · [Built with](#built-with)
 
 > "They'd leave comments asking about edge cases my agent and I had already discussed and resolved."
 > Xinyi Zhao, Principal PM at Switch, ["My agent is my best teammate"](https://www.switchagents.ai/blog-posts/my-agent-is-my-best-teammate-now-it-works-with-my-whole-team)
@@ -107,6 +107,26 @@ Switch's own docs describe "a team where the people decide and the agents carry 
 ## Use of Switch, in detail
 
 The short version, with the "What breaks without Switch" table, is in the [README](README.md#use-of-switch).
+
+In Kash's words (the README has a trimmed version):
+
+<!-- Kash's words: form answers (dictated 4 Nov); grammar fixes and trims only -->
+Switch is what lets us share a common layer between the different agents, whichever chat app you use. The rooms are probably the best thing, because they give us the bridges between Slack and Discord, and Claude Code's approval cards. That's really helpful: it means we have a human in the loop and we're actually verifying things instead of blindly letting it automate. With Switch Trust, we've got a safety layer on the prompts going through.
+
+### What breaks without Switch, in full
+
+<!-- drafted by Claude from the code; Kash to check -->
+Context Keeper has no Slack, Discord or Mattermost client of its own for posting, and no database for the team's record: both are Switch. Take a piece away and this is what stops.
+
+| Switch piece | What Context Keeper does with it | Without it |
+|---|---|---|
+| Rooms and the agent protocol's event stream (`filter=all`, `list_rooms`, `connect_to_room`, a saved stream position) | Hears every message, tagged or not, batches each person's burst and decides; a restart resumes from the saved position ([src/agent/main.ts](src/agent/main.ts), [vendor/switch-agent-runtime/](vendor/switch-agent-runtime/)) | Nothing triggers jobs A to E: the person asking "why don't we…?" never tags an agent, so the agent never hears the question. Messages sent while it was down would be lost instead of answered once |
+| Slack, Discord and Mattermost bridges | Every post is one `post_message` through the room, whichever app the room is on; the Slack and Discord bot tokens are only read to turn handles into display names ([src/agent/main.ts](src/agent/main.ts) `poster`, [src/names.ts](src/names.ts)) | One posting integration per chat app. The Slack team room, the public Discord room ([docs/demo-channel.md](docs/demo-channel.md)) and the Mattermost eval ([eval/](eval/)) would be three separate builds instead of one agent on one server |
+| Room documents (`list_references`, `load_internal_documents`), room history (`read_context`) and the agent-owned "Decision log" (`create_room_document`, `update_room_document`) | The room's record, read before each decision and cited in every answer; job B writes decisions back into the Decision log, which job A then cites ([src/agent/memory.ts](src/agent/memory.ts), [src/agent/decision-log.ts](src/agent/decision-log.ts)) | No record to quote. The quote gate only lets "covered" through with a verbatim quote from a source ([src/agent/post.ts](src/agent/post.ts)), so answers would fall back to silence or "new", and decisions would have nowhere shared to live |
+| `room_join` events (`join_event_listeners`) | Marks a newcomer so their first message gets the job C catch-up ([src/agent/main.ts](src/agent/main.ts), [src/agent/state.ts](src/agent/state.ts), [src/agent/jobs/brief.ts](src/agent/jobs/brief.ts)) | The brief would rest on the record alone: only a first-ever message, or one after `CK_RETURN_GAP_DAYS` of silence, would get one |
+| `create_room` + `send_targeted_message`, and Claude Code's approval cards | Job E opens the build room on the same bridge, sends Claude Code one targeted hand-off with the cited context, and each of Claude Code's steps waits for the owner's "Allow once" ([src/agent/handoff/switch.ts](src/agent/handoff/switch.ts), [docs/handoff-live-test.md](docs/handoff-live-test.md)) | Job E stops at "noted": no build room, no hand-off to Claude Code, and no per-step human approval. A custom agent can't raise approval cards itself (see [Limits and what's next](#limits-and-whats-next)) |
+| Switch Trust | A Jailbreak policy on the room's user messages, action Alert, turned on for the server; the flag shows in the channel and the message still reaches the agent ([blog/build-log.md](blog/build-log.md)) | No server-side flag on jailbreak attempts in the channel. The agent's own guards (chat treated as data, the quote gate, the reviewer) still apply |
+| Gateway admin API | `scripts/server-up.sh` mints the agent's registration key (`POST /gateway/api-keys`); the eval creates, populates and archives a fresh set of rooms per run ([eval/switchapi.ts](eval/switchapi.ts)); Trust was switched on with `PUT /gateway/trust-settings`. The seed itself uses the agent's own operations ([seed/switch.ts](seed/switch.ts)) | A custom agent can't register (see [why we run our own Switch server](JUDGES.md#why-we-run-our-own-switch-server)), and the 24-case eval couldn't make fresh rooms for each run |
 
 ### Agents connected
 
@@ -342,6 +362,28 @@ Switch's own three-factor safety test (Auto mode on, reach that matters, unvette
 | One VM, no automatic backups | `pg_dump` by hand ([docs/deploy-cloud.md](docs/deploy-cloud.md)); the agent log isn't rotated yet |
 
 Next: register against the server Console runs once Console's new API keys page ships (no Docker needed for local testing), add people's roles so it can suggest who picks up approved work, and let a retraction suggest the fix to the record, not only withdraw the answer. Level 4 isn't claimed.
+
+## What I liked about Switch, and what I'd improve
+
+The full text; the README has the shortest version.
+
+<!-- Kash's words: form answers (dictated 4 Nov) and blog/source.md; grammar fixes and trims only -->
+**Liked**
+
+- The local test chat (Mattermost) that comes with it. That was really helpful for automated testing.
+- That you can connect to lots of different messaging apps. I use Slack because it's work-appropriate and the one I use most at work, and Discord because it's the one I use outside work. Discord is also easy to share out.
+- Switch Trust is the one I really like the most. You can add your own trust policy and have a lot of control over it, which would normally need a huge dedicated system; this looks like something you can just add into your existing systems.
+- It feels quite easy to add additional features.
+- How fast Phil got back to me on Discord, and that he confirmed the path I was already going down.
+
+**Would improve**
+
+- One of the issues I had was that the Console's built-in server can't register your own agent. The way around it was to run Switch's published server in Docker instead. We can see they're already picking up on stuff that they should be doing to help users. Maybe in a day or so, this might be something that I don't have to do anymore.
+- Console vs Gateway confused me at the start. I'm not sure what would have made it obvious; possibly it's just a new product, and I had to look online to understand it.
+- What cost me the most was the Docker crash during automated testing. That was a Mac issue. It would help to say clearly in the setup: if you're on a Mac, use Rosetta, because there's no Apple Silicon version of the test chat.
+- Reactions and edits for agents: I've already left a comment on an existing issue asking for this; others were giving the same feedback.
+- Switch Trust's Free plan: only 5 agents, and once you use one it's gone. I understand it's a business, so you have to protect that.
+- Make custom work and cloud hosting as easy as possible. I had to set up a cloud machine myself to get everything running. I'd prefer a hosted service I could connect to. Testing locally is great, but being able to host my custom agents would be really helpful; that's where the industry is going right now.
 
 ## Notes for the Switch team
 
