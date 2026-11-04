@@ -35,12 +35,12 @@ the eval (`npm run eval`), one run at a time, failures included; nobody edits th
 | Eval citations verified, main set, r20261103-2322-3342 (testset/results/2026-11-03-claude-opus-5-5-5.json) | 59/79 | `npm run eval --` | 092366f | 2026-11-03T23:39:12.943Z |
 | Eval median seconds to a reply, main set, r20261103-2322-3342 (testset/results/2026-11-03-claude-opus-5-5-5.json) | 34.1 (n=22) | `npm run eval --` | 092366f | 2026-11-03T23:39:12.943Z |
 | Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261103-2322-3342 (testset/results/2026-11-03-claude-opus-5-5-5.json) | 2.2575 | `npm run eval --` | 092366f | 2026-11-03T23:39:12.943Z |
-| Eval overall, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5.json) | 1/1 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
-| Eval job A, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5.json) | 1/1 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
-| Eval confident wrong, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5.json) | 0 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
-| Eval citations verified, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5.json) | 2/2 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
-| Eval median seconds to a reply, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5.json) | 51.5 (n=1) | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
-| Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5.json) | 0.2116 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
+| Eval overall, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5-judge-coldstart.json; judge cold-start server) | 1/1 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
+| Eval job A, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5-judge-coldstart.json; judge cold-start server) | 1/1 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
+| Eval confident wrong, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5-judge-coldstart.json; judge cold-start server) | 0 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
+| Eval citations verified, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5-judge-coldstart.json; judge cold-start server) | 2/2 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
+| Eval median seconds to a reply, main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5-judge-coldstart.json; judge cold-start server) | 51.5 (n=1) | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
+| Eval model spend in USD (est. upper bound, prices as of 2026-10-06), main set, r20261104-0022-ec96 (testset/results/2026-11-04-claude-opus-5-5-judge-coldstart.json; judge cold-start server) | 0.2116 | `npm run eval -- --fast --only T05` | 6bfda53 | 2026-11-04T00:25:26.124Z |
 | Eval overall, main set, r20261104-0001-f83b (testset/results/2026-11-04-claude-opus-5-5.json) | 21/24 | `npm run eval --` | fe182f9 | 2026-11-04T00:18:16.655Z |
 | Eval job A, main set, r20261104-0001-f83b (testset/results/2026-11-04-claude-opus-5-5.json) | 14/17 | `npm run eval --` | fe182f9 | 2026-11-04T00:18:16.655Z |
 | Eval confident wrong, main set, r20261104-0001-f83b (testset/results/2026-11-04-claude-opus-5-5.json) | 0 | `npm run eval --` | fe182f9 | 2026-11-04T00:18:16.655Z |
