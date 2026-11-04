@@ -100,11 +100,12 @@ sends nothing. So name your room `ck-smoke-…`, or set `CK_POST_ROOMS`.
 
 ### Stop and clean up
 
-`Ctrl-C` the agent. Then remove the stack and its data (use your `CK_COMPOSE_PROJECT` if you set
-one):
+`Ctrl-C` the agent. Then remove the stack and its data. `server/.env` names the project, so this
+works with or without `CK_COMPOSE_PROJECT`. Name both profiles: with only `--profile collab`, the
+Gateway container is left running.
 
 ```bash
-docker compose -p ckswitch down -v
+(cd server && docker compose -f standalone-docker-compose.yml --profile gateway --profile collab down -v)
 ```
 
 ## Slack, Discord and Switch Console
