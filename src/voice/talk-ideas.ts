@@ -31,12 +31,24 @@ export function plainStatus(r: IdeaRecord, ownerName = 'Kash'): string {
   const by = r.signoff?.by_name || r.sender_name;
   switch (r.status) {
     case 'noted': return `noted, waiting for ${ownerName}'s OK to build it`;
-    case 'approved': return `approved by ${ownerName}, waiting to start`;
+    case 'approved': return `approved by ${ownerName}, waiting for Claude Code to start`;
     case 'stalled': return `approved, but the hand-off to Claude Code is stuck; ${ownerName} has been told`;
     case 'not_permitted': return `approved, but Switch wouldn't let it be handed to Claude Code; ${ownerName} has been told`;
-    case 'handed_off': return r.events?.nudge
-      ? `being built by Claude Code, possibly waiting for ${ownerName}'s OK on a permission step`
-      : 'being built by Claude Code';
+    case 'handed_off': {
+      // Job E's stage while handed off (chain.ts moveStage): Claude Code's own posts in the build room
+      // move it on. A record from before stages has none, and the nudge is all there is to go on.
+      const nudged = Boolean(r.events?.nudge);
+      switch (r.stage) {
+        case 'waiting': return nudged
+          ? `approved by ${ownerName}, but Claude Code hasn't started yet; it may be waiting for ${ownerName}'s OK on a step`
+          : `approved by ${ownerName}, waiting for Claude Code to start`;
+        case 'building': return 'being built by Claude Code';
+        case 'blocked': return `being built by Claude Code, waiting for ${ownerName}'s OK on a step`;
+        default: return nudged
+          ? `being built by Claude Code, possibly waiting for ${ownerName}'s OK on a permission step`
+          : 'being built by Claude Code';
+      }
+    }
     case 'timed_out': return 'with Claude Code, but no result yet after the time limit';
     case 'not_done': return `Claude Code couldn't finish it${r.report?.body ? ` (${short(r.report.body, 100)})` : ''}`;
     case 'awaiting_signoff': return `done${done ? ` (${done})` : ''}, waiting for ${r.sender_name} to sign it off`;
