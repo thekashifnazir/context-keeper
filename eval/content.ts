@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadYaml } from './yaml.ts';
+import { messageLabel, sectionLabel } from '../src/shared/refs.ts';
 
 export const ROOM_DIRS: Record<string, string> = { 'ledgerly-pilot': 'ledgerly', 'riverside-build-night': 'riverside' };
 export type CaseSet = 'main' | 'redteam' | 'holdout';
@@ -41,6 +42,10 @@ export interface Case {
 export interface RoomContent {
   messages: Map<string, string>; // seeded id -> text
   sections: Map<string, string>; // "product.md §2" -> section text (heading to next "## ")
+  /** ref -> how a post names it for people (src/shared/refs.ts, the agent's own rule): "Product overview ›
+   *  Client portal" for a section, "Rowan, 4 Nov" for a message. A citation counts as shown when its
+   *  ref, this label, or its quote is in the post (5 Nov: posts stopped printing "product.md §5"). */
+  labels?: Map<string, string>;
 }
 
 export function loadCases(root: string, set: CaseSet): { cases: Case[]; sha256: string; file: string } {
@@ -48,6 +53,14 @@ export function loadCases(root: string, set: CaseSet): { cases: Case[]; sha256: 
   const raw = readFileSync(join(root, file));
   const data = loadYaml<{ cases: Case[] }>(join(root, file));
   return { cases: data.cases, sha256: createHash('sha256').update(raw).digest('hex'), file };
+}
+
+/** Each "## §n" section's people-facing label: the doc's "# " title › the heading's words. */
+export function sectionLabels(doc: string, text: string): Map<string, string> {
+  const title = text.match(/^# (.+)$/m)?.[1]?.trim() ?? doc.replace(/\.md$/, '');
+  const out = new Map<string, string>();
+  for (const m of text.matchAll(/^## (§\d+)\b(.*)$/gm)) out.set(`${doc} ${m[1]}`, sectionLabel(title, `${m[1]}${m[2]}`));
+  return out;
 }
 
 /** Split a markdown doc into its "## §n" sections. */
@@ -71,22 +84,27 @@ export function docSections(doc: string, text: string): Map<string, string> {
 
 export function loadRoomContent(root: string, room: string, runDocsDir?: string): RoomContent {
   const dir = join(root, 'demo', ROOM_DIRS[room] ?? room);
-  const hist = loadYaml<{ messages: { id: string; text: string }[] }>(join(dir, 'chat-history.yaml'));
+  const hist = loadYaml<{ messages: { id: string; text: string; author?: string; at?: unknown }[] }>(join(dir, 'chat-history.yaml'));
   const messages = new Map(hist.messages.map((m) => [m.id, m.text]));
+  const labels = new Map<string, string>(hist.messages.map((m) => [m.id, messageLabel(m.author ?? null, String(m.at ?? ''))]));
   const sections = new Map<string, string>();
   const docs = join(dir, 'docs');
   if (existsSync(docs)) {
     for (const f of readdirSync(docs).filter((f) => f.endsWith('.md')).sort()) {
-      for (const [k, v] of docSections(f, readFileSync(join(docs, f), 'utf8'))) sections.set(k, v);
+      const text = readFileSync(join(docs, f), 'utf8');
+      for (const [k, v] of docSections(f, text)) sections.set(k, v);
+      for (const [k, v] of sectionLabels(f, text)) labels.set(k, v);
     }
   }
   // Documents the agent wrote into the room during the run (captured from Switch): never override a seeded one.
   if (runDocsDir && existsSync(runDocsDir)) {
     for (const f of readdirSync(runDocsDir).filter((f) => f.endsWith('.md')).sort()) {
-      for (const [k, v] of docSections(f, readFileSync(join(runDocsDir, f), 'utf8'))) if (!sections.has(k)) sections.set(k, v);
+      const text = readFileSync(join(runDocsDir, f), 'utf8');
+      for (const [k, v] of docSections(f, text)) if (!sections.has(k)) sections.set(k, v);
+      for (const [k, v] of sectionLabels(f, text)) if (!labels.has(k)) labels.set(k, v);
     }
   }
-  return { messages, sections };
+  return { messages, sections, labels };
 }
 
 /** Hash of every file the scorer reads for a room, so a result says which content it was scored against. */

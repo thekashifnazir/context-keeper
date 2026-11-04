@@ -210,6 +210,23 @@ describe('P3 for reopen and parked-recall (Kash, 3 Nov)', () => {
     });
     expect(r.cases[0].rules.P3).toEqual({ status: 'pass', reason: 'roadmap.md §1: resolves, quote verified, shown in the reply' });
   });
+  it('the source named for people ("Ledgerly roadmap › Phase 2", 5 Nov) counts as shown, like the ref; a wrong label does not', () => {
+    const named = 'Parked for phase 2: QuickBooks sync.\n_“Two of the 12 interviewed agencies use it”_ — [Ledgerly roadmap › Phase 2: parked, not rejected](https://x.test/roadmap.md#1) (20 Oct)';
+    const quoteOnly = { ref: 'roadmap.md §1', quote: 'Two of the 12 interviewed agencies use it' };
+    const ok = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall', sources: [quoteOnly] })], posts: [tpost(named.replace('_“Two of the 12 interviewed agencies use it”_ — ', ''))] }],
+      posts: [{ root_id: 'p-T22', message: named.replace('_“Two of the 12 interviewed agencies use it”_ — ', ''), create_at: T0 + 30000 }],
+    });
+    expect(ok.cases[0].rules.P3).toEqual({ status: 'pass', reason: 'roadmap.md §1: resolves, quote verified, shown in the reply' });
+    const wrong = 'Parked for phase 2: QuickBooks sync. — Ledgerly roadmap › Not planned';
+    const bad = build({
+      cases: [['T22', 0]],
+      lines: [{ inputs: [inp('T22', 'kash')], items: [item('T22', { verdict: 'parked-recall', sources: [quoteOnly] })], posts: [tpost(wrong)] }],
+      posts: [{ root_id: 'p-T22', message: wrong, create_at: T0 + 30000 }],
+    });
+    expect(bad.cases[0].rules.P3.status).toBe('fail');
+  });
   it('a parked-recall with no sources fails P3', () => {
     const r = build({
       cases: [['T22', 0]],

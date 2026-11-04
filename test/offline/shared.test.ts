@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { normalise, quoteVerified } from '../../src/shared/quote.ts';
 import { handoffStep, readTrace, TraceLine } from '../../src/shared/trace.ts';
+import { docName, docUrl, githubAnchor, mdLink, messageLabel, sectionLabel, sectionName } from '../../src/shared/refs.ts';
+import { buildRoomContext } from '../../src/agent/blocks.ts';
+import { loadDemoRoom } from '../../src/agent/room.ts';
+import { gateSources } from '../../src/agent/post.ts';
 
 describe('quote rule', () => {
   it('normalises case, markup, quotes and spacing', () => {
@@ -41,5 +45,47 @@ describe('trace', () => {
     expect(b.handoff).toBeUndefined();
     expect(handoffStep(c)).toBeNull();
     expect(() => TraceLine.parse({ ...e, handoff: { ...e.handoff!, step: 'made_up' } })).toThrow();
+  });
+});
+
+describe('sources people can read (Kash, 4 Nov, I9: "what do those squiggles mean … could you have links out")', () => {
+  it('a document title and section heading, not a file name and § number', () => {
+    expect(docName('Ledgerly: product overview')).toBe('Product overview');
+    expect(docName('Ledgerly roadmap')).toBe('Ledgerly roadmap');
+    expect(sectionName('§2 Decisions (each confirmed by Kash, with the reason)')).toBe('Decisions');
+    expect(sectionName('§1 shipped-tested (tested with real partner data)')).toBe('Shipped-tested');
+    expect(sectionLabel('Ledgerly: product overview', '§5 Client portal')).toBe('Product overview › Client portal');
+    expect(messageLabel('Rowan', '2026-11-04T12:08:00Z')).toBe('Rowan, 4 Nov');
+  });
+  it("GitHub's heading anchors (checked against github.com's rendered docs)", () => {
+    expect(githubAnchor('§5 Client portal')).toBe('5-client-portal');
+    expect(githubAnchor('§2 Decisions (each confirmed by Kash, with the reason)')).toBe('2-decisions-each-confirmed-by-kash-with-the-reason');
+    expect(githubAnchor('§1 Phase 2 (after the pilot, from Jan 2027): parked, not rejected')).toBe('1-phase-2-after-the-pilot-from-jan-2027-parked-not-rejected');
+  });
+  it('links only with CK_DOCS_BASE_URL set; a label that would break Slack\'s <url|label> is cleaned', () => {
+    const was = process.env.CK_DOCS_BASE_URL;
+    try {
+      delete process.env.CK_DOCS_BASE_URL;
+      expect(docUrl('demo/ledgerly/docs/product.md', '§5 Client portal')).toBeNull();
+      process.env.CK_DOCS_BASE_URL = 'https://github.com/o/r/blob/main/';
+      expect(docUrl('demo/ledgerly/docs/product.md', '§5 Client portal')).toBe('https://github.com/o/r/blob/main/demo/ledgerly/docs/product.md#5-client-portal');
+      expect(docUrl(null, '§5 Client portal')).toBeNull();
+      expect(mdLink('A [b] | c', 'https://x.test/a')).toBe('[A b c](https://x.test/a)');
+      expect(mdLink('A', 'https://x.test/a b')).toBe('A');
+      expect(mdLink('A', null)).toBe('A');
+    } finally { if (was === undefined) delete process.env.CK_DOCS_BASE_URL; else process.env.CK_DOCS_BASE_URL = was; }
+  });
+  it('job A names a demo-room source by title › heading with its date, linked to the public copy', () => {
+    const was = process.env.CK_DOCS_BASE_URL;
+    try {
+      process.env.CK_DOCS_BASE_URL = 'https://github.com/o/context-keeper/blob/main';
+      const ctx = buildRoomContext(loadDemoRoom('.', 'ledgerly-pilot'));
+      const block = ctx.table.flat().find((b) => b.blockId === 'product.md §5.1')!;
+      const { verified } = gateSources([{ block, citedText: block.text }], ctx);
+      expect(verified[0].ref).toBe('product.md §5'); // the trace keeps the raw ref for scoring
+      expect(verified[0].source).toBe('[Product overview › Client portal](https://github.com/o/context-keeper/blob/main/demo/ledgerly/docs/product.md#5-client-portal) (20 Oct)');
+      const msg = ctx.table.flat().find((b) => b.kind === 'message')!;
+      expect(gateSources([{ block: msg, citedText: msg.text }], ctx).verified[0].source).toMatch(/^[A-Z][a-z]+, \d{1,2} [A-Z][a-z]{2}$/);
+    } finally { if (was === undefined) delete process.env.CK_DOCS_BASE_URL; else process.env.CK_DOCS_BASE_URL = was; }
   });
 });

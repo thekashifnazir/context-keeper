@@ -36,18 +36,21 @@ describe('reopen route', () => {
 
     expect(poster.desk()).toHaveLength(1);
     const note = poster.desk()[0].body;
-    expect(note).toMatch(/^#1 · Reopen request in ck-test/);
-    expect(note).toContain(`Rowan said (m1): "${TEXT}"`);
-    expect(note).toContain("It's about D2 (pilot-plan.md §2):");
-    expect(note).toContain('Three agencies, max 25 clients each');
-    expect(note).toContain('Reopen if: Support capacity changes');
-    expect(note).toContain('Should D2 be reopened?');
+    expect(note.split('\n')[0]).toBe('↩️ **#1 · Reopen request** · #ck-test');
+    expect(note).toContain(`**Rowan said:** _“${TEXT}”_`);
+    expect(note).toContain('**Decision D2:** Three agencies, max 25 clients each: Support is Priya plus Kash; three keeps the loop tight — Ledgerly pilot plan › Decisions (Kash, 6 Oct)');
+    expect(note).toContain('**Reopen if:** Support capacity changes');
+    expect(note).toContain('**Should D2 be reopened?**');
+    expect(note).not.toMatch(/pilot-plan\.md|§|\(m1\)/); // no file names, § numbers or message ids
 
     expect(poster.pub()).toHaveLength(1);
     const pub = poster.pub()[0];
     expect(pub.thread).toBe('m1');
-    expect(pub.body.split('\n')[0]).toBe("↩️ **Reopen request** · Thanks, Rowan. That's new information on a recorded decision, so I've asked the owner whether to reopen it. Until they decide, the plan stays as it is. Reopen if: Support capacity changes.");
-    expect(pub.body).toContain('> **Three agencies, max 25 clients each**');
+    expect(pub.body.split('\n').slice(0, 3)).toEqual([
+      "↩️ **Reopen request** · Thanks, Rowan. That's new information on a recorded decision, so I've asked the owner whether to reopen it; until they decide, the plan stays as it is.",
+      '**Reopen if:** Support capacity changes.',
+      '_“Three agencies, max 25 clients each: Support is Priya plus Kash; three keeps the loop tight”_ — Ledgerly pilot plan › Decisions (Kash, 6 Oct)',
+    ]);
     expect(pub.body).not.toContain("It's reopened."); // the model's own words are never the public line
 
     const [line] = t.traces();
@@ -76,7 +79,7 @@ describe('reopen route', () => {
     const poster = new FakePoster();
     await decide(t.deps(claude, poster), 'room1', 'ck-test', ctx, [msg('m1', TEXT)]);
     expect(poster.desk()).toEqual([]);
-    expect(poster.pub()[0].body).toMatch(/^🔎 \*\*Might be related\*\* · I can't confirm it answers your question\.\n> /);
+    expect(poster.pub()[0].body).toMatch(/^🔎 \*\*Might be related\*\* · I can't confirm it answers your question\.\n_“/);
     expect(t.traces()[0].items[0].verdict).toBe('might-be-related');
   });
 

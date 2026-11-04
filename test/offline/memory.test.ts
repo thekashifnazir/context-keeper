@@ -167,7 +167,7 @@ describe('memory: the Decision log is a room document the agent owns', () => {
     expect(block).toMatchObject({ ref: 'decision-log.md §1', kind: 'row', author: 'Kash', at: '2026-11-04', display: 'Fieldnote goes first for onboarding: They signed first.' });
     const { verified } = gateSources([{ block, citedText: block.text }], c);
     expect(verified).toHaveLength(1);
-    expect(verified[0].who).toBe('Kash, 4 Nov (decision-log.md §1 L1)');
+    expect(verified[0].source).toBe('Decision log › Decisions logged in this room (Kash, 4 Nov)'); // never "decision-log.md §1 L1"
     expect(quoteVerified('Fieldnote goes first for onboarding', c.sourceText.get('decision-log.md §1')!)).toBe(true);
     const { reopenIf } = await import('../../src/agent/jobs/reopen.ts');
     expect(reopenIf(block)).toBe("Fieldnote can't make the 24th");

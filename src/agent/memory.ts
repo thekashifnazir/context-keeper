@@ -16,7 +16,7 @@
 import { parse } from 'yaml';
 import { DECISION_LOG, DECISION_LOG_FILE, parseLog, renderLog, upsertEntry, type LogEntry, type LoggedDecision } from './decision-log.ts';
 import type { ArchiveMessage, RoomDoc, RoomRecord } from './room.ts';
-import { toMs } from './room.ts';
+import { ROOM_DIRS, toMs } from './room.ts';
 
 export const ARCHIVE_DOC = 'Channel archive';
 
@@ -46,6 +46,7 @@ interface RoomState {
   docs: LoadedDoc[]; // as Switch lists them, the archive excluded
   archive: ArchiveMessage[];
   archiveOrder: string[]; // the archive's own `docs:` list, by file name
+  archivePaths: Map<string, string>; // file name → its public copy's repo path (demo/<room dir>/docs/…), for links
   live: ArchiveMessage[]; // read_context history + stream messages, by time
   record: RoomRecord;
   logDocId: string | null; // our Decision log, once it exists
@@ -67,11 +68,14 @@ export function fileNameOf(d: DocMeta, ours: boolean): string {
 }
 
 /** The Channel archive's YAML → its messages and its doc order. Same mapping as room.ts loadDemoRoom. */
-export function parseArchive(text: string): { messages: ArchiveMessage[]; order: string[] } {
+export function parseArchive(text: string): { messages: ArchiveMessage[]; order: string[]; paths: Map<string, string> } {
   const hist = parse(text) ?? {};
   const messages = ((hist.messages ?? []) as any[]).map((m) => ({ id: m.id, at: String(m.at), author: m.author, text: m.text, thread: m.thread ?? null }));
   const order = ((hist.docs ?? []) as string[]).map((p) => String(p).split('/').pop()!);
-  return { messages, order };
+  // The seeded docs' public copies: demo/<room dir>/<path as the archive lists it> (room.ts loadDemoRoom's layout).
+  const dir = typeof hist.room === 'string' ? (ROOM_DIRS[hist.room] ?? null) : null;
+  const paths = new Map<string, string>(dir ? ((hist.docs ?? []) as string[]).map((p) => [String(p).split('/').pop()!, `demo/${dir}/${String(p).replace(/^\/+/, '')}`]) : []);
+  return { messages, order, paths };
 }
 
 export class RoomMemory {
@@ -139,7 +143,7 @@ export class RoomMemory {
     if (!metas.length) return null;
     const texts = await this.fetchDocs(roomId, metas.map((d) => d.id));
     const st: RoomState = {
-      roomId, name: roomName, docs: [], archive: [], archiveOrder: [], live: [], record: { name: roomName, docs: [], messages: [] },
+      roomId, name: roomName, docs: [], archive: [], archiveOrder: [], archivePaths: new Map(), live: [], record: { name: roomName, docs: [], messages: [] },
       logDocId: null, logName: DECISION_LOG, log: [],
     };
     this.setDocs(st, metas.map((m) => ({ ...m, content: texts.get(m.id) ?? '' })));
@@ -157,6 +161,7 @@ export class RoomMemory {
         const a = parseArchive(archive.content);
         st.archive = a.messages;
         st.archiveOrder = a.order;
+        st.archivePaths = a.paths;
       } catch (e) { this.log(`memory: ${st.name}: the Channel archive isn't readable YAML (${(e as Error).message}); left out`); st.archive = []; }
     } else st.archive = [];
     st.docs = docs.filter((d) => d !== archive);
@@ -187,12 +192,14 @@ export class RoomMemory {
       used.add(file);
       return { d, file };
     });
+    // Only a seeded project document has a public copy to link to (its file name came from its description).
+    const pathOf = (d: LoadedDoc, file: string) => ((d.description ?? '').match(SEEDED) ? (st.archivePaths.get(file) ?? null) : null);
     const rank = (x: { d: LoadedDoc; file: string }) => {
       if (x.d.id === st.logDocId) return 1e6;
       const i = st.archiveOrder.indexOf(x.file);
       return i >= 0 ? i : 1000 + named.indexOf(x);
     };
-    const docs: RoomDoc[] = [...named].sort((a, b) => rank(a) - rank(b)).filter((x) => x.d.content.trim()).map((x) => ({ file: x.file, text: x.d.content }));
+    const docs: RoomDoc[] = [...named].sort((a, b) => rank(a) - rank(b)).filter((x) => x.d.content.trim()).map((x) => ({ file: x.file, text: x.d.content, title: x.d.name, path: pathOf(x.d, x.file) }));
     const archiveIds = new Set(st.archive.map((m) => m.id));
     st.record.name = st.name;
     st.record.docs = docs;
@@ -229,9 +236,9 @@ export class RoomMemory {
       ];
       if (archiveMeta && !archiveNew) {
         // Keep the parsed archive as it is (setDocs would re-parse an empty string).
-        const { archive, archiveOrder } = st;
+        const { archive, archiveOrder, archivePaths } = st;
         this.setDocs(st, docs);
-        st.archive = archive; st.archiveOrder = archiveOrder;
+        st.archive = archive; st.archiveOrder = archiveOrder; st.archivePaths = archivePaths;
       } else this.setDocs(st, docs);
       this.rebuild(st);
       this.log(`memory: ${st.name}: documents changed in Switch (+${fresh.map((m) => m.name).join(', ') || '0'}${gone.length ? `, -${gone.map((d) => d.name).join(', ')}` : ''})`);

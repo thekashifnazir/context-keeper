@@ -10,6 +10,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { DECISION_LOG_FILE } from './decision-log.ts';
 import type { RoomRecord } from './room.ts';
+import { dayOf, docUrl, mdLink, messageLabel, sectionLabel } from '../shared/refs.ts';
 
 export interface BlockInfo {
   blockId: string; // e.g. "product.md §1.4", "pilot-plan.md §2 D1", "led-011"
@@ -23,6 +24,11 @@ export interface BlockInfo {
   kind: 'message' | 'row' | 'bullet' | 'para';
   /** Decision rows: the table's column names, in order (the raw row alone doesn't say which cell is "Rejected"). */
   columns?: string[];
+  /** How people find it: "Product overview › Client portal" for a doc block (src/shared/refs.ts), the
+   *  author for a message. */
+  label?: string;
+  /** The section's public link (CK_DOCS_BASE_URL), or null. */
+  url?: string | null;
 }
 
 export interface RoomContext {
@@ -63,6 +69,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
   for (const doc of room.docs) {
     const infos: BlockInfo[] = [];
     const date = docDate(doc.text);
+    const docTitle = doc.text.match(/^# (.+)$/m)?.[1]?.trim() || doc.title || doc.file.replace(/\.md$/, '');
     const dateTag = `doc ${date ?? 'UNDATED'}`;
     const parts = doc.text.split(/^(?=## )/m);
     let columns: string | null = null;
@@ -71,6 +78,9 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
       const head = part.match(/^## (§\d+)\s*(.*)$/m);
       const sec = head ? head[1] : null;
       const title = head ? head[2].trim() : 'Header';
+      const heading = head ? `${head[1]} ${head[2]}`.trim() : null;
+      const label = heading ? sectionLabel(docTitle, heading) : sectionLabel(docTitle, '');
+      const url = docUrl(doc.path, heading);
       const ref = sec ? `${doc.file} ${sec}` : `${doc.file} header`;
       sourceText.set(ref, part);
       const lines = (head ? part.slice(part.indexOf('\n') + 1) : part).split('\n');
@@ -78,7 +88,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
       let para: string[] = [];
       const add = (blockId: string, tag: string, body: string, kind: BlockInfo['kind'], display: string, at: string | null, author: string | null = null) => {
         const head = `[${blockId} · ${title} · ${tag}] `;
-        infos.push({ blockId, ref, headerLen: head.length, text: head + body, body, display: trimDisplay(display), at, author, kind, ...(kind === 'row' && header ? { columns: header } : {}) });
+        infos.push({ blockId, ref, headerLen: head.length, text: head + body, body, display: trimDisplay(display), at, author, kind, ...(kind === 'row' && header ? { columns: header } : {}), label, url });
       };
       const flush = () => {
         if (para.length) add(ref, dateTag, para.join(' ').trim(), 'para', para.join(' ').trim(), date);
@@ -133,7 +143,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
   const archive: BlockInfo[] = room.messages.map((m) => {
     const header = `[${m.id} · ${m.author} · ${shortStamp(m.at)}${m.thread ? ` · reply to ${m.thread}` : ''}] `;
     sourceText.set(m.id, m.text);
-    return { blockId: m.id, ref: m.id, headerLen: header.length, text: header + m.text, body: m.text, display: trimDisplay(m.text), at: shortStamp(m.at), author: m.author, kind: 'message' };
+    return { blockId: m.id, ref: m.id, headerLen: header.length, text: header + m.text, body: m.text, display: trimDisplay(m.text), at: shortStamp(m.at), author: m.author, kind: 'message', label: m.author, url: null };
   });
   if (archive.length) {
     documents.push({
@@ -174,4 +184,17 @@ export function reviewText(b: BlockInfo, cited: string = b.text): string {
   const f = rowFields(b);
   if (!f) return cited;
   return `${cited}\nThe same row by column: ${Object.entries(f).map(([k, v]) => `${k}: ${v}`).join(' · ')}`;
+}
+
+/** How a post names a source, the way people know it: a doc section by its document's title and
+ *  heading, linked when it has a public copy, with its date ("[Product overview › Client portal](…)
+ *  (20 Oct)"); a decision row with who decided it ("… › Decisions (Kash, 6 Oct)"); a chat message by
+ *  who said it and when ("Rowan, 4 Nov"; Switch gives no permalink to link to). Never "product.md §5"
+ *  or a message id (Kash, 4 Nov, I9). */
+export function sourceText(b: Pick<BlockInfo, 'kind' | 'ref' | 'at' | 'author' | 'label' | 'url'>): string {
+  if (b.kind === 'message') return messageLabel(b.author, b.at);
+  const day = dayOf(b.at);
+  const when = b.kind === 'row' && b.author ? `${b.author}${day ? `, ${day}` : ''}` : day;
+  const name = mdLink(b.label || b.ref, b.url);
+  return when ? `${name} (${when})` : name;
 }

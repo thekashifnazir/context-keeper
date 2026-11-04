@@ -53,7 +53,7 @@ describe('job D: project clash', () => {
     expect(note).toContain('Rowan said');
     expect(note).toContain("we can't take three agencies");
     expect(note).toContain('Three agencies, max 25 clients each');
-    expect(note).toMatch(/Options:\n1\. Keep three agencies as decided\n2\. Drop to two agencies/);
+    expect(note).toMatch(/\*\*Options:\*\*\n1\. Keep three agencies as decided\n2\. Drop to two agencies/);
 
     expect(poster.pub()).toHaveLength(1);
     const pub = poster.pub()[0];

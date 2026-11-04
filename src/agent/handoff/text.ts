@@ -5,8 +5,8 @@
 //     a bare word there could read as an answer to Switch's "Allow once / Decline" card.
 // Chat text is data: the idea and the cited quotes go out as quoted lines, never as instructions.
 import { plainCommand } from '../../shared/command.ts';
-import { isRawMessageId } from '../../shared/refs.ts';
-import type { IdeaRecord } from './store.ts';
+import { isRawMessageId, mdLink } from '../../shared/refs.ts';
+import type { IdeaRecord, Source } from './store.ts';
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmtDay = (at: string) => (/^\d{4}-\d{2}-\d{2}/.test(at) ? `${Number(at.slice(8, 10))} ${MONTH[Number(at.slice(5, 7)) - 1]}` : at);
@@ -19,6 +19,16 @@ export function quoteBlock(text: string, max = 600): string {
 /** "@name" inside quoted chat text must not address anyone: break it with a zero-width joiner. */
 const defuse = (s: string) => s.replace(/@(?=[\w-])/g, '@‍');
 
+/** A quote for people (docs/message-style.md): one compact italic line, verbatim words only (line
+ *  breaks, "> " and markdown emphasis folded away), cut at a word near `max` with "…", mentions
+ *  defused. The hand-off to Claude Code keeps quoteBlock: there the "> " marks chat text as data. */
+export function quoteLine(text: string, max = 200): string {
+  // A record id in code marks ("(`led-016`)") is the doc's own cross-reference, not words people need.
+  const t = text.replace(/^\s*>\s?/gm, '').replace(/\s*\(`[^`\n]+`\)/g, '').replace(/\*\*|__|`/g, '').replace(/\s+/g, ' ').trim();
+  const cut = t.length > max ? `${t.slice(0, max).replace(/\s+\S*$/, '')} …` : t;
+  return `_“${defuse(cut)}”_`;
+}
+
 /** Remove @-mentions of the given agents from a body we're about to post. */
 export function stripMentions(body: string, agentNames: string[]): string {
   let out = body;
@@ -30,18 +40,22 @@ const BARE = /^\s*(yes|yeah|yep|y|no|nope|n|ok|okay|approve[ds]?|allow(ed)?( onc
 export const isBareAnswer = (body: string) => BARE.test(body);
 
 // ---- what we post --------------------------------------------------------------------------------
-// Kash, 4 Nov: "loads of good information, but it's quite difficult to read". So every post leads with
-// one bold line saying what it is, then short labelled lines; the idea is always a quote; the full
-// cited context goes only where Claude Code needs it (the hand-off). Markdown: Switch's Slack bridge
-// turns **bold** into Slack's *bold* and "> " into a quote; Mattermost reads both as they are. No
-// "<placeholder>": the Slack bridge doesn't escape agent text, so Slack would read it as a link.
+// docs/message-style.md. Kash, 4 Nov: "loads of good information, but it's quite difficult to read";
+// and after I9: the quote blocks "just don't really help", and "what do those squiggles mean". So
+// every post leads with one bold label and the point, then one idea per line, each led by a short
+// bold label ("**New part:**"); a quote is one italic line; a source is named the way people know it
+// ("Product overview › Client portal", linked when it can be); the full cited context goes only where
+// Claude Code needs it (the hand-off). Markdown: Switch's Slack bridge turns **bold** into Slack's
+// *bold* and [label](url) into <url|label>; Mattermost reads both as they are. No "<placeholder>":
+// the Slack bridge doesn't escape agent text, so Slack would read it as a link.
 
-/** A source as people can find it: a record ref as is, a raw Switch message id as "an earlier message". */
-const sourceLabel = (ref: string) => (isRawMessageId(ref) ? 'an earlier message' : ref);
-const labels = (refs: string[]) => [...new Set(refs.map(sourceLabel))];
+/** A source as people can find it: job A's name for it ("[Product overview › Client portal](…) (20 Oct)",
+ *  "Rowan, 4 Nov"); for an older record without one, the ref, or "an earlier message" for a raw id. */
+export const sourceName = (s: Pick<Source, 'ref' | 'source'>) => s.source?.trim() || (isRawMessageId(s.ref) ? 'an earlier message' : s.ref);
+const sourceOfRef = (rec: IdeaRecord, ref: string) => sourceName(rec.sources.find((s) => s.ref === ref && s.source) ?? { ref });
 
-/** "product.md §4" (or two refs) for an idea that builds on something in the record; null for a new one. */
-export const buildsOnLabel = (rec: IdeaRecord) => (rec.builds_on?.length ? labels(rec.builds_on).slice(0, 2).join(', ') : null);
+/** The (at most two) sources an idea builds on, as people read them; null for a genuinely new idea. */
+export const buildsOnLabel = (rec: IdeaRecord) => (rec.builds_on?.length ? [...new Set(rec.builds_on.map((r) => sourceOfRef(rec, r)))].slice(0, 2).join(', ') : null);
 
 /** Job A's name for the part the record doesn't have yet, as one defused line (chat-derived text). */
 const newPartLine = (rec: IdeaRecord) => (rec.new_part ? defuse(rec.new_part.replace(/\s+/g, ' ').trim()).slice(0, 200) : null);
@@ -51,13 +65,14 @@ export function ownerIdeaNote(rec: IdeaRecord, flagged: boolean): string {
   const on = buildsOnLabel(rec);
   const part = newPartLine(rec);
   return [
-    `**${rec.ref} · New idea from ${rec.sender_name}** · #${rec.room_name}, ${fmtDay(rec.at)}`,
-    quoteBlock(rec.text, 400),
-    ...(on ? [`Builds on ${on}.${part ? ` New part: ${part}` : ''}`] : []),
+    `💡 **${rec.ref} · New idea from ${rec.sender_name}** · #${rec.room_name}, ${fmtDay(rec.at)}`,
+    quoteLine(rec.text, 300),
+    ...(on ? [`**Builds on:** ${on}`] : []),
+    ...(on && part ? [`**New part:** ${part}`] : []),
     ...(flagged ? ['⚠️ It reads like instructions to an agent. It goes to Claude Code as quoted data only.'] : []),
     // Bold, not inline code: Slack pasted a copied `approve I7` back as code (Kash, 4 Nov). The
     // parser takes either now (plainCommand), but bold copies as plain words.
-    `Reply **approve ${rec.ref}** to hand it to Claude Code. Nothing happens until you do.`,
+    `**To build it:** reply **approve ${rec.ref}** and Claude Code takes it. Nothing happens until you do.`,
   ].join('\n');
 }
 
@@ -69,7 +84,7 @@ function contextLines(rec: IdeaRecord): string[] {
     : [`**Builds on** what the record already has (${on}): only the part that isn't there yet is new.`]) : [];
   if (!rec.sources.length) return [...head, '**Context from the record:** none (it was logged as a new idea).'];
   const by = new Map<string, string[]>();
-  for (const s of rec.sources.slice(0, 4)) by.set(sourceLabel(s.ref), [...(by.get(sourceLabel(s.ref)) ?? []), s.quote]);
+  for (const s of rec.sources.slice(0, 4)) by.set(sourceName(s), [...(by.get(sourceName(s)) ?? []), s.quote]);
   return [...head, '**Context from the record:**', ...[...by].flatMap(([ref, quotes]) => [`${ref}:`, ...quotes.map((q) => quoteBlock(q, 300))])];
 }
 
@@ -80,12 +95,10 @@ function contextLines(rec: IdeaRecord): string[] {
 export function buildRoomBrief(rec: IdeaRecord, ownerName: string, inThread = true): string {
   const part = rec.builds_on?.length ? newPartLine(rec) : null;
   return [
-    `🛠️ **${rec.ref} · Approved** · ${rec.sender_name}'s idea from #${rec.room_name}, approved by ${ownerName}`,
-    quoteBlock(rec.text, 300),
-    ...(part ? [`New part: ${part}`] : []),
-    inThread
-      ? `📬 Result goes back to ${rec.sender_name}'s thread for sign-off. Claude Code's brief is in the thread.`
-      : `📬 Result goes back to ${rec.sender_name}'s thread for sign-off. Claude Code's hand-off below has the cited context.`,
+    `🛠️ **${rec.ref} · Approved by ${ownerName}** · ${rec.sender_name}'s idea from #${rec.room_name}`,
+    `**Idea:** ${quoteLine(rec.text, 300)}`,
+    ...(part ? [`**New part:** ${part}`] : []),
+    `**Next:** Claude Code builds it (${inThread ? 'its brief is in the thread' : 'its brief is below'}); the result goes back to ${rec.sender_name} to sign off.`,
   ].join('\n');
 }
 
@@ -108,28 +121,36 @@ export function handoffMessage(rec: IdeaRecord, opts: { ownerName: string; repo:
 
 /** Stage 1, as soon as the owner approves (the chain's announce step). */
 export const announceLine = (rec: IdeaRecord, ownerName: string, buildRoom: string) =>
-  `✅ **Approved** by ${ownerName} · waiting for Claude Code to start building it in #${buildRoom}. I'll post each step here for ${rec.sender_name}.`;
+  `✅ **Approved by ${ownerName}** · Claude Code will build it in #${buildRoom}. I'll post each step here, ${rec.sender_name}.`;
 /** Stage 2: Claude Code's first sign of work ("On it", "Starting a session", "Working…"). */
-export const buildingLine = (buildRoom: string) => `🔨 **Building** · Claude Code has started on it in #${buildRoom}.`;
+export const buildingLine = (buildRoom: string) => `🔨 **Building** · Claude Code has started, in #${buildRoom}.`;
 /** Stage 3: Claude Code is waiting for the owner's "Allow once". */
-export const blockedLine = (ownerName: string) => `⏸️ **Waiting for ${ownerName}** · Claude Code needs ${ownerName}'s OK for a step before it can go on.`;
+export const blockedLine = (ownerName: string) => `⏸️ **Waiting for ${ownerName}** · Claude Code needs ${ownerName}'s OK for one step.`;
 /** Stage 4: Claude Code active again after a block. */
-export const unblockedLine = () => `🔨 **Building again** · Claude Code is working on it again.`;
+export const unblockedLine = () => `🔨 **Building again** · Claude Code is back at work.`;
+
+/** A result link with a name people can read: "ledgerly-demo issue #7", "ledgerly-demo PR #8". */
+export function resultLink(url: string): string {
+  const m = url.match(/^https?:\/\/github\.com\/[^/]+\/([^/]+)\/(issues|pull)\/(\d+)/);
+  return m ? mdLink(`${m[1]} ${m[2] === 'pull' ? 'PR' : 'issue'} #${m[3]}`, url) : url;
+}
 
 /** Stage 5: the result, and the sign-off ask (a separate notification people act on). */
 export function signoffRequest(rec: IdeaRecord, summary: string, links: string[]): string {
-  const what = links.length ? `📦 **Done** · Claude Code's result: ${links.join(' ')}` : `📦 **Done** · Claude Code says: ${summary.trim().slice(0, 300)}`;
+  const what = links.length ? `📦 **Done** · ${links.map(resultLink).join(', ')}` : `📦 **Done** · Claude Code says: ${shortNote(summary, 300)}`;
   // Kash, 4 Nov: "it might not just say 'it looks right'. It might give feedback as well." Any reply is read.
-  return `${what}\n**${rec.sender_name}**, you raised it, so it's yours to sign off: just reply here — say if it's right, or what's missing.`;
+  return `${what}\n**${rec.sender_name}**, does it do what you wanted? Reply here: say it's right, or what's missing.`;
 }
 
-export const notDoneLine = (rec: IdeaRecord, reason: string) => `⚠️ **Not done** · Claude Code couldn't finish ${rec.ref}: ${reason.trim().slice(0, 300)}. It stays open.`;
-export const timeoutLine = (rec: IdeaRecord, minutes: number) => `⌛ **No result yet** · nothing from Claude Code after ${minutes} min. It stays open; I'll post here if it reports back.`;
-export const signedOffLine = (byName: string) => `✅ **Signed off** by ${byName}. Closed.`;
+export const notDoneLine = (rec: IdeaRecord, reason: string) => `⚠️ **Not done** · Claude Code couldn't finish it: ${shortNote(reason, 300)}. It stays open.`;
+export const timeoutLine = (rec: IdeaRecord, minutes: number) => `⌛ **No result yet** · nothing from Claude Code after ${minutes} min. It stays open; I'll post here when it reports back.`;
+export const signedOffLine = (byName: string) => `✅ **Signed off** by ${byName} · closed.`;
 /** Signed off, with feedback (a wish or follow-up that doesn't stop it being done): closed, the note kept. */
-export const signedOffWithNoteLine = (byName: string, note: string) => `✅ **Signed off** by ${byName}, with a note: ${note}. Closed.`;
-/** The raiser's (or owner's) reply didn't say whether it's right: asked once per idea, never again. */
-export const askSignoffLine = (byName: string) => `**${byName}**, is that a sign-off? Reply "looks right", or say what's missing.`;
+export const signedOffWithNoteLine = (byName: string, note: string) => `✅ **Signed off** by ${byName} · closed. **Note:** ${note}`;
+/** The raiser's (or owner's) reply didn't say whether they're happy with it: asked once per idea. */
+export const askSignoffLine = (byName: string) => `**${byName}**, is that a sign-off? Say it's right, or what's missing.`;
+/** A second such reply after the ask: one short line rather than silence (Kash, 4 Nov, I9), then quiet. */
+export const remindSignoffLine = (byName: string) => `Got it, ${byName}. When you're happy with it, just say so and I'll close it.`;
 /** A model-written note or reason from chat, for a public line: one line, no @-mention, capped. */
 export function shortNote(text: string, max = 160): string {
   const t = defuse(text.replace(/\s+/g, ' ').trim()).replace(/^["'“‘]+|["'”’]+$/g, '').replace(/[.!\s]+$/, '');
@@ -146,9 +167,9 @@ export const heardLine = (byName: string, raiserName: string, ownerName: string,
   raiserIsOwner ? `Thanks, ${byName}, noted. ${ownerName} signs this one off.` : `Thanks, ${byName}, noted. ${raiserName} signs this one off.`;
 /** Owner desk, once per attempt: Claude Code posted that it's waiting (card), or the backstop timer ran out. */
 export const nudgeLine = (rec: IdeaRecord, buildRoom: string, minutes: number | null = null) => (minutes === null
-  ? `**${rec.ref} · Needs your OK** · Claude Code is waiting: open the ${rec.ref} thread in #${buildRoom} and click Allow once.`
-  : `**${rec.ref} · May need your OK** · no result from Claude Code after ${minutes} min. If a card is waiting, open the ${rec.ref} thread in #${buildRoom} and click Allow once.`);
-export const reopenedLine = (byName: string, reason: string) => `↩️ **Reopened** by ${byName}${shortNote(reason, 200) ? `: ${shortNote(reason, 200)}` : ''}.`;
+  ? `⏸️ **${rec.ref} · Needs your OK** · Claude Code is waiting.\n**To do:** open the ${rec.ref} thread in #${buildRoom} and click **Allow once**.`
+  : `⏸️ **${rec.ref} · May need your OK** · no result from Claude Code after ${minutes} min.\n**To do:** if a card is waiting in the ${rec.ref} thread in #${buildRoom}, click **Allow once**.`);
+export const reopenedLine = (byName: string, reason: string) => `↩️ **Reopened** by ${byName}${shortNote(reason, 200) ? ` · ${shortNote(reason, 200)}` : ''}`;
 
 // ---- what we read --------------------------------------------------------------------------------
 

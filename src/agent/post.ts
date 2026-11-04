@@ -4,9 +4,12 @@
 //      might-be-related with the link; with no citation at all it becomes silence + gate_blocked.
 //   2. the reviewer (one Haiku call for the decision; sees only each claim and its quotes). A block
 //      drops covered / parked / contradicts-record / reopen / parked-recall to might-be-related.
-//   3. compose: a bold label for the verdict, the model's reply, then the quote with who/when on one
-//      line, built by code from verified text, and for an idea that builds on the record, code's
-//      "💡 Logged as a new idea" line (Kash, 4 Nov: "make the updates really nice and clear").
+//   3. compose (docs/message-style.md): a bold label for the verdict and the model's answer on one
+//      line; a "Reopen if" on its own line; the quote as one italic line with its source named the way
+//      people know it ("Product overview › Client portal", linked when CK_DOCS_BASE_URL is set; "Rowan,
+//      4 Nov" for a chat message), built by code from verified text; other sources on one "Also:"
+//      line; and for an idea that builds on the record, code's "💡 Logged as a new idea" line (Kash,
+//      4 Nov, I9: the quote blocks "just don't really help", and "what do those squiggles mean").
 //   4. idempotency (room + thread + text hash, in state/), then send; a failed send retries once,
 //      then the owner desk gets the exact draft.
 // A reopen (D4-2) that passes the reviewer goes to the owner desk first (src/agent/jobs/reopen.ts);
@@ -15,15 +18,15 @@
 // checked for leaked details), and job C's brief goes through postBrief: the same gate and reviewer.
 // Code rules here only ever tighten a verdict, never loosen it.
 import { quoteVerified } from '../shared/quote.ts';
-import { isRawMessageId } from '../shared/refs.ts';
 import type { TraceItem, TracePost } from '../shared/trace.ts';
-import { reviewText, type BlockInfo, type RoomContext } from './blocks.ts';
+import { reviewText, sourceText, type BlockInfo, type RoomContext } from './blocks.ts';
+export { sourceText };
 import { decisionId, reopenIf, reopenLine, reopenNote } from './jobs/reopen.ts';
 import { leaksClash } from './jobs/restriction.ts';
 import { PendingStore } from './pending.ts';
 import { callReviewer, type BriefLine, type Claude, type ModelConfig, type Usage } from './model.ts';
 import { postKey, type AgentState } from './state.ts';
-import { shortNote } from './handoff/text.ts';
+import { quoteLine, shortNote } from './handoff/text.ts';
 import type { Cited, ModelItem } from './verdict.ts';
 
 export interface Poster {
@@ -38,35 +41,25 @@ export const STRONG = new Set(['covered', 'parked', 'contradicts-record', 'reope
 // Kash, 3 Nov: a genuinely new idea gets a short reply saying it's recorded (CK_ANNOUNCE_NEW=0 turns it off).
 const announceNew = () => process.env.CK_ANNOUNCE_NEW !== '0';
 
-export interface Verified { ref: string; quote: string; display: string; who: string; full: string; block: BlockInfo }
-
-const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const fmtDay = (at: string | null) => (at && /^\d{4}-\d{2}-\d{2}/.test(at) ? `${Number(at.slice(8, 10))} ${MONTH[Number(at.slice(5, 7)) - 1]}` : null);
+/** source: how the post names it (sourceText). The trace keeps ref, the raw record ref, for scoring. */
+export interface Verified { ref: string; quote: string; display: string; source: string; full: string; block: BlockInfo }
 
 /** The quote gate for one item: which cited blocks really are verbatim in their source. */
-export function gateSources(cited: Cited[], ctx: RoomContext): { verified: Verified[]; refsSeen: string[] } {
+export function gateSources(cited: Cited[], ctx: RoomContext): { verified: Verified[]; refsSeen: string[]; seen: string[] } {
   const verified: Verified[] = [];
   const refsSeen: string[] = [];
+  const seen: string[] = []; // each cited source as people read it (for the "see …" fallback)
   for (const c of cited) {
     const b = c.block;
-    if (!refsSeen.includes(b.ref)) refsSeen.push(b.ref);
+    if (!refsSeen.includes(b.ref)) { refsSeen.push(b.ref); seen.push(sourceText(b)); }
     const quote = c.citedText.startsWith(b.text.slice(0, b.headerLen)) ? c.citedText.slice(b.headerLen) : c.citedText;
     const source = ctx.sourceText.get(b.ref);
     if (!source || !quoteVerified(quote, source)) continue;
     if (verified.some((v) => v.ref === b.ref && v.quote === quote)) continue;
-    const day = fmtDay(b.at);
-    const where = b.kind === 'message' ? b.ref : b.blockId.replace(/^(\S+ §\d+)\.\d+$/, '$1');
-    // A message from the room's own history has a raw Switch id (sw_…) for a ref: name it by who and when only.
-    const raw = isRawMessageId(where);
-    const who = b.author ? (raw ? `${b.author}${day ? `, ${day}` : ''}` : `${b.author}, ${day} (${where})`) : raw ? `an earlier message${day ? `, ${day}` : ''}` : `${where}${day ? `, ${day}` : ''}`;
-    verified.push({ ref: b.ref, quote, display: b.display, who, full: c.citedText, block: b });
+    verified.push({ ref: b.ref, quote, display: b.display, source: sourceText(b), full: c.citedText, block: b });
   }
-  return { verified, refsSeen };
+  return { verified, refsSeen, seen };
 }
-
-/** How the "Also:" line names a source: its record ref, or for a message with a raw Switch id (sw_…),
- *  who said it and when ("Rowan, 4 Nov"). Kash, 4 Nov: a raw id leaked into a reply's Also line. */
-export const alsoLabel = (s: Pick<Verified, 'ref' | 'who'>) => (isRawMessageId(s.ref) ? s.who : s.ref);
 
 // Job A's reply in the stage lines' shape (Kash liked those: "bold label first, short"): one bold label
 // for the verdict code settled on, the reply, the quote with its source on the same line, and the
@@ -84,18 +77,23 @@ export const LABEL: Record<string, string> = {
 export const MIGHT_BE_LABEL = '🔎 **Might be related**';
 export const loggedLine = (newPart: string) => `💡 **Logged as a new idea** · ${newPart}`;
 
-/** "> quote — product.md §2, 20 Oct · also product.md §4": every quoted line keeps its "> ", the
- *  source rides on the last one, other sources folded in after it. */
-export function compose(reply: string, sources: Pick<Verified, 'ref' | 'display' | 'who'>[], opts: { label?: string; newPart?: string | null } = {}): string {
+/** Job A's reply, top to bottom (docs/message-style.md):
+ *    📌 **In the record** · <the answer, one or two short sentences>
+ *    **Reopen if:** <the decision's condition>                       (when the reply ends with one)
+ *    _“<verbatim quote>”_ — [Product overview › Client portal](…) (20 Oct)
+ *    **Also:** [Pilot readiness status › Shipped-tested](…) (20 Oct) · Sam, 2 Oct   (other sources)
+ *    💡 **Logged as a new idea** · <the new part>                      (builds-on ideas only) */
+export function compose(reply: string, sources: Pick<Verified, 'ref' | 'display' | 'source'>[], opts: { label?: string; newPart?: string | null } = {}): string {
   const [first, ...rest] = sources;
-  const text = reply.trim();
+  let text = reply.trim();
+  let reopen = '';
+  const m = /(?:^|\s)Reopen if:\s*(\S[\s\S]*)$/i.exec(text);
+  if (m && m.index > 0) { reopen = m[1].trim(); text = text.slice(0, m.index).trim(); }
   const lines = [opts.label ? `${opts.label}${text ? ` · ${text}` : ''}` : text];
-  const others = [...new Set(rest.filter((s) => s.ref !== first?.ref).map(alsoLabel))].filter((l) => l !== (first && alsoLabel(first)));
-  if (first) {
-    const quote = first.display.split('\n').map((l) => l.trim()).filter(Boolean);
-    const src = `— ${first.who}${others.length ? ` · also ${others.join(', ')}` : ''}`;
-    lines.push(...quote.map((l, i) => `> ${l}${i === quote.length - 1 ? ` ${src}` : ''}`));
-  }
+  if (reopen) lines.push(`**Reopen if:** ${reopen}`);
+  if (first) lines.push(`${quoteLine(first.display)} — ${first.source}`);
+  const others = [...new Set(rest.filter((s) => s.ref !== first?.ref).map((s) => s.source))].filter((l) => l !== first?.source);
+  if (others.length) lines.push(`**Also:** ${others.join(' · ')}`);
   const part = opts.newPart ? shortNote(opts.newPart, 200) : '';
   if (part) lines.push(loggedLine(part));
   return lines.filter(Boolean).join('\n');
@@ -128,7 +126,7 @@ const traceItem = (it: ModelItem, verdict: string | null, sources: Verified[]): 
   verdict: verdict as TraceItem['verdict'],
   restriction: it.restriction as TraceItem['restriction'],
   clashes_with: it.clashes_with,
-  sources: sources.map((s) => ({ ref: s.ref, quote: s.quote })),
+  sources: sources.map((s) => ({ ref: s.ref, quote: s.quote, source: s.source })),
   decision_record: it.decision_record ?? null,
   brief_for: null,
   new_part: buildsOnPart(it, verdict, sources),
@@ -154,7 +152,7 @@ export async function postPublic(
 
   // 1. quote gate
   for (const it of draft.items) {
-    const { verified, refsSeen } = gateSources(it.cited, ctx);
+    const { verified, refsSeen, seen } = gateSources(it.cited, ctx);
     let verdict = it.verdict;
     let body: string | null = null;
     if (it.job === 'A' && verdict && (STRONG.has(verdict) || verdict === 'might-be-related')) {
@@ -168,7 +166,7 @@ export async function postPublic(
       } else if (STRONG.has(verdict) && refsSeen.length) {
         events.push(`gate: ${it.message_id} ${verdict}→might-be-related (no verified quote)`);
         verdict = 'might-be-related';
-        body = `${MIGHT_BE_LABEL} · see ${refsSeen.join(', ')}.`;
+        body = `${MIGHT_BE_LABEL} · see ${seen.join(' · ')}`;
       } else {
         events.push(`gate_blocked: ${it.message_id} ${verdict} had no verified quote`);
         verdict = null;
@@ -320,13 +318,13 @@ export async function postBrief(
 ): Promise<BriefResult> {
   const events: string[] = [];
   const blocks = new Map(ctx.table.flat().map((b) => [b.blockId, b]));
-  type Kept = { line: BriefLine; ref: string; quote: string; full: string };
+  type Kept = { line: BriefLine; ref: string; quote: string; full: string; block: BlockInfo };
   const kept: Kept[] = [];
   draft.lines.forEach((l, i) => {
     const b = blocks.get(l.block) ?? ctx.table.flat().find((x) => x.ref === l.block && quoteVerified(l.quote, x.body));
     const src = b ? ctx.sourceText.get(b.ref) : undefined;
     if (!b || !src || !quoteVerified(l.quote, b.body) || !quoteVerified(l.quote, src)) { events.push(`brief_gate: line ${i + 1} dropped (quote not in ${l.block || 'any block'})`); return; }
-    kept.push({ line: l, ref: b.ref, quote: l.quote, full: reviewText(b) });
+    kept.push({ line: l, ref: b.ref, quote: l.quote, full: reviewText(b), block: b });
   });
   let usage: Usage | null = null;
   if (kept.length) {
@@ -347,15 +345,16 @@ export async function postBrief(
     events.push('brief_gate_blocked: no line survived the gate and the reviewer');
     return { posts: [], sources: [], events, usage, error: null, kept: 0 };
   }
-  // Each source at the end of its line, compact: the record ref ("led-015", "pilot-plan.md §2"), or for a
-  // message from the room's own history (a raw sw_ id) who said it and when, as job A's lines do.
-  const refLabel = (k: Kept) => {
-    if (!isRawMessageId(k.ref)) return k.ref;
-    const b = blocks.get(k.line.block) ?? ctx.table.flat().find((x) => x.ref === k.ref);
-    const day = fmtDay(b?.at ?? null);
-    return b?.author ? `${b.author}${day ? `, ${day}` : ''}` : `an earlier message${day ? `, ${day}` : ''}`;
-  };
-  const body = [draft.opening, ...kept.slice(0, 5).map((k) => `• ${k.line.text.trim()} (${refLabel(k)})`), draft.closing].filter(Boolean).join('\n');
+  // One line per point, led by a bold kind ("Decided", "Open") so it scans, its source last, named as
+  // job A's are ("Pilot plan › Decisions (Kash, 6 Oct)", "Rowan, 4 Nov"), never a ref or an id.
+  const body = [draft.opening, ...kept.slice(0, 5).map((k) => briefLine(k.line, k.block)), draft.closing].filter(Boolean).join('\n');
   const { posts, error } = await sendPublic(deps, draft.roomId, draft.roomName, draft.threadId, body, events);
   return { posts, sources: kept.slice(0, 5).map((k) => ({ ref: k.ref, quote: k.quote })), events, usage, error, kept: Math.min(kept.length, 5) };
+}
+
+const BRIEF_KIND: Record<string, string> = { changed: 'Changed', decided: 'Decided', open: 'Open', talk_to: 'Talk to' };
+/** "• **Decided** · Partner price: free in the pilot, then £19 a month. — [Ledgerly pilot plan › Decisions](…) (Kash, 6 Oct)" */
+export function briefLine(line: Pick<BriefLine, 'kind' | 'text'>, block: Pick<BlockInfo, 'kind' | 'ref' | 'at' | 'author' | 'label' | 'url'>): string {
+  const kind = BRIEF_KIND[line.kind];
+  return `• ${kind ? `**${kind}** · ` : ''}${line.text.trim()} — ${sourceText(block)}`;
 }

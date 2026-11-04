@@ -96,8 +96,8 @@ describe('the brief: a short, named talk link and a scannable layout (Kash: "sho
     const lines = body.split('\n');
     expect(lines[0]).toBe("👋 **Welcome back, Rowan** · here's what changed while you were away");
     expect(lines.slice(1, -1)).toEqual([
-      '• The pilot runs with three agencies, 25 clients each. (pilot-plan.md §2)',
-      '• Priya runs onboarding calls and pilot support. (pilot-plan.md §3)',
+      '• **Decided** · The pilot runs with three agencies, 25 clients each. — Ledgerly pilot plan › Decisions (Kash, 6 Oct)',
+      '• **Talk to** · Priya runs onboarding calls and pilot support. — Ledgerly pilot plan › Who does what (30 Oct)',
     ]);
     const id = lines.at(-1)!.match(/^🎧 \*\*Talk it through\*\* · \[Start a voice catch-up\]\(https:\/\/ck\.example\.test\/talk\/([A-Za-z0-9_-]{12})\) \(up to 10 min\)\. I'll post a summary here after\.$/)![1];
     expect(body).not.toMatch(/elevenlabs\.io|var_|agent_id/);
@@ -304,10 +304,12 @@ describe('people named in "needs confirming" are tagged (Kash: "get me on there 
       didnt_know: ["Whether Sam's form is ready."],
       new_ideas: ["Rowan would like to find the two waiting-list agencies; this needs Kash's confirmation.", 'Kash to brief Sam on it too, says Rowan.'],
     }, people);
-    const [, asked, didnt, ideas] = post.split('\n\n');
+    // what needs someone to act comes first: needs confirming, then to follow up, then asked about
+    const [head, ideas, didnt, asked] = post.split('\n\n');
+    expect(head).toBe('📝 **Call summary** · Rowan talked it through (3 min call) · 2 to confirm, 1 to follow up');
     expect(asked).toBe('**Asked about**\n• Rowan asked what Kash decided about pricing.');
-    expect(didnt).not.toMatch(/@/);
-    expect(ideas).toBe("**New ideas and requests (needs confirming)**\n• @rowan_demo would like to find the two waiting-list agencies; this needs @owner_demo's confirmation.\n• Kash to brief @sam_demo on it too, says Rowan.");
+    expect(didnt).toBe("**To follow up (the record didn't say)**\n• Whether Sam's form is ready.");
+    expect(ideas).toBe("**Needs confirming**\n• @rowan_demo would like to find the two waiting-list agencies; this needs @owner_demo's confirmation.\n• Kash to brief @sam_demo on it too, says Rowan.");
     expect(post.match(/@owner_demo/g)).toHaveLength(1);
     // through Switch's Slack adapter: real mentions for known users (Slack shows "@Kash's confirmation")
     expect(slackRender(ideas, { owner_demo: 'U0KASH', rowan_demo: 'U0ROWAN', sam_demo: 'U0SAM' })).toContain("<@U0ROWAN> would like to find the two waiting-list agencies; this needs <@U0KASH>'s confirmation.");

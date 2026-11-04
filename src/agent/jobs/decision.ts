@@ -8,6 +8,7 @@
 // "reopen if" when the record or the chat gives one; otherwise the desk note asks for it.
 import type { Details } from '../pending.ts';
 import { plainCommand } from '../../shared/command.ts';
+import { quoteLine } from '../handoff/text.ts';
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -41,27 +42,27 @@ export function updateLine(p: { summary: string; owner: string; date: string; re
 }
 
 const ownerLines = (d: Details): string => d.action_owner
-  ? `Action owner: ${d.action_owner} (named in the chat).`
+  ? `**Action owner:** ${d.action_owner} (named in the chat).`
   : d.suggested_owner
     ? `1. Suggested owner: ${d.suggested_owner}${d.owner_basis ? ` (${d.owner_basis})` : ''}. Reply "confirm" to take it.`
     : '1. No owner suggested: nothing in the record says who fits best. Who should do it?';
 const reopenLine = (d: Details): string => d.reopen_if
-  ? `Reopen if: ${d.reopen_if}`
-  : 'Reopen if: not said. What would make this worth revisiting? Reply "reopen if ...".';
+  ? `**Reopen if:** ${d.reopen_if}`
+  : '**Reopen if:** not said. What would make this worth revisiting? Reply "reopen if ...".';
 
 /** The owner-desk note asking the decision makers to confirm (a teammate stated the decision). */
 export function confirmNote(p: { n: number; roomName: string; raisedBy: string; text: string; details: Details; messageRef: string }): string {
   const d = p.details;
   const lines = [
-    `#${p.n} · Decision to confirm in ${p.roomName}`,
-    `Agreed: ${d.summary || p.text.trim()}`,
-    `Why: ${d.why || 'no reason was given in the chat'}`,
-    `Source: ${p.raisedBy}, ${p.messageRef}: "${p.text.trim()}"`,
-    `Date: ${d.date ? fmtDate(d.date) : 'none given'}`,
+    `🗳️ **#${p.n} · Decision to confirm** · #${p.roomName}`,
+    `**Agreed:** ${d.summary || p.text.trim()}`,
+    `**Why:** ${d.why || 'no reason was given in the chat'}`,
+    `**${p.raisedBy} said:** ${quoteLine(p.text, 400)}`,
+    `**Date:** ${d.date ? fmtDate(d.date) : 'none given'}`,
     reopenLine(d),
     ownerLines(d),
     '2. Or tell me: a different owner ("owner Sam"), a different date, a correction, or "drop".',
-    `Reply in this thread (or start with #${p.n}). Nothing is posted in the room until you confirm.`,
+    `**Reply** in this thread (or start with #${p.n}). Nothing is posted in the room until you confirm.`,
   ];
   return lines.join('\n');
 }
@@ -71,13 +72,13 @@ export function assignNote(p: { n: number; roomName: string; text: string; detai
   const d = p.details;
   const missing = [!d.action_owner && 'owner', !d.date && 'due date'].filter(Boolean).join(' or ');
   const lines = [
-    `#${p.n} · Decision logged in ${p.roomName}; it has no ${missing} yet`,
-    `Logged: ${d.summary || p.text.trim()}`,
-    `Source: you, ${p.messageRef}: "${p.text.trim()}"`,
-    d.action_owner ? `Owner: ${d.action_owner}` : ownerLines(d),
-    d.date ? `Date: ${fmtDate(d.date)}` : 'Due: none given. When is it due?',
+    `🗳️ **#${p.n} · Decision logged, no ${missing} yet** · #${p.roomName}`,
+    `**Logged:** ${d.summary || p.text.trim()}`,
+    `**You said:** ${quoteLine(p.text, 400)}`,
+    d.action_owner ? `**Owner:** ${d.action_owner}` : ownerLines(d),
+    d.date ? `**Date:** ${fmtDate(d.date)}` : '**Due:** none given. When is it due?',
     reopenLine(d),
-    `Reply in this thread (or start with #${p.n}): ${d.suggested_owner && !d.action_owner ? '"confirm", ' : ''}"owner Sam", a date, a reopen-if, or "leave it". The decision itself is already logged; until you answer, the work stays unassigned.`,
+    `**Reply** in this thread (or start with #${p.n}): ${d.suggested_owner && !d.action_owner ? '"confirm", ' : ''}"owner Sam", a date, a reopen-if, or "leave it". The decision itself is already logged; until you answer, the work stays unassigned.`,
   ];
   return lines.join('\n');
 }

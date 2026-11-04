@@ -32,14 +32,15 @@ describe('job B: the note in the owner desk', () => {
     expect(poster.pub()).toEqual([]);
     expect(poster.desk()).toHaveLength(1);
     const note = poster.desk()[0].body;
-    expect(note).toContain('#1 · Decision to confirm in ck-test');
-    expect(note).toContain('Agreed: Fieldnote goes first for onboarding.');
-    expect(note).toContain('Why: They signed first.');
-    expect(note).toContain('Priya, m1');
-    expect(note).toContain('Date: Tue 24 Nov');
+    expect(note).toContain('🗳️ **#1 · Decision to confirm** · #ck-test');
+    expect(note).toContain('**Agreed:** Fieldnote goes first for onboarding.');
+    expect(note).toContain('**Why:** They signed first.');
+    expect(note).toContain('**Priya said:** _“Ok, Fieldnote goes first for onboarding, Tue 24th.”_');
+    expect(note).not.toContain('m1'); // never a message id in a desk note
+    expect(note).toContain('**Date:** Tue 24 Nov');
     expect(note).toMatch(/1\. Suggested owner: Priya \(Priya: onboarding calls and pilot support\.\)/);
     expect(note).toMatch(/2\. Or tell me/);
-    expect(note).toContain('Reopen if: not said. What would make this worth revisiting?');
+    expect(note).toContain('**Reopen if:** not said. What would make this worth revisiting?');
     const [line] = t.traces();
     expect(line.kind).toBe('owner_note');
     // A suggestion is not an assignment; nobody has decided until the approver confirms.
@@ -52,7 +53,7 @@ describe('job B: the note in the owner desk', () => {
     const claude = new FakeClaude([{ model: OPUS, respond: verdictMessage(OPUS, ctx, [jobItem('m1', { job: 'B', verdict: 'decision', details: details({ summary: 'Weekly demo on Fridays.' }) })], []) }]);
     await decide(t.deps(claude, poster), 'room1', 'ck-test', ctx, [msg('m1', 'Agreed, weekly demo on Fridays then.', SAM, 'Sam')]);
     expect(poster.desk()[0].body).toContain('No owner suggested');
-    expect(poster.desk()[0].body).toContain('Date: none given');
+    expect(poster.desk()[0].body).toContain('**Date:** none given');
   });
 });
 
@@ -159,10 +160,10 @@ describe('job B: the owner states it himself (T14)', () => {
     expect(poster.pub()[0]).toMatchObject({ thread: 'm1', body: "Logged as decided: Fieldnote goes first for onboarding. Date: Tue 24 Nov. (Kash's call.)" });
     expect(poster.desk()).toHaveLength(1);
     const note = poster.desk()[0].body;
-    expect(note).toContain('#1 · Decision logged in ck-test; it has no owner yet');
+    expect(note).toContain('🗳️ **#1 · Decision logged, no owner yet** · #ck-test');
     expect(note).toContain('1. Suggested owner: Priya (Priya: onboarding calls and pilot support.). Reply "confirm" to take it.');
-    expect(note).toContain('Date: Tue 24 Nov');
-    expect(note).toContain('Reopen if: not said.');
+    expect(note).toContain('**Date:** Tue 24 Nov');
+    expect(note).toContain('**Reopen if:** not said.');
     expect(note).not.toMatch(/Nothing is posted|until you confirm/);
     const [line] = t.traces();
     expect(line.kind).toBe('reply');
@@ -176,9 +177,9 @@ describe('job B: the owner states it himself (T14)', () => {
     const poster = new FakePoster();
     await ownerStates(poster, { suggested_owner: '', owner_basis: '', date: '' });
     const note = poster.desk()[0].body;
-    expect(note).toContain('it has no owner or due date yet');
+    expect(note).toContain('no owner or due date yet');
     expect(note).toContain('No owner suggested: nothing in the record says who fits best. Who should do it?');
-    expect(note).toContain('Due: none given. When is it due?');
+    expect(note).toContain('**Due:** none given. When is it due?');
     expect(note).not.toContain('"confirm"');
     expect(t.traces()[0].items[0].decision_record).toMatchObject({ decided_by: 'Kash', action_owner: null, due: null });
   });
@@ -242,8 +243,8 @@ describe('job B: the work never defaults to the owner', () => {
     const claude = new FakeClaude([{ model: OPUS, respond: verdictMessage(OPUS, ctx, [jobItem('m1', { job: 'B', verdict: 'decision', details: details({ summary: 'Weekly demo on Fridays.', action_owner: 'Sam', reopen_if: 'the partners stop coming' }) })], []) }]);
     await decide(t.deps(claude, poster), 'room1', 'ck-test', ctx, [msg('m1', 'Agreed, weekly demo on Fridays, I will run it.', SAM, 'Sam')]);
     const note = poster.desk()[0].body;
-    expect(note).toContain('Action owner: Sam (named in the chat).');
-    expect(note).toContain('Reopen if: the partners stop coming');
+    expect(note).toContain('**Action owner:** Sam (named in the chat).');
+    expect(note).toContain('**Reopen if:** the partners stop coming');
     await handleOwnerDesk(t.deps(new FakeClaude([]), poster), 'desk', 'ck-owner-desk', msg('o1', 'yes', KASH, 'Kash', { thread_id: 'ev1' }));
     expect(poster.pub()[0].body).toBe("Logged as decided: Weekly demo on Fridays. Owner: Sam. Reopen if: the partners stop coming. (Kash's call.)");
   });

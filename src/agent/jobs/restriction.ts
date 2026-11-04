@@ -4,6 +4,7 @@
 // code, so a clash id or a quote can never leak into public.
 import { normalise } from '../../shared/quote.ts';
 import type { Details } from '../pending.ts';
+import { quoteLine } from '../handoff/text.ts';
 
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
@@ -34,13 +35,13 @@ export function clashNote(p: {
 }): string {
   const d = p.details;
   const lines = [
-    `#${p.n} · Clash to rule on in ${p.roomName}`,
-    `${p.raisedBy} said (${p.messageRef}): "${p.text.trim()}"`,
-    `It clashes with ${p.clashesWith ?? 'an earlier decision'}${p.decisionText ? `: ${p.decisionText}` : ''}`,
+    `⚖️ **#${p.n} · Clash to rule on** · #${p.roomName}`,
+    `**${p.raisedBy} said:** ${quoteLine(p.text, 400)}`,
+    `**Clashes with ${p.clashesWith ?? 'an earlier decision'}**${p.decisionText ? `: ${p.decisionText}` : ''}`,
   ];
-  if (d.summary) lines.push(`The clash: ${d.summary}`);
-  if (d.why) lines.push(`Why it was decided: ${d.why}`);
-  if (d.options.length) lines.push('Options:', ...d.options.map((o, i) => `${i + 1}. ${o}`));
-  lines.push(`The room has a neutral "flagged to the owner" reply; the plan stands until you rule. Reply in this thread (or start with #${p.n}) and I'll post your ruling back in their thread.`);
+  if (d.summary) lines.push(`**The clash:** ${d.summary}`);
+  if (d.why) lines.push(`**Why it was decided:** ${d.why}`);
+  if (d.options.length) lines.push('**Options:**', ...d.options.map((o, i) => `${i + 1}. ${o}`));
+  lines.push(`**Reply** in this thread (or start with #${p.n}) and I'll post your ruling back in their thread. The room got a neutral "flagged to the owner" reply; the plan stands until you rule.`);
   return lines.join('\n');
 }

@@ -23,7 +23,8 @@ export type Status =
   | 'signed_off'
   | 'reopened';
 
-export interface Source { ref: string; quote: string }
+/** source: how posts name it for people (post.ts sourceText); absent on ideas noted before 5 Nov. */
+export interface Source { ref: string; quote: string; source?: string }
 
 export type BuildStage = 'waiting' | 'building' | 'blocked';
 export type StageEvent = 'building' | 'blocked' | 'unblocked';
@@ -64,6 +65,9 @@ export interface IdeaRecord {
   signoff: { by: string; by_name: string; message_id: string; verdict: 'signed_off' | 'reopened'; text: string; at: string; note?: string } | null;
   /** The raiser (or owner) got "is that a sign-off?" once for this idea: never asked again. */
   signoff_asked?: boolean;
+  /** A second unclear reply after that ask got one "when you're happy with it, just say so" line
+   *  (Kash, 4 Nov, I9: "for sure happy you got it done" met silence). Never a third. */
+  signoff_reminded?: boolean;
   /** Sender ids already told "only <raiser> or <owner> can sign this off" (once per person per idea). */
   signoff_refused?: string[];
   /** Sender ids already given the "Thanks, Sam, noted. Rowan signs this one off." line (chain.heard;

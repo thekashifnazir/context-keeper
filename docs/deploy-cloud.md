@@ -216,6 +216,8 @@ Environment=CK_REVIEWER_MODEL=claude-opus-5-5
 # Voice (section 4): the live tool's URL, and the short talk links on the same host
 Environment=CK_TALK_TOOL_URL=https://ck.<your-domain>
 Environment=CK_PUBLIC_BASE_URL=https://ck.<your-domain>
+# Sources in posts link to the seeded docs' public copies (docs/message-style.md)
+Environment=CK_DOCS_BASE_URL=https://github.com/thekashifnazir/context-keeper/blob/main
 ExecStart=/usr/bin/npm run agent
 Restart=always
 RestartSec=5
@@ -235,6 +237,7 @@ WantedBy=multi-user.target
 | `CK_REVIEWER_MODEL` | The checker model |
 | `CK_TALK_TOOL_URL` | The voice tool's public URL (section 4) |
 | `CK_PUBLIC_BASE_URL` | The same host, for the brief's short `/talk/<id>` links (section 4, step 7) |
+| `CK_DOCS_BASE_URL` | Where the seeded docs' public copies live: a cited source links to its section; unset, sources are named without links |
 | `Restart=always` | A crash, or the stream watchdog's exit 4, starts a new process after 5 s |
 
 Any other setting goes in `.env` or as another `Environment=` line (see `.env.example`).

@@ -62,8 +62,8 @@ describe('job C: the brief', () => {
     expect(brief.thread).toBe('a1');
     expect(brief.body.split('\n')).toEqual([
       '👋 **Welcome, Alex** · a quick catch-up on where things stand',
-      '• The pilot runs with three agencies, 25 clients each (Kash decided: support is Priya plus Kash). (pilot-plan.md §2)',
-      '• Priya runs onboarding calls and pilot support. (pilot-plan.md §3)',
+      '• **Decided** · The pilot runs with three agencies, 25 clients each (Kash decided: support is Priya plus Kash). — Ledgerly pilot plan › Decisions (Kash, 6 Oct)',
+      '• **Talk to** · Priya runs onboarding calls and pilot support. — Ledgerly pilot plan › Who does what (30 Oct)',
       TALK_IT_THROUGH,
     ]);
     expect(line).toMatchObject({ kind: 'brief', trigger: 'room_join' });
