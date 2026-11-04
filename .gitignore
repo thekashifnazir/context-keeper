@@ -52,3 +52,4 @@ supabase/.temp/
 .vercel/
 # --- personal and machine files ---
 tunnel.log
+.claude/
