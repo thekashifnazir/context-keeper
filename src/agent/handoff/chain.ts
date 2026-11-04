@@ -66,6 +66,9 @@ export interface ChainConfig {
 
 const BEST_EFFORT: StepName[] = ['announce']; // after the hand-off went out, a failed line never stalls the chain
 
+/** The build room is dry-run (its name isn't in CK_POST_ROOMS): stop before anything is "handed off". */
+class DryRunBuildRoom extends Error {}
+
 export class HandoffChain {
   private running = new Set<string>();
   constructor(private c: ChainConfig) {}
@@ -180,7 +183,7 @@ export class HandoffChain {
   private async approve(rec: IdeaRecord, msg: HandoffMsg, again: boolean): Promise<void> {
     const desk = { id: msg.room_id, name: msg.room_name };
     const posts: TracePost[] = [];
-    const retryable = rec.status === 'not_permitted' || rec.status === 'timed_out' || rec.status === 'not_done' || rec.status === 'reopened' || (rec.status === 'handed_off' && rec.steps.handoff === 'unknown');
+    const retryable = rec.status === 'stalled' || rec.status === 'not_permitted' || rec.status === 'timed_out' || rec.status === 'not_done' || rec.status === 'reopened' || (rec.status === 'handed_off' && rec.steps.handoff === 'unknown');
     if (rec.status === 'noted' || (again && retryable)) {
       if (rec.status !== 'noted') {
         rec.attempt += 1;
@@ -196,7 +199,7 @@ export class HandoffChain {
       return;
     }
     // One hand-off per idea.
-    await this.ownerNote(`${rec.ref} is already ${rec.status.replace('_', ' ')}; it gets one hand-off. "approve ${rec.ref} again" works only after it timed out, failed or was reopened.`, posts);
+    await this.ownerNote(`${rec.ref} is already ${rec.status.replace('_', ' ')}; it gets one hand-off. "approve ${rec.ref} again" works only after it stalled, timed out, failed or was reopened.`, posts);
     this.trace('approval_duplicate', rec, desk, [msg], posts, `one hand-off per idea (status ${rec.status})`);
   }
 
@@ -218,6 +221,19 @@ export class HandoffChain {
           this.c.store.put(rec);
         } catch (e) {
           const err = `${step}: ${(e as Error).message}`;
+          if (e instanceof DryRunBuildRoom) {
+            // Not a failure to retry on a timer: it needs CK_BUILD_ROOM / CK_POST_ROOMS changed and a
+            // restart (resume() then picks it up), or "approve I<n>" again once it's fixed.
+            rec.steps[step] = 'pending';
+            rec.status = 'stalled';
+            rec.failures = this.c.maxFailures ?? 3;
+            rec.last_error = err;
+            this.c.store.put(rec);
+            const posts: TracePost[] = [];
+            await this.ownerNote(`I haven't handed ${rec.ref} to Claude Code: #${this.c.buildRoomName} isn't in CK_POST_ROOMS, so I'd only log the drafts. Set CK_BUILD_ROOM to a room that is (e.g. ck-smoke-build-<date>) and restart me, or add it to CK_POST_ROOMS.`, posts);
+            this.trace('stalled', rec, this.origin(rec), [], posts, err);
+            return;
+          }
           if (BEST_EFFORT.includes(step)) {
             rec.steps[step] = 'unknown';
             this.c.store.put(rec);
@@ -262,6 +278,7 @@ export class HandoffChain {
           joinListeners: [this.c.selfName],
         });
       }
+      if (this.c.sw.canPost && !this.c.sw.canPost(room.id)) throw new DryRunBuildRoom(`#${room.name} is dry-run (not in CK_POST_ROOMS)`);
       this.c.store.setBuildRoom(name, room);
       rec.build_room = room;
       this.c.store.put(rec);

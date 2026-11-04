@@ -29,6 +29,9 @@ export interface HandoffSwitch {
   sendTargeted(roomId: string, targetNames: string[], body: string): Promise<{ eventId: string | null; statuses: Record<string, string> }>;
   /** A post in the private owner desk; null when there's no desk. */
   owner(body: string): Promise<string | null>;
+  /** The listener's CK_POST_ROOMS guard. A build room it can't post in stops the chain at the room
+   *  step (nothing is handed off, so the original thread is never told it's being built). */
+  canPost?(roomId: string): boolean;
 }
 
 export type OpFn = (roomId: string | null, name: string, args: Record<string, unknown>) => Promise<any>;
@@ -99,5 +102,6 @@ export function liveHandoffSwitch(op: OpFn, o: LiveOpts): HandoffSwitch {
       return { eventId: eventIdOf(r), statuses: (x?.target_statuses ?? r?.target_statuses ?? {}) as Record<string, string> };
     },
     owner: (body) => o.owner(body),
+    canPost: (roomId) => o.canPost(roomId),
   };
 }
