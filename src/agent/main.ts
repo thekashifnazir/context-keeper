@@ -105,7 +105,11 @@ const records = new Map<string, RoomRecord>();
 function recordFor(roomId: string): RoomRecord | null {
   if (records.has(roomId)) return records.get(roomId)!;
   const name = roomNames.get(roomId) ?? '';
-  const demo = process.env.CK_ROOM_DEMO || (name.includes('riverside') ? 'riverside-build-night' : name.includes('ledgerly') ? 'ledgerly-pilot' : '');
+  // CK_ROOM_DEMO, else the room's name, else the --demo that `npm run seed` recorded for this room id
+  // (so a seeded room can have any name, e.g. ck-smoke-trial).
+  const seeded = readJson<{ demo?: string }>(`state/seed/${roomId}.json`, {}).demo;
+  const demo = process.env.CK_ROOM_DEMO || (name.includes('riverside') ? 'riverside-build-night' : name.includes('ledgerly') ? 'ledgerly-pilot' : '')
+    || (seeded === 'ledgerly' ? 'ledgerly-pilot' : seeded === 'riverside' ? 'riverside-build-night' : '');
   if (!demo) return null;
   const rec = { ...loadDemoRoom('.', demo), name };
   records.set(roomId, rec);
@@ -128,7 +132,7 @@ function enqueue(roomId: string, input: Input) {
 async function run(roomId: string, inputs: Input[]) {
   if (stopped) return;
   const rec = recordFor(roomId);
-  if (!rec) { console.log(`no record for room ${roomNames.get(roomId) ?? roomId}; skipping`); return; }
+  if (!rec) { console.log(`no record for room ${roomNames.get(roomId) ?? roomId}; skipping (seed it with npm run seed, or set CK_ROOM_DEMO)`); return; }
   try {
     const ctx = buildRoomContext(rec);
     const results = await decideWithRetry(deps, roomId, roomNames.get(roomId) ?? roomId, ctx, inputs);
