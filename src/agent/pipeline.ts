@@ -7,7 +7,7 @@ import { writeTrace, type TraceItem, type TraceLine, type TracePost } from '../s
 import type { RoomContext } from './blocks.ts';
 import { callVerdict, errorKind, type Claude, type ModelConfig, type Usage } from './model.ts';
 import { planJobs } from './owner-desk.ts';
-import type { PendingStore } from './pending.ts';
+import { PendingStore } from './pending.ts';
 import { postPublic, type Poster } from './post.ts';
 import type { AgentState } from './state.ts';
 import { parseVerdict, ParseError } from './verdict.ts';
@@ -120,7 +120,10 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
 
   // Everything public goes through postPublic (gate → reviewer → idempotent send).
   const threadId = inputs[0].thread_id ?? inputs[0].message_id;
-  const pub = await postPublic({ claude: deps.claude, cfg: deps.cfg, poster: deps.poster, state: deps.state }, ctx, { roomId, roomName, threadId, items });
+  const pub = await postPublic({ claude: deps.claude, cfg: deps.cfg, poster: deps.poster, state: deps.state, pending: (deps.pending ??= new PendingStore(null)) }, ctx, {
+    roomId, roomName, threadId, items,
+    messages: inputs.map((m) => ({ message_id: m.message_id, sender: m.sender, sender_name: m.sender_name, body: m.body, received_at: m.received_at })),
+  });
   if (pub.usage) usages.push(pub.usage);
   if (pub.error?.startsWith('reviewer_failed')) {
     return failQuiet(deps, write, inputs, roomName, usages, pub.error, errorKind(pub.error), opts.notifyOwnerOnError ?? true, pub.items, jobs.posts);

@@ -1,0 +1,214 @@
+{
+  "schema": "ck.score/1",
+  "meta": {
+    "run_id": "r20261104-0022-ec96",
+    "set": "main",
+    "mode": "fast",
+    "model": "claude-opus-5-5",
+    "burst_gap_s": 20,
+    "started_at": "2026-11-04T00:23:39.942Z",
+    "versions": {
+      "harness_sha": "6bfda5344f3a8729b80fe90ee09731ea98d4a465",
+      "agent_sha": "6bfda5344f3a8729b80fe90ee09731ea98d4a465",
+      "switch": "ok",
+      "mattermost": "11.9.0.28847360617.66476bb08eeea400cdd8b232ff7f7a8229899e77aef15199c2d6ec0b835e4cad.false"
+    },
+    "incidents": [],
+    "cases_sha256": "7c3af0e411b1f074706f6bc3b713b1295fba00352c903271f69d3d795b27ad04",
+    "content_sha256": "9a4e72a5219da5eafb9eebdac4160788e87b07b8065e133ace51ce36809d8775",
+    "prices_as_of": "2026-10-06"
+  },
+  "summary": {
+    "set": "main",
+    "overall": {
+      "passed": 1,
+      "total": 1
+    },
+    "job_a": {
+      "passed": 1,
+      "total": 1
+    },
+    "job_d": {
+      "passed": 0,
+      "total": 0
+    },
+    "job_b": {
+      "passed": 0,
+      "total": 0
+    },
+    "quiet": {
+      "passed": 0,
+      "total": 0
+    },
+    "bursts": {},
+    "confident_wrong": 0,
+    "diagnostics": {
+      "covered_on_other": 0,
+      "citations_verified": {
+        "verified": 2,
+        "cited": 2
+      },
+      "quotes_verified": {
+        "verified": 2,
+        "cited": 2
+      },
+      "briefs_seen": {},
+      "trace_missing": 0,
+      "trace_mismatch": 0,
+      "unattributed": 0,
+      "latency_s": {
+        "p50": 51.5,
+        "p95": 51.5,
+        "n": 1
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "T05",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T05",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-011"
+        ],
+        "must_mention": [
+          "weekday"
+        ]
+      },
+      "item": {
+        "message_id": "sw_da36a0bc88efafcfd048b4f7e3fec8d8",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |"
+          },
+          {
+            "ref": "led-011",
+            "quote": "Decision D1: onboarding calls Tue to Thu, weekdays only. Partner finance staff are weekday only, and we can't staff support at weekends. Confirmed."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "3b46f788-139d-4fc9-ae3b-cf36a1f72bf2",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "pilot-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-011",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "oykmmruwa7djtejbasdj1twn8h",
+      "public_post_ids": [
+        "ygat5wrm178t9fyjoxdtzmoyqw"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thought, Rowan. Kash looked at weekends for D1 on 6 Oct and confirmed onboarding calls on weekdays, Tue to Thu, because partner finance staff work weekdays only and we can't staff support at weekends. The trade-off we accepted is that owners who'd prefer a weekend fit a weekday slot. Reopen if: a partner can't make any Tue–Thu slot.\n> Onboarding calls on **weekdays, Tue to Thu**: Partner finance staff work weekdays only; support is staffed on weekdays\n— Kash, 6 Oct (pilot-plan.md §2 D1)\nAlso: led-011"
+      ],
+      "owner_text": [],
+      "latency_s": 51.5,
+      "also_expect": null
+    }
+  ],
+  "bursts": [],
+  "briefs": [],
+  "unattributed": [],
+  "pre_replay_posts": [
+    {
+      "post_id": "e55xrxg19ift98b4a6ctemi3oh",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "Hi! Mention @context-keeper-eval to get my attention."
+    },
+    {
+      "post_id": "kpzwc899rpr4iqdniu1y6a8t1y",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "📄 created room document “Ledgerly pilot plan”."
+    },
+    {
+      "post_id": "oubtxjrxbibctdiujnnsp3fspa",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "📄 created room document “Ledgerly: product overview”."
+    },
+    {
+      "post_id": "8h34hxcs5igt7pzz7e9fsywkur",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "📄 created room document “Ledgerly: customer research summary”."
+    },
+    {
+      "post_id": "8r75uphxrff4pkxrbpijbxuaua",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "📄 created room document “Ledgerly roadmap”."
+    },
+    {
+      "post_id": "pc6yu7wreffj88ytdepd5x8noe",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "📄 created room document “Ledgerly: pilot readiness status”."
+    },
+    {
+      "post_id": "mrfy9xbhzty1i8j3u8m5w9kx7y",
+      "channel_id": "qjp9s9t5ptbezqszb6foteq5ba",
+      "message": "📄 created room document “Channel archive”."
+    }
+  ],
+  "usage": {
+    "calls": 4,
+    "input_tokens": 2469,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 26456,
+    "output_tokens": 3470,
+    "est_cost_usd": 0.2116
+  }
+}

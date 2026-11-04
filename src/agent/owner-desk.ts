@@ -147,7 +147,7 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
   const { item, ambiguous } = findItem(deps, input);
   if (!item) {
     if (ambiguous.length) {
-      const ask = `Which one? Open: ${ambiguous.map((i) => `#${i.n} ${i.kind === 'B' ? 'decision' : 'clash'} from ${i.raised_by} ("${i.details.summary || i.text}")`).join('; ')}. Start your reply with the number.`;
+      const ask = `Which one? Open: ${ambiguous.map((i) => `#${i.n} ${i.kind === 'B' ? 'decision' : i.route === 'reopen' ? 'reopen request' : 'clash'} from ${i.raised_by} ("${i.details.summary || i.text}")`).join('; ')}. Start your reply with the number.`;
       const s = await sendOwner(deps, ask, events);
       if (s.post) posts.push(s.post);
       return write(posts.length ? 'owner_note' : 'silence', [quiet(input.message_id)], 'owner_desk: reply matched more than one open item');

@@ -34,6 +34,13 @@ describe('job C: when a brief fires', () => {
       .toEqual({ kind: 'returner', since: '2026-10-07T09:00:00+01:00' });
     expect(briefTrigger(d, 'room1', room, msg('p1', 'Quick one about invoices', '@x-priya', 'Priya', { received_at: '2026-11-03T09:00:00Z' }))).toBeNull();
   });
+
+  it('matches the sender to the record case-insensitively (a lowercase handle is not a joiner)', () => {
+    const d = t.deps(new FakeClaude([]));
+    expect(briefTrigger(d, 'room1', room, msg('p2', 'Lunch run in 10?', '@x-priya', 'priya', { received_at: '2026-11-03T09:00:00Z' }))).toBeNull();
+    expect(briefTrigger(d, 'room1', room, msg('r2', 'Back!', ROWAN, 'rowan', { received_at: '2026-11-04T09:31:00Z' })))
+      .toEqual({ kind: 'returner', since: '2026-10-07T09:00:00+01:00' });
+  });
 });
 
 describe('job C: the brief', () => {

@@ -15,6 +15,8 @@ import { postBrief } from '../post.ts';
 import { toMs, type RoomRecord } from '../room.ts';
 import { firstName } from './restriction.ts';
 
+const sameName = (a: string) => { const k = a.trim().toLowerCase(); return (b: string) => b.trim().toLowerCase() === k; };
+
 export const RETURN_GAP_DAYS = () => Number(process.env.CK_RETURN_GAP_DAYS ?? 7);
 
 export interface BriefTrigger { kind: 'joiner' | 'returner'; since: string | null }
@@ -26,7 +28,10 @@ export function briefTrigger(deps: Pick<Deps, 'state' | 'ownerSender' | 'selfSen
   if (deps.ownerSender && input.sender === deps.ownerSender) return null;
   if (deps.state.isBriefed(roomId, input.sender)) return null;
   const now = toMs(input.received_at);
-  const before = record.messages.filter((m) => m.author === input.sender_name && m.id !== input.message_id && toMs(m.at) < now);
+  // Names compare case-insensitively: a platform handle ("priya", the Mattermost username) must match
+  // the record's display name ("Priya"), or every regular poster looks like a first-time joiner.
+  const who = sameName(input.sender_name);
+  const before = record.messages.filter((m) => who(m.author) && m.id !== input.message_id && toMs(m.at) < now);
   const last = before.at(-1);
   if (!last) return { kind: 'joiner', since: null };
   const gapDays = (now - toMs(last.at)) / 86_400_000;
