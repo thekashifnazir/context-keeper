@@ -19,6 +19,9 @@ export interface ModelItem {
   clashes_with: string | null;
   claim: string;
   reply: string;
+  /** Job A's own might-be-related only: the part the record doesn't have yet (a short phrase), which
+   *  puts the idea on the owner's list labelled "builds on <ref>". Null otherwise. */
+  new_part: string | null;
   credit: string;
   embedded_instruction: boolean;
   details: Details; // jobs B and D: what goes to the owner desk (empty otherwise)
@@ -42,6 +45,13 @@ function parseDetails(v: any): Details {
 }
 
 export class ParseError extends Error {}
+
+/** One short line: whitespace collapsed, a trailing full stop dropped, capped; "" or "none" → null. */
+export function newPart(v: unknown): string | null {
+  const t = (typeof v === 'string' ? v : '').replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '').trim();
+  if (!t || /^(none|n\/a|null)$/i.test(t)) return null;
+  return t.length > 160 ? `${t.slice(0, 160).trimEnd()}…` : t;
+}
 
 /** Split a citation over [start, end) blocks into one Cited per block, re-cutting cited_text by the
  *  known block texts (cited_text is the blocks joined). A piece that doesn't match is kept as-is,
@@ -91,14 +101,16 @@ export function parseVerdict(msg: Anthropic.Message, ctx: RoomContext, inputIds:
     let job = (['A', 'B', 'D', 'none'].includes(it.job) ? it.job : 'none') as ModelItem['job'];
     const restriction = job === 'D' ? none(it.restriction) : null;
     if (job === 'D' && (restriction === null || restriction === 'not-a-restriction')) job = 'none'; // not a restriction: stay quiet
+    const verdict = job === 'A' ? none(it.verdict) : job === 'B' ? 'decision' : null;
     return {
       message_id: id,
       job,
-      verdict: job === 'A' ? none(it.verdict) : job === 'B' ? 'decision' : null,
+      verdict,
       restriction: job === 'D' ? restriction : null,
       clashes_with: job === 'D' ? none(it.clashes_with) : null,
       claim: String(it.claim ?? ''),
       reply: String(it.reply ?? ''),
+      new_part: verdict === 'might-be-related' ? newPart(it.new_part) : null,
       credit: String(it.credit ?? ''),
       embedded_instruction: Boolean(it.embedded_instruction),
       details: job === 'B' || job === 'D' ? parseDetails(it.details) : emptyDetails(),

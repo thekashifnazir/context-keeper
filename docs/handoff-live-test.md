@@ -9,7 +9,7 @@ smoke room, so no demo channel gets a test post. About 30 minutes.
 
 | Flag | Default for `npm run agent` | In `npm run eval` | What it does |
 |---|---|---|---|
-| `CK_JOB_E` | on | off unless you set it | Job A's `new` ideas (and `might-be-related` ones whose reply logged the new part, labelled "builds on …") go on the owner desk list; "approve I<n>" hands one to Claude Code in `CK_BUILD_ROOM`; the raiser signs it off in the original thread |
+| `CK_JOB_E` | on | off unless you set it | Job A's `new` ideas (and `might-be-related` ones where job A named a new part, labelled "builds on …") go on the owner desk list; "approve I<n>" hands one to Claude Code in `CK_BUILD_ROOM`; the raiser signs it off in the original thread |
 | `CK_AUDIO_BRIEF` | on (needs `ELEVENLABS_API_KEY`) | off unless you set it | Job C's ~60 s audio clip, posted under the text brief in the same thread |
 | `CK_TALK_LINK` | on (needs `ELEVENLABS_API_KEY` and `agent_id` in `state/voice-ids.json`) | off unless you set it | The brief's last line becomes a per-person "talk it through" link; after the call, its summary posts in the same thread |
 
@@ -23,11 +23,11 @@ Where each hook sits in `main.ts`:
   jobs A–D. Another agent's post (any `@switch-agent-` sender) never reaches job A.
 - after each job A decision, each `new` idea is noted for you (`noteNewIdeas`, once per idea). So is a
   `might-be-related` one when job A itself chose that verdict, its cited record passed the quote gate,
-  and its reply told the raiser the new part is logged ("…that part would be new. I've logged it.").
-  Job A's tool output has no "partly new" field, so this reads the reply (`replyLogsIt` in
-  `src/agent/handoff/text.ts`): only a first-person "I've logged / recorded it" or "it's logged" counts.
-  The desk note then reads "New idea I2 from Rowan in #… (4 Nov), builds on product.md §4:", and the
-  hand-off says it builds on what's there before the usual "Cited context from the record:".
+  and it filled record_verdict's `new_part` (the part the record doesn't have yet, e.g. "a pay-now
+  link in the reminder emails"; it lands in the trace item as `new_part`). Code then adds "I've logged
+  that part as a new idea: <new part>." to the public reply. The desk note reads "New idea I2 from Rowan in #…
+  (4 Nov), builds on product.md §2: <new part>", and the hand-off quotes the new part before the usual
+  "Cited context from the record:".
 - after the rooms are joined, once per process: `handoff.resume()`. Every 60 s: `handoff.tick()`
   (the nudge, the "still being built" line, timeouts) and, while a talk link is open, a check for a
   finished call.

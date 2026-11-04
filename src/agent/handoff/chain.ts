@@ -1,8 +1,8 @@
 // handoff/chain: job E, idea → done (Switch's Level 3 example: "a coding agent builds it in a work
 // channel with the ticket and design already in it, and whoever asked for it signs it off").
 //
-//   noteIdea()   job A logged a genuinely new idea (or a related one whose reply logged the new part,
-//                labelled "builds on <ref>") → owner-desk note "reply 'approve I3'"
+//   noteIdea()   job A logged a genuinely new idea (or a related one with a part the record doesn't
+//                have yet, labelled "builds on <ref>: <new part>") → owner-desk note "reply 'approve I3'"
 //   owner desk   "approve I3" from the owner's sender id only → the chain runs:
 //                  room      open or reuse the build room (create_room on the idea room's bridge;
 //                            the owner + the raiser, context-keeper + claude-code; never deleted)
@@ -136,9 +136,9 @@ export class HandoffChain {
   private origin(rec: IdeaRecord) { return { id: rec.room_id, name: rec.room_name }; }
 
   // ---- 1. a new idea goes on the list -------------------------------------------------------------------
-  /** Job A logged `msg` as a genuinely new idea (or, with `buildsOn`, a related one whose new part it
-   *  logged). Idempotent per idea. */
-  async noteIdea(msg: HandoffMsg, sources: Source[] = [], opts: { buildsOn?: string[] } = {}): Promise<IdeaRecord> {
+  /** Job A logged `msg` as a genuinely new idea (or, with `buildsOn`, a related one; `newPart` is the
+   *  part the record doesn't have yet). Idempotent per idea. */
+  async noteIdea(msg: HandoffMsg, sources: Source[] = [], opts: { buildsOn?: string[]; newPart?: string } = {}): Promise<IdeaRecord> {
     const key = ideaKey(msg.room_id, msg.message_id);
     const had = this.c.store.get(key);
     if (had) return had;
@@ -146,7 +146,7 @@ export class HandoffChain {
       ref: this.c.store.nextRef(), key, attempt: 1,
       room_id: msg.room_id, room_name: msg.room_name, thread_id: msg.thread_id ?? msg.message_id, message_id: msg.message_id,
       sender: msg.sender, sender_name: msg.sender_name, sender_handle: msg.sender_handle ?? null, text: msg.body, at: msg.received_at,
-      sources, ...(opts.buildsOn?.length ? { builds_on: opts.buildsOn } : {}), status: 'noted', noted_event: null, approved: null, build_room: null, steps: freshSteps(), events: {},
+      sources, ...(opts.buildsOn?.length ? { builds_on: opts.buildsOn, ...(opts.newPart ? { new_part: opts.newPart } : {}) } : {}), status: 'noted', noted_event: null, approved: null, build_room: null, steps: freshSteps(), events: {},
       failures: 0, last_error: null, target_status: null, handed_at: null, report: null, signoff: null,
     };
     this.c.store.put(rec);

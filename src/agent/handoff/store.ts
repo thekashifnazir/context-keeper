@@ -39,8 +39,9 @@ export interface IdeaRecord {
   text: string;
   at: string;
   sources: Source[]; // cited context (already through job A's quote gate)
-  /** Job A said `might-be-related` and its reply logged the new part: the record blocks it builds on. */
+  /** Job A said `might-be-related` and named a new part: the record blocks it builds on, and that part. */
   builds_on?: string[];
+  new_part?: string;
   status: Status;
   noted_event: string | null; // the owner-desk note
   approved: { by: string; message_id: string; at: string } | null;
