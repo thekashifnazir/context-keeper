@@ -45,6 +45,7 @@ import type { RoomRecord } from './room.ts';
 import { AgentState, atomicWriteJson } from './state.ts';
 import { realEleven } from '../voice/eleven.ts';
 import { VoiceLive } from '../voice/live.ts';
+import { readTalkIdeas } from '../voice/talk-ideas.ts';
 import { realSwitchMedia } from '../voice/post-audio.ts';
 
 loadEnv();
@@ -150,6 +151,12 @@ const voice = eleven ? new VoiceLive({
   },
   callsFile: `${SD}/voice-calls.json`,
   saveDir: process.env.CK_VOICE_SAVE_DIR || 'build/voice/live',
+  // While a talk link is open, tick() keeps the talk agent on the room's live record (no Switch call:
+  // the record as RoomMemory holds it). `memory` is declared below; this only runs from tick().
+  recordOf: (roomId) => memory.cached(roomId),
+  // Job E's ideas from that room, in plain words ("being built by Claude Code"), read from its store's
+  // file (read-only). A status change counts as a record change.
+  ...(handoff ? { ideasOf: (roomId: string) => readTalkIdeas(`${SD}/handoff.json`, roomId, deps.ownerName) } : {}),
   log: (s) => console.log(s),
 }) : null;
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().catch((e) => console.error('voice tick:', e.message)); }, 60_000).unref();
@@ -230,7 +237,12 @@ async function onEvent(ev: AgentBridgeEvent) {
   if (handoff && !stopped) {
     handles.set(m.message_id, m.sender_name);
     try {
-      if (await handoff.onMessage(toHandoffMsg(ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, m, who, at))) return;
+      if (await handoff.onMessage(toHandoffMsg(ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, m, who, at))) {
+        // Job E's (a sign-off in the idea's thread, say), but still part of the room's record, so the
+        // talk agent hears it. addLive ignores rooms with no record (build rooms).
+        if (ev.room_id !== owner.owner_desk_room) memory.addLive(ev.room_id, { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
+        return;
+      }
     } catch (e) { console.error('job E handler crashed:', (e as Error).message); }
   }
   if (ev.room_id === owner.owner_desk_room) {
@@ -257,7 +269,7 @@ async function onEvent(ev: AgentBridgeEvent) {
     const opts: BriefOpts = {};
     const v = voice && allowed(ev.room_id) ? voice : null; // a dry-run room gets no clip and no link (nothing paid for)
     try {
-      const talk = v ? await v.talkClosing(rec, roomName, who) : null;
+      const talk = v ? await v.talkClosing(rec, roomName, who, ev.room_id) : null;
       if (talk) opts.closing = talk.closing;
       if (v) opts.after = async ({ threadId, briefText }) => {
         textDone();

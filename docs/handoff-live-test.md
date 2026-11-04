@@ -119,9 +119,13 @@ Uses the brief from step 1 (any time in the 3 hours after it posted).
 2. **Open the talk link** from the brief's last line, in Rowan's Chrome profile (or yours: the name in
    the link is Rowan either way). ElevenLabs' talk page opens; allow the microphone. If it asks you
    to sign in, use your ElevenLabs account (the agent lives there).
-3. **Talk for a minute or two**: "What did I miss?", then one question the record can't answer
-   (something from today, say), then one request ("Could Sam send me the pilot numbers on Friday?").
-   Say thanks and let it end the call.
+   The agent's notes are kept current while the link is open: within a minute of a new message in
+   the room (or every 15 min if nothing changes) its prompt is refreshed, and its first line says how
+   far they run ("I've got the Ledgerly pilot room up to 13:51"). The agent log shows
+   `[voice] talk agent refreshed from <room>: N messages, notes run to …`.
+3. **Talk for a minute or two**: "What did I miss?", then ask about something posted after the brief, or "what's the build status of my idea?"
+   (it should know both), then one question the record can't answer, then one request ("Could Sam
+   send me the pilot numbers on Friday?"). Say thanks and let it end the call.
 4. **Wait a minute or two.** The call summary posts in the same brief thread: "Context Keeper · Rowan
    talked it through (N min call)", with "Asked about", "The record didn't say (to follow up)" and
    "New ideas and requests (needs confirming)". Once per call.

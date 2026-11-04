@@ -5,7 +5,13 @@
 //   afterBrief()   once the text brief has posted: the ~60 s audio clip (audioBrief) in the same
 //                  thread. Its post goes on the brief's own ck.trace/1 line. If the brief carried a
 //                  talk link, the call is watched for.
-//   tick()         about once a minute while a link is open: a finished call by that person →
+//   tick()         about once a minute while a link is open: first, if the room's live record (recordOf:
+//                  RoomMemory, so Switch documents + Channel archive + room history + stream messages)
+//                  or job E's ideas for that room (ideasOf: the hand-off store, read-only) changed
+//                  since the last refresh, or that refresh is over refreshEveryMin old,
+//                  re-PATCH the talk agent's prompt, so a call started at any time is at most about a
+//                  minute stale (4 Nov live test: a call 1 h 45 min after the brief got the 12:05
+//                  snapshot). No Claude call; the PATCH is free. Then a finished call by that person →
 //                  transcript summary (talk-summary.ts) posted in the brief's thread through
 //                  sendPublic (post.ts: idempotent, CK_POST_ROOMS guard, owner desk on failure),
 //                  one ck.trace/1 line per call.
@@ -23,7 +29,12 @@ import { audioBrief } from './audio-brief.ts';
 import type { Eleven } from './eleven.ts';
 import type { SwitchMedia } from './post-audio.ts';
 import { fetchCall, formatCallSummary, summariseCall } from './talk-summary.ts';
-import { IDS_FILE, readIds, refreshTalkAgent, snapshotStamp, talkConfigFromEnv, talkLink } from './talk-agent.ts';
+import { IDS_FILE, ideasText, readIds, recordSignature, refreshTalkAgent, snapshotStamp, talkConfigFromEnv, talkLink } from './talk-agent.ts';
+import type { TalkIdea } from './talk-ideas.ts';
+
+/** What the prompt is built from: the record's fingerprint plus job E's ideas as the prompt shows them
+ *  (so a hand-off step that changes nothing a caller would hear doesn't cause a refresh). */
+const signature = (record: RoomRecord, ideas: TalkIdea[] | null) => `${recordSignature(record)}#${ideas ? ideasText(ideas) : '-'}`;
 
 export interface VoiceLiveConfig {
   claude: Claude;
@@ -39,6 +50,13 @@ export interface VoiceLiveConfig {
   saveDir?: string | null; // keep a local copy of each clip here (main.ts: build/voice/live, gitignored)
   watchHours?: number; // how long a posted link is watched for a call (default 3)
   refreshTimeoutMs?: number; // the prompt refresh must not hold up the text brief (default 10 s)
+  /** The room's current record, without calling Switch (main.ts: memory.cached). Absent = the prompt
+   *  is refreshed only when a link is posted. */
+  recordOf?: (roomId: string) => RoomRecord | null;
+  refreshEveryMin?: number; // re-stamp an unchanged record this often while a link is open (default 15)
+  /** Job E's ideas from this room, in plain words, for the prompt's "Ideas in progress" (main.ts:
+   *  readTalkIdeas on state/handoff.json, read-only). Absent or null = job E off: no section. */
+  ideasOf?: (roomId: string) => TalkIdea[] | null;
   now?: () => Date;
   log?: (s: string) => void;
 }
@@ -76,12 +94,18 @@ const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) =>
 
 export class VoiceLive {
   private calls: CallsFile = { watches: [], done: [] };
+  /** What the talk agent's prompt was last built from (in memory: after a restart the first tick refreshes). */
+  private lastRefresh: { agentId: string; room: string; sig: string; at: number } | null = null;
   constructor(private c: VoiceLiveConfig) {
     if (c.callsFile && existsSync(c.callsFile)) {
       try { this.calls = { ...this.calls, ...(JSON.parse(readFileSync(c.callsFile, 'utf8')) as CallsFile) }; } catch { /* unreadable: start clean */ }
     }
   }
   private now() { return (this.c.now ?? (() => new Date()))(); }
+  private ideas(roomId: string): TalkIdea[] | null {
+    if (!this.c.ideasOf) return null;
+    try { return this.c.ideasOf(roomId); } catch (e) { this.log(`ideas left out: ${(e as Error).message}`); return null; }
+  }
   private log(s: string) { (this.c.log ?? (() => {}))(`[voice] ${s}`); }
   private save() { if (this.c.callsFile) atomicWriteJson(this.c.callsFile, this.calls); }
   get watches(): readonly Watch[] { return this.calls.watches; }
@@ -94,16 +118,18 @@ export class VoiceLive {
 
   /** Refresh the talk agent from the room's record, then the closing line with the person's link.
    *  Null (and the brief keeps its usual closing) when the link is off or the refresh failed. */
-  async talkClosing(record: RoomRecord, roomName: string, person: string): Promise<{ closing: string; talk: NonNullable<BriefHookInput['talk']> } | null> {
+  async talkClosing(record: RoomRecord, roomName: string, person: string, roomId?: string): Promise<{ closing: string; talk: NonNullable<BriefHookInput['talk']> } | null> {
     const agentId = this.talkAgentId();
     if (!agentId || !this.c.el) return null;
     const at = snapshotStamp(this.now());
+    const ideas = roomId ? this.ideas(roomId) : null;
     try {
-      await withTimeout(refreshTalkAgent(this.c.el, agentId, record, at, talkConfigFromEnv(roomLabel(roomName))), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
+      await withTimeout(refreshTalkAgent(this.c.el, agentId, record, at, talkConfigFromEnv(roomLabel(roomName)), ideas), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
     } catch (e) {
       this.log(`talk link left out: ${(e as Error).message}`);
       return null;
     }
+    this.lastRefresh = { agentId, room: roomName, sig: signature(record, ideas), at: this.now().getTime() };
     const caller = firstOf(person);
     return { closing: talkLine(talkLink(agentId, caller, at)), talk: { agentId, caller, at: this.now().toISOString() } };
   }
@@ -149,6 +175,7 @@ export class VoiceLive {
     const open = this.calls.watches.filter((w) => now - Date.parse(w.link_at) < ttl);
     if (open.length !== this.calls.watches.length) { this.calls.watches = open; this.save(); }
     if (!open.length || !this.c.el) return [];
+    await this.refreshOpen(open);
     const lines: TraceLine[] = [];
     for (const agentId of [...new Set(open.map((w) => w.agent_id))]) {
       let call;
@@ -166,6 +193,34 @@ export class VoiceLive {
       lines.push(await this.postSummary(w, call));
     }
     return lines;
+  }
+
+  /** While a link is open, keep the talk agent's prompt on the room's current record: re-PATCH when
+   *  the record changed (message count, last message, documents) or the last refresh is over
+   *  refreshEveryMin old (so "my notes run to" stays close to now). There is one agent, so the
+   *  newest link's room wins, as it does when a link is posted. A failure is retried next tick. */
+  private async refreshOpen(open: Watch[]): Promise<boolean> {
+    if (!this.c.recordOf || !this.c.el) return false;
+    const w = [...open].sort((a, b) => b.link_at.localeCompare(a.link_at))[0];
+    let record: RoomRecord | null;
+    try { record = this.c.recordOf(w.room_id); } catch { record = null; }
+    if (!record) return false;
+    const ideas = this.ideas(w.room_id);
+    const sig = signature(record, ideas);
+    const now = this.now();
+    const last = this.lastRefresh;
+    const due = !last || last.agentId !== w.agent_id || last.room !== w.room_name || last.sig !== sig
+      || now.getTime() - last.at >= (this.c.refreshEveryMin ?? 15) * 60_000;
+    if (!due) return false;
+    try {
+      await withTimeout(refreshTalkAgent(this.c.el, w.agent_id, record, snapshotStamp(now), talkConfigFromEnv(roomLabel(w.room_name)), ideas), this.c.refreshTimeoutMs ?? 10_000, 'talk agent refresh');
+    } catch (e) {
+      this.log(`talk agent refresh failed (next tick retries): ${(e as Error).message}`);
+      return false;
+    }
+    this.lastRefresh = { agentId: w.agent_id, room: w.room_name, sig, at: now.getTime() };
+    this.log(`talk agent refreshed from ${w.room_name}: ${record.messages.length} messages, notes run to ${snapshotStamp(now)}`);
+    return true;
   }
 
   private async postSummary(w: Watch, call: NonNullable<Awaited<ReturnType<typeof fetchCall>>>): Promise<TraceLine> {
