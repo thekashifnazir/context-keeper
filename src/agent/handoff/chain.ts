@@ -187,7 +187,7 @@ export class HandoffChain {
     if (!rec) {
       const posts: TracePost[] = [];
       const list = waiting.map((r) => `${r.ref} (${r.sender_name})`).join(', ') || 'none';
-      await this.ownerNote(a.ref ? `I don't have an idea ${a.ref}. Waiting for approval: ${list}.` : `Which one? Waiting for approval: ${list}. Reply "approve I<n>".`, posts);
+      await this.ownerNote(a.ref ? `I don't have an idea ${a.ref}. Waiting for approval: ${list}.` : `Which one? Waiting for approval: ${list}. Reply \`approve\` and the number, e.g. \`approve ${waiting[0]?.ref ?? 'I1'}\`.`, posts);
       this.trace('approval_unmatched', null, desk, [msg], posts);
       return true;
     }
@@ -246,7 +246,7 @@ export class HandoffChain {
             rec.last_error = err;
             this.c.store.put(rec);
             const posts: TracePost[] = [];
-            await this.ownerNote(`I haven't handed ${rec.ref} to Claude Code: #${this.c.buildRoomName} isn't in CK_POST_ROOMS, so I'd only log the drafts. Set CK_BUILD_ROOM to a room that is (e.g. ck-smoke-build-<date>) and restart me, or add it to CK_POST_ROOMS.`, posts);
+            await this.ownerNote(`I haven't handed ${rec.ref} to Claude Code: #${this.c.buildRoomName} isn't in CK_POST_ROOMS, so I'd only log the drafts. Set CK_BUILD_ROOM to a room that is (e.g. ck-smoke-build-1105) and restart me, or add it to CK_POST_ROOMS.`, posts);
             this.trace('stalled', rec, this.origin(rec), [], posts, err);
             return;
           }

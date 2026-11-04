@@ -556,8 +556,9 @@ describe('job E: formatting (Kash, 4 Nov: "quite difficult to read")', () => {
     expect(summary).not.toMatch(/Context from the record|Cited context/);
     expect(sw.targeted[0].body.split('\n')[0]).toBe('**Hand-off I1** from Context Keeper · approved by Kash');
     expect(sw.targeted[0].body).toMatch(/^\*\*Task:\*\* in github\.com\/thekashifnazir\/ledgerly-demo/m);
-    expect(sw.targeted[0].body).toMatch(/^\*\*When finished:\*\* post one line here, "Done I1: <link>" or "Not done I1: <why>"\.$/m);
-    expect(sw.targeted[0].body).toContain('"Waiting for OK I1: <the step>"');
+    expect(sw.targeted[0].body).toMatch(/^\*\*When finished:\*\* post one line here starting "Done I1:" with the link, or "Not done I1:" and why\.$/m);
+    expect(sw.targeted[0].body).toContain('starting "Waiting for OK I1:" and the step');
+    expect(sw.targeted[0].body).not.toMatch(/<[^>\n]*>/); // Slack would read "<…>" as a link
     for (const b of [sw.ownerPosts[0], summary, sw.targeted[0].body]) expect(b.split('\n')[0]).toMatch(/\*\*.+\*\*/);
   });
 });
