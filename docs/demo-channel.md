@@ -107,6 +107,8 @@ flag shows in the channel and the message still reaches the agent, which treats 
 
 ```ini
 Environment=CK_DEMO_ROOMS=try-context-keeper
+# the audio clip upload still checks CK_POST_ROOMS: add the demo room there too (full Switch name), e.g.
+# Environment="CK_POST_ROOMS=…,<Discord server name>: try-context-keeper"  (quoted: the name has a space)
 Environment=CK_DAILY_SPEND_CAP_USD=6
 # your own Discord handle (or sender id), so the limits never apply to you there
 Environment=CK_DEMO_EXEMPT=<your Discord handle>
