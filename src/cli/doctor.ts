@@ -30,6 +30,7 @@ interface SeedRecord {
   room_name: string;
   owner_username: string;
   owner_desk_room: string;
+  agent?: string;
   bridge: { id: string; type: string } | null;
   documents: { name: string }[];
 }
@@ -78,7 +79,8 @@ export async function run(argv: string[]): Promise<number> {
     email = execFileSync('git', ['config', 'user.email'], { encoding: 'utf8' }).trim();
   } catch {}
   const noreply = /@users\.noreply\.github\.com$/.test(email);
-  line(noreply ? 'ok' : 'FAIL', 'git email', noreply ? 'noreply address' : `git user.email is ${email ? 'not a noreply address' : 'unset'}`);
+  // WARN, not FAIL: it only matters for commits pushed to the public repo, not for running the agent.
+  line(noreply ? 'ok' : 'WARN', 'git email', noreply ? 'noreply address' : `git user.email is ${email ? 'not a noreply address' : 'unset'} (only matters if you commit here)`);
 
   line('SKIP', 'model params', 'max_tokens and thinking: checked once the agent loop exists (core lane)');
   line('SKIP', 'budget', 'no spend check wired yet');
@@ -134,12 +136,15 @@ async function checks(sw: Session) {
 
   // Rooms the seed command recorded (state/seed/*.json). None yet: SKIP.
   const dir = 'state/seed';
-  const records = existsSync(dir)
+  const all = existsSync(dir)
     ? readdirSync(dir)
         .filter((f) => f.endsWith('.json') && f !== 'last.json')
         .map((f) => readJson<SeedRecord>(`${dir}/${f}`))
         .filter((r): r is SeedRecord => !!r)
     : [];
+  // Rooms seeded for another agent (the eval's context-keeper-eval) aren't this agent's to check.
+  const records = all.filter((r) => !r.agent || r.agent === agent);
+  if (all.length > records.length) line('SKIP', 'rooms', `${all.length - records.length} seeded room(s) belong to another agent (e.g. the eval's)`);
   const live = await timed(8000, sw.op<{ room_id: string }[]>('list_rooms'));
   if (!records.length) {
     line('SKIP', 'rooms', `${live.length} room(s) on the server; none seeded yet (npm run seed)`);
