@@ -37,7 +37,12 @@ say() { printf '==> %s\n' "$*"; }
 die() { printf 'server-up: %s\n' "$*" >&2; exit 1; }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"; }
 command -v docker >/dev/null || die "Docker isn't installed (Docker Desktop, or Colima on a Mac)"
-docker info >/dev/null 2>&1 || die "Docker isn't running"
+if ! docker_err=$(docker info 2>&1); then
+  case "$docker_err" in *[Pp]ermission\ denied*)
+    die "Docker is running, but this user can't reach it. On Linux: sudo usermod -aG docker \"\$USER\", then log out and back in";;
+  esac
+  die "Docker isn't running"
+fi
 envget() { grep "^$1=" "$DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2-; }
 
 # 1. Fetch Switch's Compose file (an OCI artifact on ghcr.io) and check it against the manifest digest.
