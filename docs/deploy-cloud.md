@@ -213,6 +213,9 @@ Environment=CK_POST_OWNER=1
 Environment=CK_BUILD_ROOM=ck-smoke-build-1104
 Environment=CK_HANDOFF_TIMEOUT_MIN=10
 Environment=CK_REVIEWER_MODEL=claude-opus-5-5
+# Voice (section 4): the live tool's URL, and the short talk links on the same host
+Environment=CK_TALK_TOOL_URL=https://ck.<your-domain>
+Environment=CK_PUBLIC_BASE_URL=https://ck.<your-domain>
 ExecStart=/usr/bin/npm run agent
 Restart=always
 RestartSec=5
@@ -230,6 +233,8 @@ WantedBy=multi-user.target
 | `CK_BUILD_ROOM` | Job E's build room; must match `CK_POST_ROOMS` to be created and posted in |
 | `CK_HANDOFF_TIMEOUT_MIN` | Minutes before a hand-off with no report times out |
 | `CK_REVIEWER_MODEL` | The checker model |
+| `CK_TALK_TOOL_URL` | The voice tool's public URL (section 4) |
+| `CK_PUBLIC_BASE_URL` | The same host, for the brief's short `/talk/<id>` links (section 4, step 7) |
 | `Restart=always` | A crash, or the stream watchdog's exit 4, starts a new process after 5 s |
 
 Any other setting goes in `.env` or as another `Environment=` line (see `.env.example`).
@@ -315,6 +320,15 @@ Done on 4 Nov (about 10 minutes, most of it clicks):
    ElevenLabs agent.
 6. **Check it from anywhere:** `curl https://ck.<your-domain>/health` → 200; a POST to
    `/voice/whats_new` without the secret header → 401; any other path → 404.
+7. **Short talk links in the brief:** add `Environment=CK_PUBLIC_BASE_URL=https://ck.<your-domain>`
+   too. The brief's "🎧 Talk it through" line then links `https://ck.<your-domain>/talk/<id>`
+   instead of the long ElevenLabs URL. The route goes through the same tunnel and the same server
+   (the whole host already points at it, so there's nothing to add in Cloudflare): `GET /talk/<id>`
+   is a 302 to the person's ElevenLabs talk page while the link is open (3 hours), then a 404. The id
+   is random and unguessable, nothing secret is in it or in the redirect, and the agent logs
+   `[voice] short talk links: https://ck.<your-domain>/talk/<id>` at start. Without the setting (or
+   while the tool server isn't up) the brief carries the long link, still behind a "Start a voice
+   catch-up" label. `CK_TALK_LINK_STYLE=bare` posts the short URL itself instead of a named link.
 
 On a VM reboot both services start by themselves: `cloudflared` (the tunnel) and `ck-agent`. If
 the tunnel is down, the agent detaches the tool and falls back to refreshing the voice agent's

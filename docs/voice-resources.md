@@ -35,6 +35,14 @@ The first time the live agent finds a cloudflared tunnel answering (docs/handoff
 
 `wipe` deletes both. A provisioning check on 4 Nov made one of each against a placeholder URL and deleted them straight away.
 
+## Settings the live agent keeps on itself
+
+Every prompt refresh (before a talk link is posted, and while one is open) also PATCHes the agent's delivery settings from `VOICE` in `src/voice/talk-agent.ts`: `stability` 0.8 (0.6 until 4 Nov, when a call "went from normal to really loud in places"), `similarity_boost` 0.75, `expressive_mode` on, and four gentle `suggested_audio_tags` (warm, calm, soft laugh, thoughtful). The voice and the model are never in that PATCH, so a voice picked in the dashboard stays. A check on 4 Nov PATCHed these onto the agent, read them back, and put the old values back.
+
+## Not in ElevenLabs: the short talk links
+
+The brief's `https://ck.<domain>/talk/<id>` links live in `state/voice-calls.json` (`links`: a random 12-character id, the full ElevenLabs talk URL, the time), next to the call watches. The tool server answers `GET /talk/<id>` with a 302 to that URL for 3 hours, then 404, and old entries are pruned on the next tick. The same file keeps `ended` (calls that got the "just finished a call" line) and `done` (calls that got a summary).
+
 The text-to-speech samples are local files in `build/voice/` (gitignored), not account resources.
 
 When this lane merges, copy `state/voice-ids.json` into the checkout that will run the agent, or `agent-setup` there makes a second agent. Copy `state/talk-tool-secret` with it once it exists (or set `CK_TALK_TOOL_SECRET` in `.env`), or the next run makes a second workspace secret.
