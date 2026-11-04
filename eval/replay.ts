@@ -19,7 +19,7 @@ import { Gateway, health, readEnvFile, serverEnv, type Room } from './switchapi.
 import { SwitchSession } from '../seed/switch.ts';
 import { loadYaml } from './yaml.ts';
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ── Mattermost outages ──
 // The compose file's Mattermost is amd64-only; under qemu on an Apple Silicon Mac it dies at random
@@ -30,7 +30,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // already landed, and retries once. Every outage is logged and kept in capture.json as an incident.
 // It never touches the switch, gateway or postgres containers.
 const MM_CONTAINER = process.env.CK_EVAL_MM_CONTAINER || `${serverEnv(ROOT).COMPOSE_PROJECT_NAME || 'ckswitch'}-mattermost-1`;
-const incidents: string[] = [];
+export const incidents: string[] = [];
 let recovering: Promise<boolean> | null = null;
 const isOutage = (e: unknown) => /timeout|aborted|fetch failed|ECONNREFUSED|ECONNRESET|socket hang up|other side closed/i.test(String((e as Error)?.message ?? e));
 
@@ -57,7 +57,7 @@ async function mmRecover(runDir: string, mmUrl: string, what: string): Promise<b
 }
 
 /** Run a Mattermost call; on an outage, recover, then return what `landed()` finds or call again once. */
-async function mmRetry<T>(runDir: string, mmUrl: string, what: string, fn: () => Promise<T>, landed?: () => Promise<T | null>): Promise<T> {
+export async function mmRetry<T>(runDir: string, mmUrl: string, what: string, fn: () => Promise<T>, landed?: () => Promise<T | null>): Promise<T> {
   try {
     return await fn();
   } catch (e) {
@@ -69,10 +69,10 @@ async function mmRetry<T>(runDir: string, mmUrl: string, what: string, fn: () =>
     return await fn();
   }
 }
-const L_S = 120; // longest model time after a decision is due
+export const L_S = 120; // longest model time after a decision is due
 const SHORT: Record<string, string> = { 'ledgerly-pilot': 'ledgerly', 'riverside-build-night': 'riverside' };
 
-function log(runDir: string | null, msg: string) {
+export function log(runDir: string | null, msg: string) {
   const line = `${new Date().toISOString()} ${msg}`;
   console.log(line);
   if (runDir) appendFileSync(join(runDir, 'harness.log'), line + '\n');
@@ -83,7 +83,7 @@ function git(args: string[]): string | null {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-interface Env { api: string; mmUrl: string; agentName: string; adminEmail: string; adminPassword: string; team: string; model: string | null }
+export interface Env { api: string; mmUrl: string; agentName: string; adminEmail: string; adminPassword: string; team: string; model: string | null }
 
 function loadEnv(args: Args): Env {
   const app = { ...readEnvFile(join(ROOT, '.env')), ...readEnvFile(join(ROOT, '.env.local')) };
@@ -136,20 +136,21 @@ function preflightCases(cases: Case[]) {
 }
 
 export async function runLive(args: Args) {
-  if (args.robustness) throw new Error('--robustness (R1–R8) is not built yet (eval-harness §10b)');
+  if (args.robustness) { const { runRobustness } = await import('./robustness-live.ts'); return runRobustness(args); }
   if (args.readme && args.setupOnly) throw new Error('--readme needs a scored run');
   for (let i = 1; i <= Math.max(1, args.repeat); i++) await runOnce(args, i);
 }
 
-async function runOnce(args: Args, n: number) {
-  incidents.length = 0;
-  const env = loadEnv(args);
-  const { cases: all } = loadCases(ROOT, args.set);
-  if (args.only) for (const id of args.only) if (!all.some((c) => c.id === id)) throw new Error(`--only: no case ${id} in the ${args.set} set`);
-  const cases = args.only ? all.filter((c) => args.only!.includes(c.id)) : all;
+export interface World {
+  env: Env; gw: Gateway; evalAgent: EvalAgent | null; bridge: { bridge_id: string }; team: { id: string };
+  people: Map<string, { mm: Mattermost; id: string }>; kash: { mm: Mattermost; id: string };
+  runId: string; runDir: string; switchVersion: string; mmVersion: string;
+}
 
-  // ── Preflight ──
-  preflightCases(all);
+/** Preflight (Switch, Mattermost, the eval agent, the bridge), a run id and directory, and the personas
+ *  signed in and on the team. Shared by the scored run and --robustness. */
+export async function prepare(args: Args, what: (runId: string) => string): Promise<World> {
+  const env = loadEnv(args);
   const switchVersion = await health(env.api);
   if (!switchVersion) throw new Error(`Switch isn't answering at ${env.api}/health`);
   const mm0 = new Mattermost(env.mmUrl);
@@ -172,7 +173,7 @@ async function runOnce(args: Args, n: number) {
   const runId = `r${stamp}-${randomBytes(2).toString('hex')}`;
   const runDir = join(ROOT, 'build/eval', runId);
   mkdirSync(runDir, { recursive: true });
-  log(runDir, `run ${runId} (${n}/${args.repeat}): ${cases.length} ${args.set} case(s), Switch ${switchVersion}, Mattermost ${mmVersion}, bridge ${bridge.bridge_id}`);
+  log(runDir, `run ${runId} ${what(runId)}, Switch ${switchVersion}, Mattermost ${mmVersion}, bridge ${bridge.bridge_id}`);
 
   // ── Personas (open sign-up, then join the open team) ──
   const srv = serverEnv(ROOT);
@@ -189,7 +190,18 @@ async function runOnce(args: Args, n: number) {
     people.set(u, { mm: p.mm, id: p.user.id });
     log(runDir, `persona ${u} ${p.created ? 'signed up' : p.reset ? 'signed in (password reset by the Mattermost admin: the stored one was lost)' : 'signed in'}`);
   }
-  const kash = people.get('kash')!;
+  return { env, gw, evalAgent, bridge, team, people, kash: people.get('kash')!, runId, runDir, switchVersion, mmVersion };
+}
+
+async function runOnce(args: Args, n: number) {
+  incidents.length = 0;
+  const { cases: all } = loadCases(ROOT, args.set);
+  if (args.only) for (const id of args.only) if (!all.some((c) => c.id === id)) throw new Error(`--only: no case ${id} in the ${args.set} set`);
+  const cases = args.only ? all.filter((c) => args.only!.includes(c.id)) : all;
+
+  // ── Preflight ──
+  preflightCases(all);
+  const { env, gw, evalAgent, bridge, team, people, kash, runId, runDir, switchVersion, mmVersion } = await prepare(args, () => `(${n}/${args.repeat}): ${cases.length} ${args.set} case(s)`);
   const rooms: Room[] = [];
   let agent: ChildProcess | null = null;
 
@@ -325,9 +337,9 @@ async function runOnce(args: Args, n: number) {
   }
 }
 
-const covers = (l: TraceLine, c: Case) => l.inputs.some((i) => i.sender.toLowerCase() === usernameOf(c.author) && normalise(i.body).startsWith(normalise(c.message)));
+export const covers = (l: TraceLine, c: Case) => l.inputs.some((i) => i.sender.toLowerCase() === usernameOf(c.author) && normalise(i.body).startsWith(normalise(c.message)));
 
-async function waitChannel(mm: Mattermost, teamId: string, r: Room): Promise<string> {
+export async function waitChannel(mm: Mattermost, teamId: string, r: Room): Promise<string> {
   for (let i = 0; i < 30; i++) {
     if (r.external_channel_id) return r.external_channel_id;
     const ch = await mm.channelByName(teamId, r.name);
@@ -339,7 +351,7 @@ async function waitChannel(mm: Mattermost, teamId: string, r: Room): Promise<str
   throw new Error(`no Mattermost channel appeared for room ${r.name}`);
 }
 
-async function waitBot(mm: Mattermost, agentName: string): Promise<string> {
+export async function waitBot(mm: Mattermost, agentName: string): Promise<string> {
   for (let i = 0; i < 30; i++) {
     const u = await mm.userByUsername(agentName);
     if (u) return u.id;
@@ -379,7 +391,7 @@ async function captureSwitchDocs(runDir: string, api: string, agent: EvalAgent, 
 
 /** Seed a fresh room with `npm run seed` (the same command as the README) as the agent under test.
  *  Returns the owner desk room it made. */
-function seedRoom(runDir: string, roomId: string, demo: string, agent: EvalAgent | null): string | null {
+export function seedRoom(runDir: string, roomId: string, demo: string, agent: EvalAgent | null): string | null {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { scripts?: Record<string, string> };
   if (!pkg.scripts?.seed) { log(runDir, 'seed: no `npm run seed` yet (seed lane), room left unseeded'); return null; }
   const env = { ...process.env, ...(agent ? { SWITCH_AGENT_ID: agent.id, SWITCH_AGENT_API_KEY: agent.key } : {}) };
@@ -399,9 +411,9 @@ function agentCommand(): string {
   return cmd;
 }
 
-function startAgent(runDir: string, traceFile: string, gapS: number, model: string | null, extra: Record<string, string>): ChildProcess {
+export function startAgent(runDir: string, traceFile: string, gapS: number, model: string | null, extra: Record<string, string>, logFile = join(runDir, 'agent.log')): ChildProcess {
   const cmd = agentCommand();
-  const out = join(runDir, 'agent.log');
+  const out = logFile;
   // The agent's optional parts (src/agent/features.ts: job E, the audio brief, the talk link) are on by
   // default for the demo; a scored run keeps them off unless this eval's own env sets them.
   const features = Object.fromEntries(['CK_JOB_E', 'CK_AUDIO_BRIEF', 'CK_TALK_LINK'].map((k) => [k, process.env[k] || '0']));
@@ -411,10 +423,10 @@ function startAgent(runDir: string, traceFile: string, gapS: number, model: stri
   return child;
 }
 
-/** The agent runs through a shell and npx, so signal its whole process group. */
-function stopAgent(child: ChildProcess | null) {
+/** The agent runs through a shell and npx, so signal its whole process group. SIGKILL = a crash (R2). */
+export function stopAgent(child: ChildProcess | null, signal: NodeJS.Signals = 'SIGTERM') {
   if (!child?.pid || child.exitCode !== null) return;
-  try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); }
+  try { process.kill(-child.pid, signal); } catch { child.kill(signal); }
 }
 
 function resultPath(model: string, set: string): string {

@@ -1,6 +1,7 @@
 // eval: replay the test set into fresh ck-eval-* rooms, capture, score with no LLM.
 //   npm run eval -- --rescore <capture dir>   re-score a saved capture, no server needed
 //   npm run eval -- [--fast] [--only T05,T08] [--set main|redteam|holdout] [--keep] [--attach]
+//   npm run eval -- --robustness [R2,R7,…]   the §10b pass/fail checks (eval/robustness-live.ts)
 // Every run is reported; there's no best-of. Red team and held-out are scored on their own line.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -42,7 +43,7 @@ export function parseArgs(argv: string[]): Args {
     else if (k === '--attach') a.attach = true;
     else if (k === '--readme') a.readme = true;
     else if (k === '--repeat') a.repeat = Number(val());
-    else if (k === '--robustness') a.robustness = val();
+    else if (k === '--robustness') a.robustness = argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[++i] : 'all';
     else if (k === '--model') a.model = val();
     else if (k === '--setup-only') a.setupOnly = true;
     else throw new Error(`unknown flag ${k}`);
