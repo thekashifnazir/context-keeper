@@ -294,64 +294,237 @@ export function ago(fromIso: string, nowIso: string): string {
   return `${Math.floor(h / 24)} days`;
 }
 
+// The look is the "nightshift" direction from our design language (a late-shift control desk), its
+// tokens copied as they are. Every colour has one job: blue is progress and the one action, green is
+// done, amber is waiting on someone, red is a problem, and grey-blue hatching is idle time. Two
+// changes forced by the page's CSP (no fonts or images from anywhere): type falls back to the system
+// sans, condensed for display, and the hatching is a CSS gradient rather than an SVG mask.
 const CSS = `
-:root{--bg:#f7f7f5;--card:#fff;--ink:#1d1d1b;--muted:#6b6b66;--line:#e4e4df;--accent:#2f6f4f;--warn:#a15c00;--bar:#e9e9e4}
-@media (prefers-color-scheme:dark){:root{--bg:#141413;--card:#1e1e1c;--ink:#ecebe6;--muted:#a3a29b;--line:#33332f;--accent:#7fc4a0;--warn:#e0a24a;--bar:#2c2c29}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:760px;margin:0 auto;padding:24px 16px 48px}
-h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1rem;margin:0 0 10px;letter-spacing:.01em}
-.sub{color:var(--muted);margin:0 0 20px;font-size:.92rem}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-right:8px;vertical-align:middle}
-section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:0 0 14px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.stat b{display:block;font-size:1.6rem;line-height:1.2}.stat span{color:var(--muted);font-size:.85rem}
-ul{list-style:none;margin:0;padding:0}li{padding:8px 0;border-top:1px solid var(--line)}li:first-child{border-top:0;padding-top:0}
-.muted{color:var(--muted);font-size:.88rem}.tag{display:inline-block;font-size:.8rem;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
-.label{font-weight:600}.q{display:block}.w{text-decoration:line-through;color:var(--muted)}
-.bar{height:10px;background:var(--bar);border-radius:99px;overflow:hidden;margin:8px 0 4px}.bar i{display:block;height:100%;background:var(--accent)}
-.bar.hot i{background:var(--warn)}a{color:var(--accent)}
-footer{color:var(--muted);font-size:.82rem;margin-top:18px}
-@media (max-width:480px){.stat b{font-size:1.3rem}.stat span{font-size:.8rem}}
-li{overflow-wrap:anywhere}
+:root{color-scheme:light;--ds-color-background:#EDEFF2;--ds-color-foreground:#14171C;--ds-color-card:#F7F8FA;--ds-color-muted:#E4E6E9;--ds-color-muted-foreground:#4B525C;--ds-color-primary:#1F5BD0;--ds-color-primary-foreground:#FFFFFF;--ds-color-secondary:#DFE3E9;--ds-color-border:#BFC3C9;--ds-color-input:#7B838E;--ds-color-ring:#1F5BD0;--ds-color-destructive:#B91C1C;--ds-color-highlight:#DFE3E9;--ds-color-raised:#FFFFFF;--ds-color-success:#17703F;--ds-color-warning:#8C5300;--ds-color-signal:#95A1B3;
+--ds-font-sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--ds-font-display:"IBM Plex Sans","IBM Plex Sans Condensed",system-ui,-apple-system,"Segoe UI",sans-serif;
+--ds-font-size-xs:12px;--ds-font-size-sm:14px;--ds-font-size-base:16px;--ds-font-size-lg:18px;--ds-font-size-xl:20px;--ds-font-size-2xl:24px;--ds-font-size-3xl:30px;--ds-font-size-4xl:36px;--ds-font-size-5xl:48px;--ds-font-size-6xl:60px;
+--ds-spacing-1:4px;--ds-spacing-2:8px;--ds-spacing-3:12px;--ds-spacing-4:16px;--ds-spacing-6:24px;--ds-spacing-8:32px;--ds-spacing-12:48px;--ds-spacing-16:64px;
+--ds-radius-control:4px;--ds-radius-full:9999px;--ds-border-width:1px;--ds-duration-slow:320ms;--ds-easing-standard:cubic-bezier(0.2,0,0,1);
+--hatch:repeating-linear-gradient(135deg,transparent 0 6px,var(--ds-color-signal) 6px 7px)}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--ds-color-background:#09090B;--ds-color-foreground:#F4F4F5;--ds-color-card:#18181B;--ds-color-muted:#232327;--ds-color-muted-foreground:#94949C;--ds-color-primary:#5C9BFF;--ds-color-primary-foreground:#0A0F1A;--ds-color-secondary:#232327;--ds-color-border:#4D4D53;--ds-color-input:#6E6E76;--ds-color-ring:#5C9BFF;--ds-color-destructive:#EF4444;--ds-color-highlight:#242931;--ds-color-raised:#232327;--ds-color-success:#4CC38A;--ds-color-warning:#E6B450;--ds-color-signal:#5E6B7F}}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--ds-color-background);color:var(--ds-color-foreground);font:var(--ds-font-size-base)/1.55 var(--ds-font-sans);-webkit-font-smoothing:antialiased}
+body{margin:0;overflow-x:hidden}
+p,h1,h2,h3,ul,ol,dl,dd{margin:0}ul,ol{padding:0;list-style:none}
+a{color:var(--ds-color-primary);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--ds-color-ring);outline-offset:3px}
+.num{font-variant-numeric:tabular-nums}
+.display{font-family:var(--ds-font-display);font-weight:600;font-stretch:85%;letter-spacing:-.01em;line-height:1.04}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1200px;margin:0 auto;padding:0 var(--ds-spacing-6)}
+.card{background:var(--ds-color-card);border:var(--ds-border-width) solid var(--ds-color-border);border-radius:var(--ds-radius-control)}
+.muted{color:var(--ds-color-muted-foreground);font-size:var(--ds-font-size-sm)}
+.mark{display:inline-block;flex:none;width:.9em;height:.9em;vertical-align:-.08em;border:var(--ds-border-width) solid var(--ds-color-foreground);background:var(--hatch)}
+.solid{display:inline-block;flex:none;width:.9em;height:.9em;vertical-align:-.08em;background:var(--ds-color-foreground)}
+.top{display:flex;align-items:center;gap:var(--ds-spacing-3);min-height:72px;border-bottom:var(--ds-border-width) solid var(--ds-color-border)}
+.logo{display:inline-flex;align-items:center;gap:var(--ds-spacing-2);font-size:var(--ds-font-size-2xl);color:var(--ds-color-foreground)}
+.logo svg{width:28px;height:28px}.logo .t{fill:var(--ds-color-primary)}.logo .b{fill:var(--ds-color-primary-foreground)}
+.top .muted{margin-left:auto}
+.hero{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:var(--ds-spacing-12);align-items:center;--now:57%}
+.wrap.hero{padding-block:var(--ds-spacing-16) var(--ds-spacing-12)}
+.hero::before,.hero::after{content:"";position:absolute;z-index:-1;top:0;bottom:0;pointer-events:none}
+.hero::before{left:var(--now);right:min(0px,calc((100% - 100vw)/2));background:repeating-linear-gradient(135deg,transparent 0 6px,color-mix(in srgb,var(--ds-color-signal) 42%,transparent) 6px 7px)}
+.hero::after{left:var(--now);width:var(--ds-border-width);background:var(--ds-color-input)}
+.hero h1{font-size:clamp(var(--ds-font-size-4xl),4.6vw,var(--ds-font-size-6xl));max-width:16ch;text-wrap:balance}
+.lede{font-size:var(--ds-font-size-lg);color:var(--ds-color-muted-foreground);max-width:52ch;margin-top:var(--ds-spacing-6)}
+.actions{display:flex;flex-wrap:wrap;gap:var(--ds-spacing-3);margin-top:var(--ds-spacing-8)}
+.btn{display:inline-flex;align-items:center;min-height:44px;padding:0 var(--ds-spacing-6);border-radius:var(--ds-radius-control);font-weight:600;text-decoration:none;transition:background-color var(--ds-duration-slow) var(--ds-easing-standard)}
+.btn-p{background:var(--ds-color-primary);color:var(--ds-color-primary-foreground)}
+.btn-p:hover{background:color-mix(in srgb,var(--ds-color-primary) 88%,var(--ds-color-foreground))}
+.btn-s{background:var(--ds-color-secondary);color:var(--ds-color-foreground)}
+.btn-s:hover{background:var(--ds-color-border)}
+.live{padding:var(--ds-spacing-6);background:var(--ds-color-raised)}
+.live-top{display:flex;justify-content:space-between;align-items:center;gap:var(--ds-spacing-4)}
+.pulse{display:inline-flex;align-items:center;gap:var(--ds-spacing-2);font-weight:600;color:var(--ds-color-success)}
+.pulse i{position:relative;width:10px;height:10px;border-radius:var(--ds-radius-full);background:currentColor}
+.pulse i::after{content:"";position:absolute;inset:-4px;border-radius:inherit;border:2px solid currentColor;opacity:0}
+@media (prefers-reduced-motion:no-preference){.pulse i::after{animation:ping 2.4s var(--ds-easing-standard) infinite}}
+@keyframes ping{0%{transform:scale(.6);opacity:.7}70%,100%{transform:scale(1.6);opacity:0}}
+.live-num{font-size:var(--ds-font-size-6xl);margin-top:var(--ds-spacing-4)}
+.rows{margin-top:var(--ds-spacing-6)}
+.rows div{display:flex;justify-content:space-between;gap:var(--ds-spacing-4);padding:var(--ds-spacing-3) 0;border-top:var(--ds-border-width) solid var(--ds-color-border);font-size:var(--ds-font-size-sm)}
+.rows dt{color:var(--ds-color-muted-foreground)}.rows dd{font-weight:600;text-align:right;overflow-wrap:anywhere}
+section.wrap{padding-block:var(--ds-spacing-12)}
+.wrap.split{padding-block:var(--ds-spacing-12) var(--ds-spacing-8)}
+.head{display:flex;justify-content:space-between;align-items:baseline;gap:var(--ds-spacing-4);flex-wrap:wrap;margin-bottom:var(--ds-spacing-6)}
+.head h2{font-size:var(--ds-font-size-3xl)}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.7fr)}
+.kpi{padding:var(--ds-spacing-6);border-left:var(--ds-border-width) solid var(--ds-color-border)}
+.kpi:first-child{border-left:0}
+.kpi-l{display:flex;align-items:center;gap:var(--ds-spacing-2);font-size:var(--ds-font-size-sm);font-weight:600;color:var(--ds-color-muted-foreground)}
+.kpi-n{font-size:var(--ds-font-size-6xl);margin-top:var(--ds-spacing-3)}
+.kpi-n small{font-size:var(--ds-font-size-xl);font-weight:400;color:var(--ds-color-muted-foreground);margin-left:var(--ds-spacing-2);letter-spacing:0}
+.kpi-d{margin-top:var(--ds-spacing-2);font-size:var(--ds-font-size-sm);color:var(--ds-color-muted-foreground)}
+.spend{background:var(--ds-color-raised)}
+.meter{height:var(--ds-spacing-2);background:var(--ds-color-muted);border-radius:var(--ds-radius-control);margin-top:var(--ds-spacing-4);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ds-color-primary)}
+.meter.warn i{background:var(--ds-color-warning)}.meter.bad i{background:var(--ds-color-destructive)}
+.rule{position:relative;height:var(--ds-spacing-3)}
+.rule::before{content:"";position:absolute;left:0;right:0;top:50%;height:var(--ds-border-width);background:linear-gradient(to right,var(--ds-color-input) 0 64%,transparent 64% 82%,var(--ds-color-input) 82%)}
+.rule::after{content:"";position:absolute;top:0;bottom:0;left:64%;width:18%;border:var(--ds-border-width) solid var(--ds-color-signal);background:var(--hatch)}
+.ideas{overflow:hidden}
+.idea{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:var(--ds-spacing-8);align-items:center;padding:var(--ds-spacing-6)}
+.idea+.idea{border-top:var(--ds-border-width) solid var(--ds-color-border)}
+.idea-t{display:flex;gap:var(--ds-spacing-3);align-items:baseline}
+.ref{font-size:var(--ds-font-size-xl);flex:none;min-width:2.2em}
+.idea-t p{font-weight:600;overflow-wrap:anywhere}
+.idea-m{margin:var(--ds-spacing-2) 0 0 calc(2.2em * 1.25 + var(--ds-spacing-3));font-size:var(--ds-font-size-sm);color:var(--ds-color-muted-foreground);overflow-wrap:anywhere}
+.track{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--ds-spacing-1)}
+.track li{position:relative;padding-top:var(--ds-spacing-4);font-size:var(--ds-font-size-xs);line-height:1.25;color:var(--ds-color-muted-foreground)}
+.track li::before{content:"";position:absolute;left:0;right:0;top:2px;height:6px;border:var(--ds-border-width) solid var(--ds-color-border);border-radius:var(--ds-radius-control)}
+.track li.past::before{background:var(--ds-color-primary);border-color:var(--ds-color-primary)}
+.track.all li::before{background:var(--ds-color-success);border-color:var(--ds-color-success)}
+.track li.now{color:var(--ds-color-foreground);font-weight:600}
+.track li.now::before{top:0;height:10px;--c:var(--ds-color-primary);background:var(--c);border-color:var(--c)}
+.t-wait li.now::before{--c:var(--ds-color-warning)}.t-ok li.now::before{--c:var(--ds-color-success)}.t-bad li.now::before{--c:var(--ds-color-destructive)}
+.answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--ds-spacing-4)}
+.ans{padding:var(--ds-spacing-6);display:flex;flex-direction:column;gap:var(--ds-spacing-3);overflow-wrap:anywhere}
+.ans-top{display:flex;justify-content:space-between;align-items:center;gap:var(--ds-spacing-3);flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:var(--ds-spacing-1);padding:2px var(--ds-spacing-3);border:var(--ds-border-width) solid var(--ds-color-border);border-radius:var(--ds-radius-full);font-size:var(--ds-font-size-sm);font-weight:600;background:var(--ds-color-raised)}
+.b-ok{color:var(--ds-color-success)}.b-wait{color:var(--ds-color-warning)}
+.w{text-decoration:line-through;color:var(--ds-color-muted-foreground)}
+.chip{display:inline-flex;align-items:center;padding:2px var(--ds-spacing-2);border-radius:var(--ds-radius-full);background:var(--ds-color-highlight);font-size:var(--ds-font-size-xs);font-weight:600;white-space:nowrap}
+.q{font-size:var(--ds-font-size-lg);line-height:1.45}
+.src{margin-top:auto;padding-top:var(--ds-spacing-3);border-top:var(--ds-border-width) solid var(--ds-color-border)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--ds-spacing-12)}
+.split h2{font-size:var(--ds-font-size-2xl);margin-bottom:var(--ds-spacing-4)}
+.list li{display:flex;align-items:baseline;gap:var(--ds-spacing-3);flex-wrap:wrap;padding:var(--ds-spacing-3) 0;border-top:var(--ds-border-width) solid var(--ds-color-border);overflow-wrap:anywhere}
+.list li:last-child{border-bottom:var(--ds-border-width) solid var(--ds-color-border)}
+.list .name{font-weight:600;margin-right:auto}
+.pieces li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:var(--ds-spacing-3);align-items:baseline}
+.pieces .d{grid-column:2/-1}
+.state{font-size:var(--ds-font-size-sm);font-weight:600}
+.after{margin-top:var(--ds-spacing-4)}
+.foot{border-top:var(--ds-border-width) solid var(--ds-color-border);padding-block:var(--ds-spacing-8) var(--ds-spacing-12);display:flex;justify-content:space-between;gap:var(--ds-spacing-6);flex-wrap:wrap;align-items:flex-start}
+.foot nav{display:flex;gap:var(--ds-spacing-6);flex-wrap:wrap;font-weight:600}
+.foot p{max-width:62ch}
+@media (max-width:960px){.hero{grid-template-columns:minmax(0,1fr);gap:var(--ds-spacing-8)}.wrap.hero{padding-top:var(--ds-spacing-12)}
+.hero::before{top:auto;left:min(0px,calc((100% - 100vw)/2));height:36%}.hero::after{display:none}
+.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.spend{grid-column:1/-1;border-left:0;border-top:var(--ds-border-width) solid var(--ds-color-border)}
+.idea{grid-template-columns:minmax(0,1fr);gap:var(--ds-spacing-4)}.split{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){.wrap{padding:0 var(--ds-spacing-4)}.top .muted{display:none}.hero h1{font-size:var(--ds-font-size-4xl)}
+.kpi{padding:var(--ds-spacing-4)}.kpi-n{font-size:var(--ds-font-size-4xl)}.kpi-d{display:none}.spend .kpi-d{display:block}
+.answers{grid-template-columns:minmax(0,1fr)}.idea,.ans{padding:var(--ds-spacing-4)}.idea-m{margin-left:0}
+.track{padding-bottom:var(--ds-spacing-4)}.track li{padding-top:var(--ds-spacing-3)}.track li:not(.now) span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.track li.now span{position:absolute;left:0;white-space:nowrap}.track li.now:nth-child(n+4) span{left:auto;right:0}}
 `;
 
+/** Where an idea sits on the tracker people see (Noted → … → Signed off), and what its colour means:
+ *  go = moving (blue), wait = waiting on someone (amber), ok = done (green), bad = a problem (red).
+ *  Read from ideaStage's words, so the page and /status.json can never disagree. at = -1: unknown. */
+export const TRACK = ['Noted', 'Approved', 'Building', 'Waiting for Kash', 'Done', 'Signed off'] as const;
+export type StageTone = 'go' | 'wait' | 'ok' | 'bad';
+export function stageStep(stage: string): { at: number; tone: StageTone } {
+  const s = stage.toLowerCase();
+  if (s === 'done · signed off') return { at: 5, tone: 'ok' };
+  if (s.startsWith('done')) return { at: 4, tone: 'ok' };
+  if (s === 'not done') return { at: 2, tone: 'bad' };
+  if (s.includes('waiting for an ok')) return { at: 3, tone: 'wait' };
+  if (s.startsWith('claude code')) return { at: 2, tone: s.includes('no result') ? 'wait' : 'go' };
+  if (s.startsWith('approved')) return { at: 1, tone: s.includes('refused') ? 'bad' : s.includes('retrying') ? 'wait' : 'go' };
+  if (s.startsWith('noted') || s === 'reopened') return { at: 0, tone: 'wait' };
+  return { at: -1, tone: 'go' };
+}
+
+/** A posted label's meaning: confirmed from the record (green), needs a look (amber), or neither. */
+const verdictTone = (label: string) =>
+  /in the record|decision/i.test(label) ? ' b-ok' : /otherwise|reopen/i.test(label) ? ' b-wait' : '';
+
+const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect class="t" width="64" height="64" rx="15"/><rect class="b" x="14" y="17" width="36" height="7" rx="3.5"/><rect class="b" x="14" y="28.5" width="27" height="7" rx="3.5" fill-opacity=".72"/><rect class="b" x="14" y="40" width="18" height="7" rx="3.5" fill-opacity=".45"/></svg>';
+const REPO = 'https://github.com/thekashifnazir/context-keeper';
+const DISCORD = 'https://discord.gg/ygPnp7bj5';
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const link = (url: string, text: string) => `<a href="${esc(url)}" rel="noopener noreferrer">${esc(text)}</a>`;
+
 export function renderStatusHtml(s: StatusSnapshot): string {
-  const room = (r: StatusSnapshot['rooms']['named'][number]) =>
-    `<li>${esc(r.name)}${r.bridge ? `<span class="tag">${esc(r.bridge)}</span>` : ''}${r.kind === 'build' ? '<span class="tag">build room, Claude Code</span>' : ''}</li>`;
-  const extra = [
-    s.rooms.test_rooms ? `${s.rooms.test_rooms} test room${s.rooms.test_rooms === 1 ? '' : 's'}` : '',
-    s.rooms.listening_only ? `${s.rooms.listening_only} room${s.rooms.listening_only === 1 ? '' : 's'} it listens to without posting` : '',
-  ].filter(Boolean).join(' · ');
-  const idea = (i: StatusSnapshot['ideas'][number]) =>
-    `<li><span class="label">${esc(i.ref)}</span> · ${esc(i.idea)}<br><span class="muted">${esc(i.raiser)}'s idea · <b>${esc(i.stage)}</b>${i.changed_at ? ` · since ${esc(when(i.changed_at))}` : ''}${i.issue_url ? ` · <a href="${esc(i.issue_url)}" rel="noopener noreferrer">${esc(i.issue_url.replace(/^https:\/\/github\.com\//, ''))}</a>` : ''}</span></li>`;
-  const answer = (a: StatusSnapshot['recent'][number]) => {
-    const src = a.source ? (a.source.url ? `<a href="${esc(a.source.url)}" rel="noopener noreferrer">${esc(a.source.label)}</a>` : esc(a.source.label)) : '';
-    return `<li><span class="label${a.withdrawn ? ' w' : ''}">${esc(a.label)}</span>${a.withdrawn ? ' <span class="tag">withdrawn by the owner</span>' : ''}<span class="q">“${esc(a.question)}”</span><span class="muted">${esc(a.room)} · ${esc(when(a.at))}${src ? ` · source: ${src}` : ''}</span></li>`;
+  const day = new Date(`${s.today.day}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+  const track = (stage: string) => {
+    const { at, tone } = stageStep(stage);
+    const all = at === TRACK.length - 1 && tone === 'ok';
+    return `<ol class="track t-${tone}${all ? ' all' : ''}" aria-label="Stage">${TRACK.map((name, i) =>
+      `<li${i < at ? ' class="past"' : i === at ? ' class="now" aria-current="step"' : ''}><span>${esc(name)}</span></li>`).join('')}</ol>`;
   };
+  const idea = (i: StatusSnapshot['ideas'][number]) =>
+    `<li class="idea"><div><div class="idea-t"><span class="ref display num">${esc(i.ref)}</span><p>${esc(i.idea)}</p></div>` +
+    `<p class="idea-m">${esc(i.raiser)}'s idea. ${esc(i.stage)}${i.changed_at ? `, since ${esc(when(i.changed_at))}` : ''}.` +
+    `${i.issue_url ? ` ${link(i.issue_url, i.issue_url.replace(/^https:\/\/github\.com\//, ''))}` : ''}</p></div>${track(i.stage)}</li>`;
+
+  const answer = (a: StatusSnapshot['recent'][number]) => {
+    const src = a.source ? (a.source.url ? link(a.source.url, a.source.label) : esc(a.source.label)) : '';
+    return `<li class="ans card"><p class="ans-top"><span class="badge${a.withdrawn ? ' w' : verdictTone(a.label)}">${esc(a.label)}</span>` +
+      `${a.withdrawn ? '<span class="chip">withdrawn by the owner</span>' : `<span class="muted num">${esc(when(a.at))}</span>`}</p>` +
+      `<p class="q">“${esc(a.question)}”</p><p class="muted">In ${esc(a.room)}${a.withdrawn ? `, ${esc(when(a.at))}` : ''}</p>` +
+      `${src ? `<p class="muted src">Source: ${src}</p>` : ''}</li>`;
+  };
+
+  const room = (r: StatusSnapshot['rooms']['named'][number]) =>
+    `<li><span class="name">${esc(r.name)}</span>${r.bridge ? `<span class="chip">${esc(r.bridge)}</span>` : ''}${r.kind === 'build' ? '<span class="chip">build room, Claude Code</span>' : ''}</li>`;
+  const extra = [
+    s.rooms.test_rooms ? plural(s.rooms.test_rooms, 'test room') : '',
+    s.rooms.listening_only ? `${plural(s.rooms.listening_only, 'room')} it listens to without posting` : '',
+  ].filter(Boolean).join(' and ');
+  const piece = (p: StatusSnapshot['switch_pieces'][number]) =>
+    `<li><span class="${p.in_use ? 'solid' : 'mark'}" aria-hidden="true"></span><span class="name">${esc(p.piece)}</span>` +
+    `<span class="state${p.in_use ? '' : ' muted'}">${p.in_use ? 'In use' : 'Off'}</span><span class="muted d">${esc(p.detail)}</span></li>`;
+
   const sp = s.spend;
   const pct = sp.metered && sp.cap_usd ? Math.min(100, Math.round(((sp.usd ?? 0) / sp.cap_usd) * 100)) : null;
   const spend = !sp.metered
-    ? '<p class="muted">Not metered on this run (no daily cap set).</p>'
-    : `<p><b>$${(sp.usd ?? 0).toFixed(2)}</b>${sp.cap_usd !== null ? ` of the $${sp.cap_usd.toFixed(2)} daily cap` : ' (no cap)'} · ${sp.calls} model call${sp.calls === 1 ? '' : 's'}</p>${pct !== null ? `<div class="bar${pct >= 80 ? ' hot' : ''}"><i style="width:${pct}%"></i></div>` : ''}<p class="muted">${sp.capped ? 'Cap reached: no model calls until 00:00 UTC. ' : ''}An estimate from the model price table (an upper bound), per UTC day.</p>`;
+    ? '<p class="kpi-n display num">–</p><p class="kpi-d">Not metered on this run (no daily cap set).</p>'
+    : `<p class="kpi-n display num">$${(sp.usd ?? 0).toFixed(2)}<small>${sp.cap_usd !== null ? `of the $${sp.cap_usd.toFixed(2)} daily cap` : 'no cap set'}</small></p>` +
+      `${pct !== null ? `<div class="meter${sp.capped ? ' bad' : pct >= 80 ? ' warn' : ''}" role="img" aria-label="${pct}% of the daily cap used"><i style="width:${pct}%"></i></div>` : ''}` +
+      `<p class="kpi-d">${sp.capped ? 'Cap reached: no model calls until 00:00 UTC. ' : ''}${plural(sp.calls ?? 0, 'model call')}. An upper-bound estimate from the model price table.</p>`;
+
+  const lastAnswer = s.recent[0]?.at ?? null;
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="60"><meta name="robots" content="noindex">
+<meta name="description" content="The running Context Keeper agent: its rooms, today's replies, ideas in progress and latest answers.">
 <title>Context Keeper · live</title><style>${CSS}</style></head>
-<body><main>
-<h1><span class="dot"></span>Context Keeper · live</h1>
-<p class="sub">Up since ${esc(when(s.up_since))} (${esc(ago(s.up_since, s.generated_at))}). Refreshes every minute; figures are at most a minute old.</p>
-<section><h2>Today (UTC)</h2><div class="grid">
-<div class="stat"><b>${s.today.replies}</b><span>replies</span></div>
-<div class="stat"><b>${s.today.briefs}</b><span>catch-up briefs</span></div>
-<div class="stat"><b>${s.today.silences}</b><span>stayed quiet</span></div>
+<body>
+<header class="wrap top"><span class="logo display">${LOGO}Context Keeper</span><span class="muted">Live status</span></header>
+<main>
+<div class="wrap hero">
+<div><h1 class="display">From “didn’t we decide this?” to “it’s built”, right in your team chat.</h1>
+<p class="lede">Context Keeper sits in a team's chat. It answers with the source when a question was already settled, and turns new ideas into work for Claude Code. This page is the running agent, read from its own state.</p>
+<p class="actions"><a class="btn btn-p" href="${DISCORD}" rel="noopener noreferrer">Try it on Discord</a><a class="btn btn-s" href="${REPO}" rel="noopener noreferrer">View the code on GitHub</a></p></div>
+<aside class="card live" aria-label="Agent status">
+<p class="live-top"><span class="pulse"><i aria-hidden="true"></i>Live</span><span class="muted">Refreshes every minute</span></p>
+<p class="live-num display num">${esc(ago(s.up_since, s.generated_at))}</p>
+<p class="muted">running, up since ${esc(when(s.up_since))}</p>
+<dl class="rows num"><div><dt>Rooms it posts in</dt><dd>${s.rooms.named.length}</dd></div><div><dt>Ideas on the list</dt><dd>${s.ideas.length}</dd></div>
+<div><dt>Last public answer</dt><dd>${lastAnswer ? esc(when(lastAnswer)) : 'none yet'}</dd></div><div><dt>Figures as of</dt><dd>${esc(when(s.generated_at))}</dd></div></dl>
+</aside>
+</div>
+<section class="wrap" aria-labelledby="h-today"><div class="head"><h2 id="h-today" class="display">Today</h2><p class="muted">UTC day, ${esc(day)}</p></div>
+<div class="card kpis">
+<div class="kpi"><p class="kpi-l">Replies</p><p class="kpi-n display num">${s.today.replies}</p><p class="kpi-d">posted in public rooms</p></div>
+<div class="kpi"><p class="kpi-l">Catch-up briefs</p><p class="kpi-n display num">${s.today.briefs}</p><p class="kpi-d">for people back in a thread</p></div>
+<div class="kpi"><p class="kpi-l"><span class="mark" aria-hidden="true"></span>Stayed quiet</p><p class="kpi-n display num">${s.today.silences}</p><p class="kpi-d">heard it, judged no reply was needed</p></div>
+<div class="kpi spend"><p class="kpi-l">Model spend</p>${spend}</div>
 </div></section>
-<section><h2>Rooms it's in</h2>${s.rooms.named.length ? `<ul>${s.rooms.named.map(room).join('')}</ul>` : '<p class="muted">None yet.</p>'}${extra ? `<p class="muted">Plus ${esc(extra)}.</p>` : ''}</section>
-<section><h2>Ideas in progress (job E)</h2>${s.ideas.length ? `<ul>${s.ideas.map(idea).join('')}</ul>` : '<p class="muted">No ideas on the list.</p>'}</section>
-<section><h2>Latest answers in public rooms</h2>${s.recent.length ? `<ul>${s.recent.map(answer).join('')}</ul>` : '<p class="muted">None yet.</p>'}</section>
-<section><h2>Model spend today</h2>${spend}</section>
-<section><h2>Switch pieces in use</h2><ul>${s.switch_pieces.map((p) => `<li><span class="label">${p.in_use ? '●' : '○'} ${esc(p.piece)}</span><br><span class="muted">${esc(p.detail)}</span></li>`).join('')}</ul></section>
-<footer>Read-only, from the running agent's own state. Owner-desk notes, private rooms, ids and emails are never shown. Generated ${esc(when(s.generated_at))}. JSON: <a href="/status.json">/status.json</a></footer>
-</main></body></html>
+<div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+<section class="wrap" aria-labelledby="h-ideas"><div class="head"><h2 id="h-ideas" class="display">Ideas in progress</h2><p class="muted">Each step waits for an approval card in the room</p></div>
+${s.ideas.length ? `<ul class="card ideas">${s.ideas.map(idea).join('')}</ul>` : '<p class="card idea">No ideas on the list yet. When someone suggests one in a room, it shows here once it is noted.</p>'}</section>
+<section class="wrap" aria-labelledby="h-answers"><div class="head"><h2 id="h-answers" class="display">Latest answers</h2><p class="muted">Posted in public rooms, newest first</p></div>
+${s.recent.length ? `<ul class="answers">${s.recent.map(answer).join('')}</ul>` : '<p class="muted">No answers posted in public rooms yet.</p>'}</section>
+<div class="wrap"><div class="rule" aria-hidden="true"></div></div>
+<section class="wrap split">
+<div><h2 id="h-rooms" class="display">Rooms</h2>${s.rooms.named.length ? `<ul class="list">${s.rooms.named.map(room).join('')}</ul>` : '<p class="muted">Not in any public rooms yet.</p>'}${extra ? `<p class="muted after">Also ${esc(extra)}.</p>` : ''}</div>
+<div><h2 id="h-switch" class="display">Switch pieces in use</h2><ul class="list pieces">${s.switch_pieces.map(piece).join('')}</ul></div>
+</section>
+</main>
+<footer class="wrap"><div class="foot">
+<nav aria-label="Links"><a href="${REPO}" rel="noopener noreferrer">GitHub repo</a><a href="${DISCORD}" rel="noopener noreferrer">Try it on Discord</a><a href="/status.json">Raw data (JSON)</a></nav>
+<p class="muted">Read-only, from the running agent's own state. Owner-desk notes, private rooms, ids and emails are never shown. Generated ${esc(when(s.generated_at))}, UK time.</p>
+</div></footer>
+</body></html>
 `;
 }
 
