@@ -66,6 +66,9 @@ export interface IdeaRecord {
   signoff_asked?: boolean;
   /** Sender ids already told "only <raiser> or <owner> can sign this off" (once per person per idea). */
   signoff_refused?: string[];
+  /** Sender ids already given the "Thanks, Sam, noted. Rowan signs this one off." line (chain.heard;
+   *  shares the one-line-per-person budget with signoff_refused). */
+  heard?: string[];
 }
 
 interface FileShape {

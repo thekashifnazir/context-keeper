@@ -26,7 +26,7 @@ export interface HandoffSwitch {
   /** post_message; returns the event id. */
   post(roomId: string, threadId: string | null, body: string): Promise<string | null>;
   /** send_targeted_message; Switch prefixes "@<name>". A refused target is a status, not an error. */
-  sendTargeted(roomId: string, targetNames: string[], body: string): Promise<{ eventId: string | null; statuses: Record<string, string> }>;
+  sendTargeted(roomId: string, targetNames: string[], body: string, threadId?: string | null): Promise<{ eventId: string | null; statuses: Record<string, string> }>;
   /** A post in the private owner desk; null when there's no desk. */
   owner(body: string): Promise<string | null>;
   /** The listener's CK_POST_ROOMS guard. A build room it can't post in stops the chain at the room
@@ -94,10 +94,11 @@ export function liveHandoffSwitch(op: OpFn, o: LiveOpts): HandoffSwitch {
       await op(roomId, 'connect_to_room', { room_id: roomId });
       return eventIdOf(await op(roomId, 'post_message', { body, ...(threadId ? { thread_id: threadId } : {}) }));
     },
-    async sendTargeted(roomId, targetNames, body) {
-      if (!o.canPost(roomId)) { log(`[dry-run: ${roomId} not in CK_POST_ROOMS] would send_targeted_message to ${targetNames.join(', ')}:\n${body}`); return { eventId: null, statuses: {} }; }
+    async sendTargeted(roomId, targetNames, body, threadId) {
+      if (!o.canPost(roomId)) { log(`[dry-run: ${roomId} not in CK_POST_ROOMS] would send_targeted_message to ${targetNames.join(', ')}${threadId ? ` in thread ${threadId}` : ''}:\n${body}`); return { eventId: null, statuses: {} }; }
       await op(roomId, 'connect_to_room', { room_id: roomId });
-      const r = await op(roomId, 'send_targeted_message', { target_names: targetNames, body });
+      // thread_id (ops listing, 5 Nov): "a message id from the thread … normalised to the thread root".
+      const r = await op(roomId, 'send_targeted_message', { target_names: targetNames, body, ...(threadId ? { thread_id: threadId } : {}) });
       const x = unwrap(r);
       return { eventId: eventIdOf(r), statuses: (x?.target_statuses ?? r?.target_statuses ?? {}) as Record<string, string> };
     },

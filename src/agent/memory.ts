@@ -77,6 +77,12 @@ export function parseArchive(text: string): { messages: ArchiveMessage[]; order:
 export class RoomMemory {
   private rooms = new Map<string, RoomState>();
   private loading = new Map<string, Promise<RoomState | null>>();
+  private versions = new Map<string, number>();
+
+  /** Goes up whenever the room's record changes (a live message, a document added, removed or written).
+   *  The listener compares it before using a verdict it started early (src/agent/main.ts, prefetch). */
+  version(roomId: string): number { return this.versions.get(roomId) ?? 0; }
+  private bump(roomId: string) { this.versions.set(roomId, this.version(roomId) + 1); }
   constructor(private o: MemoryOptions) {}
 
   private log(m: string) { (this.o.log ?? console.log)(m); }
@@ -171,6 +177,7 @@ export class RoomMemory {
   /** Docs in a stable order: the archive's own list first (the seeded docs, as the room had them),
    *  then any other document as Switch lists it, our Decision log last (it changes most). */
   private rebuild(st: RoomState) {
+    this.bump(st.roomId);
     // Our log is named first, so it is always "decision-log.md"; any clash gets "-2", "-3".
     const used = new Set<string>(st.logDocId ? [DECISION_LOG_FILE] : []);
     const named = st.docs.map((d) => {
@@ -198,6 +205,7 @@ export class RoomMemory {
     if (!st || isDocNotice(m.text) || st.live.some((x) => x.id === m.id) || st.archive.some((x) => x.id === m.id)) return;
     st.live.push(m);
     st.record.messages.push(m);
+    this.bump(roomId);
   }
 
   /** Before a decision: pick up documents added or removed since the last look. */

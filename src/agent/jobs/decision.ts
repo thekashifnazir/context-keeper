@@ -7,6 +7,7 @@
 // supports one). The action owner never quietly defaults to the room owner. Every record carries
 // "reopen if" when the record or the chat gives one; otherwise the desk note asks for it.
 import type { Details } from '../pending.ts';
+import { plainCommand } from '../../shared/command.ts';
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -85,7 +86,7 @@ export type PlainReading = { action: 'confirm' | 'drop'; owner: string; date: st
 
 /** Plain owner replies that need no model call: "confirm", "yes", "owner Priya", "drop". */
 export function readPlain(text: string, kind: 'B' | 'D'): PlainReading {
-  const t = text.replace(/#\d+\b/g, '').trim();
+  const t = plainCommand(text.replace(/#\d+\b/g, ''));
   if (kind === 'B') {
     if (/^(drop|scrap|cancel|not a decision|ignore|leave it)\b/i.test(t)) return { action: 'drop', owner: '', date: '' };
     const owner = (t.match(/^(?:confirm(?:ed)?[,.]?\s+)?(?:owner|assign(?:ed)?(?: it)? to|give it to|make it)\s*[:=]?\s*([A-Z][\w'-]+)\s*\.?$/i) ?? [])[1];
