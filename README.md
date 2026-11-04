@@ -58,11 +58,23 @@ The trust rule: it never says "already covered" without a quote that code has ch
 
 ## Try it
 
-<!-- factual stub; Kash to reword -->
-- A public Discord channel, bridged into the same Switch server as the team's Slack and seeded with the Ledgerly record, is set up by [docs/demo-channel.md](docs/demo-channel.md). Invite link: https://discord.gg/ygPnp7bj5
-- There it answers, logs decisions and flags clashes, citing the record; Claude Code builds and voice are off in that channel.
-- Each person gets up to 6 replies an hour, and model spend stops at a daily cap (`CK_DAILY_SPEND_CAP_USD`).
-- Live status: https://ck.kashifnazir.com/status shows the running agent's rooms, today's replies and silences, where each idea is, its latest public answers and today's spend against the cap (read-only, no owner-desk content; `CK_STATUS_PAGE`, [docs/deploy-cloud.md](docs/deploy-cloud.md)).
+<!-- Kash's direction (4 Nov): Slack is the full product; the Discord channel is a simplified demo. Wording drafted by Claude; Kash to check. -->
+**Context Keeper is built around Slack.** That's where the full version runs for the team in the demo video: cited answers, catch-up briefs with a voice call, ideas approved by the owner and built by Claude Code in a new build channel, stage updates, and the person who asked signing it off.
+
+**The Discord channel is a simplified version, so you can try it yourself.** It's the same agent on the same Switch server, with the same Ledgerly record, but only the answering part is switched on:
+
+| | Slack (full version) | Discord demo |
+|---|---|---|
+| Cited answers, staying quiet on chatter | ✅ | ✅ |
+| Catch-up briefs | ✅ text, audio clip and a voice call | ✅ text only |
+| Decisions logged, clashes flagged to the owner | ✅ | ✅ |
+| New ideas → owner approval → Claude Code builds → sign-off | ✅ | ❌ off |
+| Voice "talk it through" | ✅ | ❌ off |
+| Limits | none for the team | 6 replies per person per hour, daily spend cap |
+
+- Discord demo: https://discord.gg/ygPnp7bj5 (set up by [docs/demo-channel.md](docs/demo-channel.md))
+- **Want the full version?** It wires into your own Slack workspace through Switch's Slack bridge: see [How the channels are set up](#how-the-channels-are-set-up) and [Run it](#run-it).
+- Live status: https://ck.kashifnazir.com/status shows the running agent's rooms, today's replies and silences, where each idea is, its latest public answers and today's spend against the cap (read-only, no owner-desk content).
 
 <!-- drafted by Claude from the build log; Kash to check -->
 Things to ask there, as if you were on the Ledgerly team:
