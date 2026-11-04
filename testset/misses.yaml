@@ -1,0 +1,12 @@
+# Misses: answers the room owner retracted by replying "wrong" (or similar) in the answer's thread.
+# Appended by src/agent/retract.ts, one entry per retraction; written only by the eval or when
+# CK_MISSES_FILE points here (production keeps its own in <state>/misses.jsonl).
+- date: 2026-11-04
+  room: ck-eval-r20261104-2038-faa0-ch-ledgerly
+  message: "rowan: Why don't we run onboarding on Saturdays? Agency owners have more time at weekends."
+  answer: |-
+    📌 **In the record** · Onboarding stays on weekdays, Tue to Thu. Kash decided this on 6 Oct (D1) because partner finance staff work weekdays only and we can't staff support at weekends. The team accepted that owners who'd prefer a weekend have to fit a weekday slot.
+    **Reopen if:** a partner can't make any Tue–Thu slot.
+    _“Onboarding calls on weekdays, Tue to Thu: Partner finance staff work weekdays only; support is staffed on weekdays”_ — Ledgerly pilot plan › Decisions (Kash, 6 Oct)
+    **Also:** Kash, 6 Oct
+  owner_reason: ""

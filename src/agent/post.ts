@@ -12,6 +12,8 @@
 //      4 Nov, I9: the quote blocks "just don't really help", and "what do those squiggles mean").
 //   4. idempotency (room + thread + text hash, in state/), then send; a failed send retries once,
 //      then the owner desk gets the exact draft.
+// Between 1 and 2, an answer the room owner withdrew ("wrong" in its thread, src/agent/retract.ts) is
+// dropped when the same question would cite any of the same sources again.
 // A reopen (D4-2) that passes the reviewer goes to the owner desk first (src/agent/jobs/reopen.ts);
 // the room then gets code's "asked the owner, plan stands" line above the decision's quote.
 // Jobs B and D post their lines through here too (no quotes in them; a project clash's line is
@@ -25,6 +27,7 @@ import { decisionId, reopenIf, reopenLine, reopenNote } from './jobs/reopen.ts';
 import { leaksClash } from './jobs/restriction.ts';
 import { PendingStore } from './pending.ts';
 import { callReviewer, type BriefLine, type Claude, type ModelConfig, type Usage } from './model.ts';
+import type { RetractStore } from './retract.ts';
 import { postKey, type AgentState } from './state.ts';
 import { quoteLine, shortNote } from './handoff/text.ts';
 import type { Cited, ModelItem } from './verdict.ts';
@@ -141,13 +144,13 @@ const buildsOnPart = (it: ModelItem, verdict: string | null, sources: Verified[]
 const newPartOf = (it: ModelItem) => (it.job === 'A' && it.verdict === 'might-be-related' && it.new_part && announceNew() ? it.new_part : null);
 
 export async function postPublic(
-  deps: { claude: Claude; cfg: ModelConfig; poster: Poster; state: AgentState; pending?: PendingStore },
+  deps: { claude: Claude; cfg: ModelConfig; poster: Poster; state: AgentState; pending?: PendingStore; withdrawn?: Pick<RetractStore, 'blocks'> },
   ctx: RoomContext,
   draft: PublicDraft,
 ): Promise<PublicResult> {
   const msgOf = (id: string) => draft.messages?.find((m) => m.message_id === id) ?? null;
   const events: string[] = [];
-  type Plan = { it: ModelItem; verdict: string | null; sources: Verified[]; body: string | null };
+  type Plan = { it: ModelItem; verdict: string | null; sources: Verified[]; body: string | null; refs: string[] }; // refs: every cited ref, verified or not
   const plans: Plan[] = [];
 
   // 1. quote gate
@@ -181,7 +184,20 @@ export async function postPublic(
         body = "Noted, and I've flagged it to the owner. The plan stays as it is until they decide.";
       }
     }
-    plans.push({ it, verdict, sources: verified, body });
+    plans.push({ it, verdict, sources: verified, body, refs: refsSeen });
+  }
+
+  // 1b. withdrawn (src/agent/retract.ts): the owner said an answer to this same question, citing any of
+  // these sources, was wrong. It isn't posted again; an answer from other sources still is.
+  for (const p of plans) {
+    if (p.it.job !== 'A' || !p.body || !p.verdict || !deps.withdrawn) continue;
+    const q = msgOf(p.it.message_id);
+    const w = q ? deps.withdrawn.blocks(draft.roomId, q.body, p.refs) : null;
+    if (!w) continue;
+    events.push(`withdrawn: ${p.it.message_id} ${p.verdict} not posted (cites ${p.refs.filter((r) => w.refs.includes(r)).join(', ')}, withdrawn by ${w.by} ${w.at.slice(0, 10)})`);
+    p.verdict = null;
+    p.body = null;
+    p.sources = [];
   }
 
   // 2. reviewer: strong verdicts with verified quotes only

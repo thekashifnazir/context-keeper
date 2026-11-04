@@ -99,7 +99,8 @@ export function checkR3(c: RCapture): RResult {
 
 /** R4 fail quiet: CK_FAULT=model_500 on the first model call, then T05. */
 export function checkR4(c: RCapture, label: string, expectVerdict: string): RResult {
-  const lines = linesFor(c, label).sort((a, b) => a.ts.localeCompare(b.ts));
+  // R5's re-ask posts the same text later; only lines from before it are R4's.
+  const lines = linesFor(c, label).filter((l) => Date.parse(l.ts) < (c.marks.reask_at ?? Infinity)).sort((a, b) => a.ts.localeCompare(b.ts));
   const first = lines[0];
   const retry = lines.find((l) => l !== first && l.kind === 'reply');
   const notes = deskPosts(c).filter((p) => /^Couldn't check this one/.test(p.message));
@@ -119,22 +120,37 @@ export function checkR4(c: RCapture, label: string, expectVerdict: string): RRes
   ]);
 }
 
-/** R5 retract: the owner replies "wrong" in the thread of the agent's reply. */
-export function checkR5(c: RCapture, label: string, missesBefore: number, missesAfter: number): RResult {
+/** R5 retract: the owner replies "wrong" in the thread of the agent's reply; then (when `reask` is
+ *  given) the same question is asked again as a new message. */
+export function checkR5(c: RCapture, label: string, missesBefore: number, missesAfter: number, reask?: string): RResult {
   const at = c.marks.wrong_at ?? Infinity;
   const after = inThread(c, label).filter((p) => p.create_at > at);
-  const wrongLines = linesFor(c, 'WRONG');
-  const retracted = c.trace.some((l) => /retract/i.test(`${l.kind} ${l.error ?? ''} ${JSON.stringify(l.items)}`));
+  const corrections = after.filter((p) => /^↩️ \*\*Withdrawn\*\*/u.test(p.message.trim()));
+  const answer = linesFor(c, label).filter((l) => Date.parse(l.ts) < at && publicPosts(l).length).pop();
+  const rl = linesFor(c, 'WRONG').find((l) => l.kind === 'retract');
+  const refs = rl?.retract?.refs ?? [];
+  const checks: [boolean, string][] = [
+    [corrections.length === 1 && after.length === 1, after.length ? `agent posted ${after.length} line(s) in the thread after "wrong": ${after.map((p) => `"${short(p.message, 90)}"`).join(', ')}` : 'no agent post in the thread after "wrong"'],
+    [!!rl && !!answer && rl.retract?.answer_decision_id === answer.decision_id,
+      rl ? `trace: a retract line (read by ${rl.retract?.read_by ?? '?'}) withdrawing decision ${rl.retract?.answer_decision_id ?? '?'}${answer ? (rl.retract?.answer_decision_id === answer.decision_id ? ` (${label}'s answer)` : `, not ${label}'s answer ${answer.decision_id}`) : ` (no public answer to ${label} found)`}, refs ${refs.join(', ') || 'none'}`
+        : `no retract trace line for the owner's message (${linesFor(c, 'WRONG').map((l) => `${l.kind} ${verdictOf(l)}`).join('; ') || 'no decision line'})`],
+    [missesAfter > missesBefore, `testset/misses.yaml entries: ${missesBefore} before, ${missesAfter} after`],
+  ];
+  if (reask && c.cases[reask]) {
+    const askedAt = c.marks.reask_at ?? c.cases[reask].create_at;
+    const lines = linesFor(c, reask).filter((l) => Date.parse(l.ts) > askedAt);
+    const repeats = lines.filter((l) => publicPosts(l).length && l.items.some((i) => i.sources.some((s) => refs.includes(s.ref))));
+    const posted = inThread(c, reask);
+    const note = lines.map((l) => (l.error ?? '').match(/withdrawn: [^;]*/)?.[0]).find(Boolean);
+    checks.push([lines.length > 0 && refs.length > 0 && repeats.length === 0,
+      `asked again: ${lines.length} decision line(s) (${lines.map((l) => `${l.kind} ${verdictOf(l)}`).join('; ') || 'none'}); ${repeats.length ? `the withdrawn source(s) cited again in public (${repeats.length})` : 'the withdrawn source(s) not cited again'}; ${posted.length} post(s) in its thread${note ? `; trace: "${short(note, 120)}"` : ''}`]);
+  }
   return result({
     id: 'R5', title: 'Retract',
-    how: `after ${label}'s reply, the owner (kash) replies "${c.cases.WRONG?.body ?? 'wrong'}" in that thread`,
-    pass_when: 'a correction appears in that thread; the trace item is retracted; testset/misses.yaml gains an entry',
-    adapted: null,
-  }, [
-    [after.length > 0, after.length ? `agent posted in the thread after "wrong": "${short(after[0].message, 80)}"` : 'no agent post in the thread after "wrong"'],
-    [retracted, retracted ? 'a trace line records a retraction' : `no trace line records a retraction (the owner's message: ${wrongLines.map((l) => `${l.kind} ${verdictOf(l)}`).join('; ') || 'no decision line'})`],
-    [missesAfter > missesBefore, `testset/misses.yaml entries: ${missesBefore} before, ${missesAfter} after`],
-  ]);
+    how: `after ${label}'s reply, the owner (kash) replies "${c.cases.WRONG?.body ?? 'wrong'}" in that thread${reask && c.cases[reask] ? `; then ${label}'s question is posted again as a new message` : ''}`,
+    pass_when: `a correction appears in that thread; the trace item is retracted; testset/misses.yaml gains an entry${reask && c.cases[reask] ? "; asked again, the withdrawn source(s) aren't cited in public" : ''}`,
+    adapted: reask && c.cases[reask] ? 'One check added to the plan\'s three: asked the same question again, the agent doesn\'t cite the withdrawn source(s) in public.' : null,
+  }, checks, rl ? [`correction: ${corrections[0] ? `"${short(corrections[0].message, 120)}"` : 'none'}; owner's reason: "${rl.retract?.reason ?? ''}"`] : []);
 }
 
 /** R6 pending items survive: T12's clash note, a restart, then the owner's ruling in the desk. */

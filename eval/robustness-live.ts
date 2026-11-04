@@ -4,7 +4,8 @@
 //   r2   R2 restart mid-burst: Rowan joins, posts B1; the agent is SIGKILLed once T01 sits in its saved
 //        burst queue (agent-buffer.json) and restarted at once; T02 and T03 arrive on schedule
 //   ch   R4 (CK_FAULT=model_500 then T05), R8 (stop, T08, start), R6 (T12's clash, restart, the
-//        owner rules in the desk), R5 (the owner says "wrong" in T05's thread); R3 over all of it
+//        owner rules in the desk), R5 (the owner says "wrong" in T05's thread, then Rowan asks T05
+//        again); R3 over all of it. Steps no wanted check needs are skipped (R5 alone: T05, no fault)
 //   cap  R7, adapted to the current design: the per-person demo limit, then the daily spend cap
 // R1 is the offline unit test (test/offline/jobA.test.ts "R1 quote gate"), as the plan says.
 // Nothing here changes the agent: faults, limits and caps are the agent's own env switches. Rowan is
@@ -20,6 +21,7 @@ import { readTrace, type TraceLine } from '../src/shared/trace.ts';
 import { type Args, ROOT } from './cli.ts';
 import { loadCases, ROOM_DIRS, type Case } from './content.ts';
 import { appendFacts } from './facts.ts';
+import { loadYaml } from './yaml.ts';
 import type { MmRawPost } from './mattermost.ts';
 import { incidents, log, L_S, mmRetry, prepare, seedRoom, sleep, startAgent, stopAgent, waitBot, waitChannel, type World } from './replay.ts';
 import {
@@ -236,19 +238,47 @@ async function scenarioR2(s: Scenario, cases: Case[]): Promise<RResult[]> {
 // ── R3, R4, R5, R6, R8 ─────────────────────────────────────────────────────────────────────────────
 async function scenarioChain(s: Scenario, cases: Case[], want: Set<string>): Promise<RResult[]> {
   const T05 = byId(cases, 'T05'), T08 = byId(cases, 'T08'), T12 = byId(cases, 'T12');
+  // The agent (CK_EVAL=1, src/agent/retract.ts) appends its misses to testset/misses.yaml, a YAML list.
   const missesFile = join(ROOT, 'testset/misses.yaml');
-  const misses = () => (existsSync(missesFile) ? (readFileSync(missesFile, 'utf8').match(/^\s*-\s/gm) ?? []).length : 0);
+  const misses = () => (existsSync(missesFile) ? (loadYaml<unknown[] | null>(missesFile) ?? []).length : 0);
   const missesBefore = misses();
+  // Run only the steps the wanted checks need (R3 reads all of them). R5 needs T05's reply, not R4's fault.
+  const step = (...ids: string[]) => ids.some((x) => want.has(x));
   await s.setup(['kash', 'priya', 'sam', 'rowan']);
   s.markBriefed(['rowan']);
 
   // R4: the first model call fails with a 500.
-  await s.start({ CK_FAULT: 'model_500', CK_FAULT_TIMES: '1' });
+  await s.start(step('R3', 'R4') ? { CK_FAULT: 'model_500', CK_FAULT_TIMES: '1' } : {});
   await sleep(5000);
   await s.post('rowan', 'T05', T05.message);
-  await until('T05 retried and replied', DECIDE_MS + 60_000 + L_S * 1000, () => s.covered('T05', (l) => l.kind === 'reply'));
+  await until('T05 replied', DECIDE_MS + 60_000 + L_S * 1000, () => s.covered('T05', (l) => l.kind === 'reply'));
   await sleep(10_000);
 
+  if (step('R3', 'R8', 'R6')) await chainR8R6(s, T08, T12);
+
+  // R5: the owner says the reply to T05 was wrong, in its thread; then Rowan asks the same again.
+  if (want.has('R5')) {
+    s.marks.wrong_at = Date.now();
+    await s.post('kash', 'WRONG', 'wrong', s.cases.T05.post_id);
+    await until('the agent to read "wrong"', DECIDE_MS, () => s.covered('WRONG'));
+    await sleep(15_000);
+    s.marks.reask_at = Date.now();
+    await s.post('rowan', 'REASK', T05.message);
+    await until('the re-ask decided', DECIDE_MS + 30_000, () => s.covered('REASK', (l) => Date.parse(l.ts) > s.marks.reask_at));
+    await sleep(15_000);
+  }
+  await s.stop();
+  const cap = await s.capture();
+  const out: RResult[] = [];
+  if (want.has('R3')) out.push(checkR3(cap));
+  if (want.has('R4')) out.push(checkR4(cap, 'T05', String(T05.expect.verdict)));
+  if (want.has('R5')) out.push(checkR5(cap, 'T05', missesBefore, misses(), 'REASK'));
+  if (want.has('R6')) out.push(checkR6(cap, 'T12'));
+  if (want.has('R8')) out.push(checkR8(cap, 'T08'));
+  return out;
+}
+
+async function chainR8R6(s: Scenario, T08: Case, T12: Case) {
   // R8: stopped, T08 posted, started again.
   s.marks.stopped_at = Date.now();
   await s.stop('SIGTERM');
@@ -277,27 +307,6 @@ async function scenarioChain(s: Scenario, cases: Case[], want: Set<string>): Pro
     await until('the ruling in T12\'s thread', 120_000, async () => (await s.posts()).some((p) => p.user_id === s.bot && p.root_id === s.cases.T12.post_id && p.create_at > s.marks.answer_at), 3000);
     await sleep(5000);
   } else s.log('R6: no clash note found in the owner desk; the owner has nothing to answer');
-
-  // R5: the owner says the reply to T05 was wrong, in its thread.
-  if (want.has('R5')) {
-    s.marks.wrong_at = Date.now();
-    await s.post('kash', 'WRONG', 'wrong', s.cases.T05.post_id);
-    await until('the agent to read "wrong"', DECIDE_MS, () => s.covered('WRONG'));
-    await sleep(30_000);
-  }
-  await s.stop();
-  const cap = await s.capture();
-  const out: RResult[] = [];
-  if (want.has('R3')) out.push(checkR3(cap));
-  if (want.has('R4')) out.push(checkR4(cap, 'T05', String(T05.expect.verdict)));
-  if (want.has('R5')) {
-    const r = checkR5(cap, 'T05', missesBefore, misses());
-    r.adapted = 'Not built: no code in src/agent reads a "wrong" reply, writes a retraction or appends to testset/misses.yaml. Run as written, to record what the agent does today.';
-    out.push(r);
-  }
-  if (want.has('R6')) out.push(checkR6(cap, 'T12'));
-  if (want.has('R8')) out.push(checkR8(cap, 'T08'));
-  return out;
 }
 
 // ── R7 (adapted) ───────────────────────────────────────────────────────────────────────────────────

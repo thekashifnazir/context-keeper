@@ -98,20 +98,46 @@ describe('R4 fail quiet', () => {
 });
 
 describe('R5 retract', () => {
+  const Q = 'Saturdays?';
+  const cases = { T05: { post_id: 'p5', create_at: at(0), body: Q }, WRONG: { post_id: 'w', create_at: at(100), body: 'wrong' }, REASK: { post_id: 'p6', create_at: at(200), body: Q } };
+  const srcItem = (refs: string[]) => ({ ...item('covered'), sources: refs.map((ref) => ({ ref, quote: 'q' })) });
+  const answer = () => line({ decision_id: 'ans', ts: new Date(at(20)).toISOString(), inputs: [Q], posts: [pub('a')], items: [srcItem(['pilot-plan.md §2', 'led-011'])] });
+  const retract = (o: Partial<NonNullable<TraceLine['retract']>> = {}) => line({ kind: 'retract', ts: new Date(at(105)).toISOString(), inputs: ['wrong'], posts: [pub('c')], items: [item(null, 'none')],
+    retract: { answer_decision_id: 'ans', answer_event_id: 'a', thread_id: 't', messages: ['m'], refs: ['pilot-plan.md §2', 'led-011'], reason: '', read_by: 'words', misses_file: 'testset/misses.yaml', ...o } });
+  const correction = post('c', "↩️ **Withdrawn** · Kash says this was wrong. I won't repeat it.", at(106), { root_id: 'p5' });
+  const marks = { wrong_at: at(100), reask_at: at(200) };
+
   it('fails, with reasons, when nothing reads "wrong"', () => {
-    const r = checkR5(cap({
-      cases: { T05: { post_id: 'p5', create_at: at(0), body: 'Saturdays?' }, WRONG: { post_id: 'w', create_at: at(100), body: 'wrong' } },
-      marks: { wrong_at: at(100) }, trace: [line({ kind: 'silence', inputs: ['wrong'], items: [item(null, 'none')] })],
-    }), 'T05', 0, 0);
+    const r = checkR5(cap({ cases, marks, trace: [answer(), line({ kind: 'silence', ts: new Date(at(110)).toISOString(), inputs: ['wrong'], items: [item(null, 'none')] })] }), 'T05', 0, 0);
     expect(r.status).toBe('fail');
     expect(r.evidence.filter((e) => e.startsWith('FAIL'))).toHaveLength(3);
   });
-  it('passes on a correction, a retracted line and a new misses entry', () => {
-    const r = checkR5(cap({
-      cases: { T05: { post_id: 'p5', create_at: at(0), body: 'Saturdays?' } }, marks: { wrong_at: at(100) },
-      trace: [line({ inputs: ['wrong'], error: 'retracted d1' })], posts: [post('c', 'Correction: …', at(110), { root_id: 'p5' })],
-    }), 'T05', 0, 1);
+  it('passes on the correction, a retract line for that answer and a new misses entry', () => {
+    const r = checkR5(cap({ cases, marks, trace: [answer(), retract()], posts: [correction] }), 'T05', 0, 1);
     expect(r.status).toBe('pass');
+    expect(r.adapted).toBeNull();
+    expect(r.evidence.join('\n')).toContain("(T05's answer), refs pilot-plan.md §2, led-011");
+  });
+  it('fails when the retract withdrew another answer, or the correction is not the withdrawn line', () => {
+    expect(checkR5(cap({ cases, marks, trace: [answer(), retract({ answer_decision_id: 'other' })], posts: [correction] }), 'T05', 0, 1).status).toBe('fail');
+    expect(checkR5(cap({ cases, marks, trace: [answer(), retract()], posts: [post('c', 'Correction: …', at(106), { root_id: 'p5' })] }), 'T05', 0, 1).status).toBe('fail');
+  });
+  it('re-ask: passes when the withdrawn sources are not cited again in public', () => {
+    const silent = line({ kind: 'silence', ts: new Date(at(230)).toISOString(), inputs: [Q], items: [{ ...item(null), sources: [] }], error: 'withdrawn: m2 covered not posted (cites pilot-plan.md §2, withdrawn by Kash 2026-11-04)' });
+    const r = checkR5(cap({ cases, marks, trace: [answer(), retract(), silent], posts: [correction] }), 'T05', 0, 1, 'REASK');
+    expect(r.status).toBe('pass');
+    expect(r.adapted).toMatch(/One check added/);
+    expect(r.evidence.join('\n')).toContain('trace: "withdrawn: m2 covered not posted');
+    // another source only is fine
+    const other = line({ ts: new Date(at(230)).toISOString(), inputs: [Q], posts: [pub('o')], items: [srcItem(['led-020'])] });
+    expect(checkR5(cap({ cases, marks, trace: [answer(), retract(), other], posts: [correction] }), 'T05', 0, 1, 'REASK').status).toBe('pass');
+  });
+  it('re-ask: fails when the same source is cited again in public, or the re-ask was never decided', () => {
+    const repeat = line({ ts: new Date(at(230)).toISOString(), inputs: [Q], posts: [pub('r')], items: [srcItem(['led-011'])] });
+    const r = checkR5(cap({ cases, marks, trace: [answer(), retract(), repeat], posts: [correction] }), 'T05', 0, 1, 'REASK');
+    expect(r.status).toBe('fail');
+    expect(r.evidence.find((e) => e.startsWith('FAIL'))).toMatch(/withdrawn source\(s\) cited again in public/);
+    expect(checkR5(cap({ cases, marks, trace: [answer(), retract()], posts: [correction] }), 'T05', 0, 1, 'REASK').status).toBe('fail');
   });
 });
 

@@ -258,13 +258,13 @@ The eval runs the **real agent** against the **real Switch server**, in real tim
 | R2 | Restart mid-burst: killed while a returner's first message waits in the queue | ❌ fail in the first run: one combined reply, but the catch-up brief was lost for good. Fixed (the brief is saved as pending and re-run once after a restart), then ✅ pass in `r20261104-1959-990f` ([report](testset/results/2026-11-04-robustness-claude-opus-5-5-3.md)): one brief, one combined reply, no duplicates |
 | R3 | Own posts ignored: none of the agent's posts is ever taken as input | ✅ pass |
 | R4 | Fail quiet: a model error posts nothing public, one note to the owner, and the retry posts the right answer | ✅ pass |
-| R5 | Retract: the owner says "wrong" under an answer | ❌ fail: **not built** (see [Limits](#limits-and-whats-next)) |
+| R5 | Retract: the owner says "wrong" under an answer | ❌ fail in the first run: **not built**. Built, then ✅ pass in `r20261104-2038-faa0` ([report](testset/results/2026-11-04-robustness-claude-opus-5-5-4.md)): one "↩️ **Withdrawn**" line in the thread, a `retract` trace line, a new entry in [testset/misses.yaml](testset/misses.yaml), and when Rowan asked the same question again, nothing was posted that cited the withdrawn sources. That fourth check is our own addition to the plan's three |
 | R6 | A clash waiting for the owner survives a restart, and the ruling lands in the thread | ✅ pass |
 | R7a | Per-person limit in a public demo room: the limit line once, then silence, nothing dropped unseen | ✅ pass |
 | R7b | Daily spend cap: no model call after the cap | ❌ fail in the first run (the check also counted the call that crossed the cap); check corrected, then ✅ pass in `r20261104-1916-b591` ([report](testset/results/2026-11-04-robustness-claude-opus-5-5-2.md)) |
 | R8 | Missed while down: a message posted while the agent is stopped is answered once after it restarts | ✅ pass (there's no "late" marker; reported, not scored) |
 
-Model spend for the three robustness runs: $0.46, $0.15 and $0.30 (metered estimates, in [facts.md](facts.md)).
+Model spend for the four robustness runs: $0.46, $0.15, $0.30 and $0.13 (metered estimates, in [facts.md](facts.md)).
 
 **How it was tested honestly.** The 24 cases and the invented demo data (two teams, Ledgerly and Riverside) were prepared before the build window. One expectation (T14) changed in the window, openly, after a rule change; the build log says why. T24 hides instructions in chat; it has to be checked as a claim, not obeyed. `testset/` deliberately contains attack text aimed at the agent, not at you. These results describe Context Keeper's behaviour only; they're not a benchmark of Switch.
 
@@ -368,10 +368,10 @@ Switch's own three-factor safety test (Auto mode on, reach that matters, unvette
 | Chat messages are named, not linked | Switch gives agents no message permalink, so a chat source reads "Rowan, 4 Nov"; document sources link to their section |
 | Covered or parked is sometimes a judgement call | T18 (above). Left as an honest miss rather than tuned to the test |
 | Spend is an estimate | From a price table, on the high side; the real bill is on the Anthropic Console |
-| No retraction yet (robustness check R5) | **Not built.** When the owner replies "wrong" under an answer, nothing reads it: no correction is posted, the trace isn't marked retracted and nothing is logged as a miss. The R5 check fails for that reason, and stays in the results as a fail. Next on the list |
+| Retraction is narrow (robustness check R5) | Agents can't see reactions, so the signal is the owner's reply in the answer's thread ("wrong", "not right, we changed that"; anything less plain goes to a small reader model). Only the owner can retract. The withdrawn answer isn't posted again when the same question, worded the same, would cite any of the same sources. A reworded question isn't matched, and an answer from other sources still posts. The asker of a re-asked question gets silence rather than a corrected answer, and the record itself isn't edited: the owner still updates the doc. R5 failed in the first run (not built) and passes since `r20261104-2038-faa0` |
 | One VM, no automatic backups | `pg_dump` by hand ([docs/deploy-cloud.md](docs/deploy-cloud.md)); the agent log isn't rotated yet |
 
-Next: register against the server Console runs once Console's new API keys page ships (no Docker needed for local testing), add people's roles so it can suggest who picks up approved work, and build the retraction R5 tests for. Level 4 isn't claimed.
+Next: register against the server Console runs once Console's new API keys page ships (no Docker needed for local testing), add people's roles so it can suggest who picks up approved work, and let a retraction suggest the fix to the record, not only withdraw the answer. Level 4 isn't claimed.
 
 ## What I liked about Switch, and what I'd improve
 

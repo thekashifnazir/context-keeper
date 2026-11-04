@@ -191,15 +191,24 @@ export const isClearSignoff = (body: string) => CLEAR_SIGNOFF.test(plainCommand(
 // I wanted it per client", "No worries, looks great") goes to the sign-off reader (model.ts callSignoff).
 const YES = String.raw`(looks (right|good|great|fine)|lgtm|signed? (it )?off|sign it off|that'?s (right|it|perfect|great)|perfect|spot on|ship it|all good|approved?|yes|yep|yeah|great)`;
 const TRIVIA = String.raw`(\s*(to me|thanks?( you)?( (?!but\b|not?\b|though\b)\w+)?|ta|cheers|[,.!]+|👍|🙏|✅|🎉|🙌|:\)))*`;
-const PLAIN_YES = new RegExp(String.raw`^\s*${YES}${TRIVIA}\s*$`, 'i');
+export const PLAIN_YES = new RegExp(String.raw`^\s*${YES}${TRIVIA}\s*$`, 'i');
 const PLAIN_NO = /^\s*(not quite|not right|reopen)\b/i;
+
+/** The cheap first read of a reply, before any model call: `no` matches the start of an unmistakable
+ *  "no" (the rest of the reply is its reason), `yes` the whole of an unmistakable "yes". Null means
+ *  "read it" (the model decides). Job E's sign-off and the owner's retract (src/agent/retract.ts) share it. */
+export function plainReading(raw: string, no: RegExp, yes: Pick<RegExp, 'test'> = PLAIN_YES): { said: 'no' | 'yes'; reason: string } | null {
+  const body = plainCommand(raw);
+  const m = no.exec(body);
+  if (m) return { said: 'no', reason: body.slice(m.index + m[0].length).replace(/^[\s,:;.!—–*_~-]+/, '').trim() };
+  if (yes.test(body)) return { said: 'yes', reason: '' };
+  return null;
+}
 
 /** The raiser's reply when it's unmistakable; null means "read it" (the model decides). */
 export function parseSignoff(raw: string): { verdict: 'signed_off' | 'reopened'; reason: string } | null {
-  const body = plainCommand(raw);
-  if (PLAIN_NO.test(body)) return { verdict: 'reopened', reason: body.replace(/^\s*(not quite|not right|reopen)\b[\s,:;.!-]*/i, '').trim() };
-  if (PLAIN_YES.test(body)) return { verdict: 'signed_off', reason: '' };
-  return null;
+  const r = plainReading(raw, PLAIN_NO);
+  return r && { verdict: r.said === 'no' ? 'reopened' : 'signed_off', reason: r.reason };
 }
 
 /** Claude Code's progress line ("Working… Last: …") or a "Starting a session" notice: not a report. */
