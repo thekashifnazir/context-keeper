@@ -55,6 +55,8 @@ interface RoomState {
 
 const SEEDED = /\(seeded project document, ([\w.-]+\.md)\)/;
 const NOTICE = /^📄 (created|updated|deleted) room document “.*”\.?$/u;
+/** Switch's visible notice for a room-document write, posted in the writing agent's name. */
+export const isDocNotice = (body: string) => NOTICE.test(body.trim());
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
 
 /** The file name a document is cited by. */
@@ -193,7 +195,7 @@ export class RoomMemory {
   /** A live message from the stream (already filtered by the caller). Ignored if already known. */
   addLive(roomId: string, m: ArchiveMessage): void {
     const st = this.rooms.get(roomId);
-    if (!st || st.live.some((x) => x.id === m.id) || st.archive.some((x) => x.id === m.id)) return;
+    if (!st || isDocNotice(m.text) || st.live.some((x) => x.id === m.id) || st.archive.some((x) => x.id === m.id)) return;
     st.live.push(m);
     st.record.messages.push(m);
   }

@@ -70,6 +70,9 @@ describe('memory: the record comes from Switch', () => {
     // A live message the stream then delivers again is not doubled.
     m.addLive(ROOM, live[0]);
     expect(rec.messages.filter((x) => x.id === root)).toHaveLength(1);
+    // Switch's notice for our own Decision log write, delivered on the stream, is not record either.
+    m.addLive(ROOM, { id: 'sw_n', at: '2026-11-04T10:02:00.000Z', author: NAME, text: '📄 updated room document “Decision log”.', thread: null });
+    expect(rec.messages.some((x) => x.id === 'sw_n')).toBe(false);
   });
 
   it('a room with no documents has no record (the agent skips it, as before)', async () => {

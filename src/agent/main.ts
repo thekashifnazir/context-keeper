@@ -30,7 +30,7 @@ import { modelConfigFromEnv, realClaude } from './model.ts';
 import { decideWithRetry, type Deps, type Input } from './pipeline.ts';
 import type { Poster } from './post.ts';
 import { systemPrompt } from './prompt.ts';
-import { RoomMemory } from './memory.ts';
+import { isDocNotice, RoomMemory } from './memory.ts';
 import type { RoomRecord } from './room.ts';
 import { AgentState, atomicWriteJson } from './state.ts';
 
@@ -152,6 +152,8 @@ async function onEvent(ev: AgentBridgeEvent) {
   if (ev.type !== 'message') return;
   const m = ev.payload as MessagePayload;
   if (ourEvents.has(m.message_id)) { selfSenders.add(m.sender); return; } // learn our own sender id from our own post
+  // Switch's "📄 updated room document" notice for our own Decision log write, in our name: not chat.
+  if (isDocNotice(m.body ?? '') && selfNames.has(m.sender_name ?? '')) { selfSenders.add(m.sender); return; }
   if (selfSenders.has(m.sender)) return;
   const who = await displayName(m.sender, m.sender_name);
   const at = new Date(m.timestamp).toISOString();
