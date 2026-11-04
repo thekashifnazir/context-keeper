@@ -47,13 +47,14 @@ import { briefTrigger, resumableBriefs, runBrief, type BriefOpts, type BriefTrig
 import { featuresFromEnv } from './features.ts';
 import { demoConfigFromEnv, DemoLimiter, gateMessage, matchesRoom, roomFeatures } from './demo.ts';
 import { meteredClaude, spendMeterFromEnv, spendNote } from './spend.ts';
+import { StatusPage } from './status.ts';
 import { gapConfigFromEnv, quietGapMs } from './burst.ts';
 import { HandleMemo, heardAfterJobA, isAgentSender, noteNewIdeas, toHandoffMsg } from './handoff/dispatch.ts';
 import { handoffFromEnv } from './handoff/wire.ts';
 import { handleOwnerDesk } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
 import { handleRetract, missesSinkFromEnv, RetractStore } from './retract.ts';
-import { loadEnv } from './env.ts';
+import { envFlag, loadEnv } from './env.ts';
 import { callSignoff, callVerdict, modelConfigFromEnv, realClaude } from './model.ts';
 import { actionable, decideWithRetry, type Deps, type Input, type PrefetchedVerdict } from './pipeline.ts';
 import type { Poster } from './post.ts';
@@ -70,6 +71,7 @@ import { DEFAULT_PORT as TOOL_PORT, startToolServer, toolSecret, tunnelUrl } fro
 import { realSwitchMedia } from '../voice/post-audio.ts';
 
 loadEnv();
+const startedAt = new Date();
 const need = (k: string) => process.env[k] || (console.error(`missing ${k}`), process.exit(1));
 const endpoint = need('SWITCH_API_URL');
 const agentId = need('SWITCH_AGENT_ID');
@@ -212,13 +214,27 @@ const voice = eleven ? new VoiceLive({
   peopleOf,
   log: (s) => console.log(s),
 }) : null;
+// The public status page (src/agent/status.ts) on the same server: GET /, /status, /status.json. Read
+// from the agent's own state only (rooms, trace, job E's store, the spend meter, the seed records), no
+// Switch call, cached 45 s, 30 requests a minute per IP. CK_STATUS_PAGE=0 turns it off.
+const statusPage = envFlag('CK_STATUS_PAGE', true) ? new StatusPage({
+  startedAt,
+  rooms: () => [...roomNames].map(([id, name]) => ({ id, name, posting: allowed(id) })),
+  privateRoomIds: () => (owner.owner_desk_room ? [owner.owner_desk_room] : []),
+  traceFile: process.env.CK_TRACE_FILE || 'state/trace.ck.jsonl',
+  handoffFile: handoff ? `${SD}/handoff.json` : null,
+  seedDir: 'state/seed',
+  spend: () => (meter ? { usd: meter.spent(), cap: meter.cap, calls: meter.calls() } : null),
+  features: { jobE: !!handoff, voice: !!voice },
+}, { log: (s) => console.error(s) }) : null;
 if (voice && features.talkLink && voice.talkAgentId()) {
   const port = Number(process.env.CK_TALK_TOOL_PORT || TOOL_PORT);
-  startToolServer({ port, secret: toolSecret(process.env, `${SD}/talk-tool-secret`), answer: (req) => voice.answerWhatsNew(req), talkTarget: (id) => voice.talkTarget(id), log: (s) => console.log(`[voice] ${s}`) })
+  startToolServer({ port, secret: toolSecret(process.env, `${SD}/talk-tool-secret`), answer: (req) => voice.answerWhatsNew(req), talkTarget: (id) => voice.talkTarget(id), ...(statusPage ? { status: statusPage } : {}), log: (s) => console.log(`[voice] ${s}`) })
     .then(() => {
       toolServerUp = true;
       console.log(`[voice] whats_new tool server on 127.0.0.1:${port}; tunnel it with: cloudflared tunnel --no-autoupdate --url http://127.0.0.1:${port} > tunnel.log 2>&1 &`);
       console.log(publicBase ? `[voice] short talk links: ${publicBase}/talk/<id>` : '[voice] no CK_PUBLIC_BASE_URL: the brief carries the long ElevenLabs talk link');
+      if (statusPage) console.log(`[status] live status page: ${publicBase ? `${publicBase}/status` : `http://127.0.0.1:${port}/status`} (CK_STATUS_PAGE=0 turns it off)`);
     })
     .catch((e) => console.error(`[voice] whats_new tool server not started (${(e as Error).message}); refresh-on-change only`))
     .finally(() => { void voice.syncTool(); });

@@ -14,7 +14,7 @@
 // state/voice-ids.json, and a new tunnel URL PATCHes the tool in place. Never a second agent.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { dirname } from 'node:path';
 import type { ArchiveMessage, RoomRecord } from '../agent/room.ts';
 import { toMs } from '../agent/room.ts';
@@ -158,6 +158,9 @@ export interface ToolServerOptions {
   /** The short talk link's target (live.ts talkTarget): the full ElevenLabs URL for a known, unexpired
    *  id, else null (404). Absent = no /talk route. */
   talkTarget?: (id: string) => string | null;
+  /** The public status page (src/agent/status.ts StatusPage): GET /, /status, /status.json. Absent =
+   *  those paths are 404s, as before. It answers the request and returns true when the path is its own. */
+  status?: { handle: (req: IncomingMessage, res: ServerResponse) => boolean };
   log?: (s: string) => void;
 }
 
@@ -165,6 +168,7 @@ export interface ToolServerOptions {
 const SHORT_ID = /^\/talk\/([A-Za-z0-9_-]{8,64})\/?$/;
 
 /** 127.0.0.1 only; the tunnel forwards to it. GET /health (no auth, says nothing about the room),
+ *  GET /, /status and /status.json (the public status page, when `status` is given; read-only),
  *  POST /voice/whats_new (secret header required), GET /talk/<id> (the brief's short "talk it
  *  through" link: a 302 to the full ElevenLabs URL while the link is open, a bare 404 otherwise; the
  *  id is random and unguessable, and the target carries nothing the old long link didn't show). */
@@ -173,6 +177,9 @@ export function startToolServer(o: ToolServerOptions): Promise<{ server: Server;
   const server = createServer((req, res) => {
     const send = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (req.method === 'GET' && req.url === '/health') return send(200, { ok: true, service: 'ck-talk-tool' });
+    if (o.status) {
+      try { if (o.status.handle(req, res)) return; } catch (e) { log(`status page failed: ${(e as Error).message}`); if (!res.headersSent) return send(503, { error: 'unavailable' }); return; }
+    }
     const short = (req.method === 'GET' || req.method === 'HEAD') && o.talkTarget ? (req.url ?? '').split('?')[0].match(SHORT_ID) : null;
     if (short) {
       let target: string | null = null;
