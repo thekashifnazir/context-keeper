@@ -1,7 +1,8 @@
 // handoff/chain: job E, idea → done (Switch's Level 3 example: "a coding agent builds it in a work
 // channel with the ticket and design already in it, and whoever asked for it signs it off").
 //
-//   noteIdea()   job A logged a genuinely new idea → owner-desk note "reply 'approve I3'"
+//   noteIdea()   job A logged a genuinely new idea (or a related one whose reply logged the new part,
+//                labelled "builds on <ref>") → owner-desk note "reply 'approve I3'"
 //   owner desk   "approve I3" from the owner's sender id only → the chain runs:
 //                  room      open or reuse the build room (create_room on the idea room's bridge;
 //                            the owner + the raiser, context-keeper + claude-code; never deleted)
@@ -10,9 +11,13 @@
 //                  announce  a line in the original thread: approved, being built, result comes here
 //   build room   Claude Code's "Done I3: <link>" → the result and a sign-off request go in the
 //                ORIGINAL thread; "Not done" → said in the thread, the owner told privately
+//                A "Permission needed" card from Claude Code → the owner is nudged at once (once per attempt)
 //   orig thread  the raiser's (or owner's) text reply: "looks right" → signed_off, "not quite, …"
-//                → reopened. Anyone else's reply is ignored (and traced).
-//   tick()       no report within CK_HANDOFF_TIMEOUT_MIN → said in the original thread
+//                → reopened. Anyone else's sign-off gets one "only <raiser> or <owner> can sign this
+//                off" per person per idea; their other replies go on to job A (and are traced).
+//   tick()       no report within CK_HANDOFF_NUDGE_MIN → one owner-desk nudge (a card may be waiting);
+//                CK_HANDOFF_PROGRESS_MIN → one "still being built" line in the original thread;
+//                CK_HANDOFF_TIMEOUT_MIN → said in the original thread
 // Each step writes one ck.trace/1 line with job 'E' items and a `handoff` object (step, ref, status).
 //
 // Code rules: one hand-off per idea (idempotency key in state/; "approve I3 again" only after it
@@ -25,8 +30,8 @@ import { looksInjected } from '../pipeline.ts';
 import type { HandoffSwitch } from './switch.ts';
 import { freshSteps, ideaKey, STEPS, type HandoffStore, type IdeaRecord, type Source, type Status, type StepName } from './store.ts';
 import {
-  announceLine, buildRoomBrief, handoffMessage, isBareAnswer, isProgress, looksFinal, notDoneLine, ownerIdeaNote,
-  parseApproval, parseSignoff, readReport, refIn, reopenedLine, signedOffLine, signoffRequest, stripMentions, timeoutLine,
+  announceLine, asksPermission, buildRoomBrief, handoffMessage, isBareAnswer, isProgress, looksFinal, notDoneLine, notTheirsLine, nudgeLine,
+  ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, signedOffLine, signoffRequest, stillBuildingLine, stripMentions, timeoutLine,
 } from './text.ts';
 
 export interface HandoffMsg {
@@ -56,6 +61,10 @@ export interface ChainConfig {
   buildRoomName: string;
   repo: string;
   timeoutMs: number;
+  /** No report this long after the hand-off → one owner-desk nudge about a waiting card. Unset or ≤ 0: off. */
+  nudgeMs?: number;
+  /** No report this long after the hand-off → one "still being built" line for the raiser. Unset or ≤ 0: off. */
+  progressMs?: number;
   maxFailures?: number;
   traceFile?: string;
   now?: () => Date;
@@ -127,8 +136,9 @@ export class HandoffChain {
   private origin(rec: IdeaRecord) { return { id: rec.room_id, name: rec.room_name }; }
 
   // ---- 1. a new idea goes on the list -------------------------------------------------------------------
-  /** Job A logged `msg` as a genuinely new idea. Idempotent per idea. */
-  async noteIdea(msg: HandoffMsg, sources: Source[] = []): Promise<IdeaRecord> {
+  /** Job A logged `msg` as a genuinely new idea (or, with `buildsOn`, a related one whose new part it
+   *  logged). Idempotent per idea. */
+  async noteIdea(msg: HandoffMsg, sources: Source[] = [], opts: { buildsOn?: string[] } = {}): Promise<IdeaRecord> {
     const key = ideaKey(msg.room_id, msg.message_id);
     const had = this.c.store.get(key);
     if (had) return had;
@@ -136,7 +146,7 @@ export class HandoffChain {
       ref: this.c.store.nextRef(), key, attempt: 1,
       room_id: msg.room_id, room_name: msg.room_name, thread_id: msg.thread_id ?? msg.message_id, message_id: msg.message_id,
       sender: msg.sender, sender_name: msg.sender_name, sender_handle: msg.sender_handle ?? null, text: msg.body, at: msg.received_at,
-      sources, status: 'noted', noted_event: null, approved: null, build_room: null, steps: freshSteps(), events: {},
+      sources, ...(opts.buildsOn?.length ? { builds_on: opts.buildsOn } : {}), status: 'noted', noted_event: null, approved: null, build_room: null, steps: freshSteps(), events: {},
       failures: 0, last_error: null, target_status: null, handed_at: null, report: null, signoff: null,
     };
     this.c.store.put(rec);
@@ -332,16 +342,20 @@ export class HandoffChain {
       this.trace('build_room_chat', null, room, [msg], [], null); // people talking in the work room: not ours
       return true;
     }
+    // Live 4 Nov: the "Permission needed … Allow once" card sat in Claude Code's thread and nobody saw it.
+    // A card is never the report, even if it names a GitHub URL.
+    if (asksPermission(msg.body)) {
+      const rec = this.openFor(msg, ['handed_off']);
+      if (rec && !rec.events.nudge) await this.nudge(rec, [msg]);
+      else this.trace('progress', rec ?? null, room, [msg], []);
+      return true;
+    }
     // Live 4 Nov: Claude Code's top-level greeting was taken as the report. Only a final-looking post counts.
     if (isProgress(msg.body) || !looksFinal(msg.body)) {
       this.trace('progress', null, room, [msg], []);
       return true;
     }
-    const open = this.c.store.all().filter((r) => r.build_room?.id === msg.room_id && (r.status === 'handed_off' || r.status === 'timed_out'));
-    const ref = refIn(msg.body);
-    const rec = (ref && open.find((r) => r.ref === ref))
-      ?? (msg.thread_id ? open.find((r) => r.events.handoff === msg.thread_id) : undefined)
-      ?? (open.length ? open.sort((a, b) => (a.handed_at ?? '').localeCompare(b.handed_at ?? ''))[0] : undefined);
+    const rec = this.openFor(msg, ['handed_off', 'timed_out']);
     if (!rec) {
       this.trace('report_unmatched', null, room, [msg], [], 'no open hand-off in this room');
       return true;
@@ -372,6 +386,25 @@ export class HandoffChain {
     return true;
   }
 
+  /** The open hand-off a build-room post is about: its "I<n>", the hand-off it's threaded under, else the oldest. */
+  private openFor(msg: HandoffMsg, statuses: Status[]): IdeaRecord | undefined {
+    const open = this.c.store.all().filter((r) => r.build_room?.id === msg.room_id && statuses.includes(r.status));
+    const ref = refIn(msg.body);
+    return (ref ? open.find((r) => r.ref === ref) : undefined)
+      ?? (msg.thread_id ? open.find((r) => r.events.handoff === msg.thread_id) : undefined)
+      ?? (open.length ? open.sort((a, b) => (a.handed_at ?? '').localeCompare(b.handed_at ?? ''))[0] : undefined);
+  }
+
+  /** One owner-desk note per attempt: Claude Code may be waiting on an "Allow once" card. */
+  private async nudge(rec: IdeaRecord, inputs: HandoffMsg[]): Promise<void> {
+    const posts: TracePost[] = [];
+    rec.events.nudge = 'sending';
+    this.c.store.put(rec);
+    rec.events.nudge = (await this.ownerNote(nudgeLine(rec, rec.build_room?.name ?? this.c.buildRoomName), posts)) ?? 'said';
+    this.c.store.put(rec);
+    this.trace('nudged', rec, rec.build_room ?? this.origin(rec), inputs, posts, inputs.length ? 'permission card seen' : null);
+  }
+
   // ---- 5. the raiser signs it off in the original thread --------------------------------------------
   private async onOriginalThread(msg: HandoffMsg): Promise<boolean> {
     if (!msg.thread_id) return false;
@@ -380,11 +413,27 @@ export class HandoffChain {
     const room = this.origin(rec);
     const isRaiser = msg.sender === rec.sender;
     const isOwner = !!this.c.ownerSender && msg.sender === this.c.ownerSender;
-    if (!isRaiser && !isOwner) {
-      this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name})`);
-      return false; // ordinary chat for job A
-    }
     const p = parseSignoff(msg.body);
+    if (!isRaiser && !isOwner) {
+      if (!p) {
+        this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name})`);
+        return false; // ordinary chat for job A
+      }
+      // Kash, 4 Nov: a sign-off from someone else gets one short reply saying who can, not silence.
+      this.c.store.markSeen(msg.message_id);
+      if (rec.signoff_refused?.includes(msg.sender)) {
+        this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name}); already told once`);
+        return true;
+      }
+      rec.signoff_refused = [...(rec.signoff_refused ?? []), msg.sender];
+      this.c.store.put(rec); // before posting: at most one reply per person, even if the post fails
+      const posts: TracePost[] = [];
+      let error: string | null = null;
+      const raiserIsOwner = !!this.c.ownerSender && rec.sender === this.c.ownerSender;
+      try { await this.say(room, rec.thread_id, notTheirsLine(msg.sender_name, rec.sender_name, this.c.ownerName, raiserIsOwner), posts); } catch (e) { error = `post failed: ${(e as Error).message}`; }
+      this.trace('signoff_not_theirs', rec, room, [msg], posts, error ?? `not the raiser or the owner (${msg.sender_name})`);
+      return true;
+    }
     if (!p) {
       this.trace('signoff_unclear', rec, room, [msg], []);
       return true;
@@ -410,8 +459,10 @@ export class HandoffChain {
   /** Call about once a minute: timeouts, and retries of a stalled chain. */
   async tick(): Promise<void> {
     const now = this.now().getTime();
+    const due = (rec: IdeaRecord, ms: number | undefined) => !!ms && ms > 0 && now - Date.parse(rec.handed_at!) >= ms;
     for (const rec of this.c.store.all()) {
-      if (rec.status === 'handed_off' && rec.handed_at && now - Date.parse(rec.handed_at) >= this.c.timeoutMs && !rec.events.timeout) {
+      const waiting = rec.status === 'handed_off' && !!rec.handed_at && !rec.report;
+      if (waiting && now - Date.parse(rec.handed_at!) >= this.c.timeoutMs && !rec.events.timeout) {
         rec.status = 'timed_out';
         this.c.store.put(rec);
         const posts: TracePost[] = [];
@@ -421,6 +472,17 @@ export class HandoffChain {
         await this.ownerNote(`No report from Claude Code on ${rec.ref} after ${Math.round(this.c.timeoutMs / 60_000)} min. Check #${rec.build_room?.name} (is Console open, is a card waiting?). A late report still counts; "approve ${rec.ref} again" re-sends.`, posts);
         this.c.store.put(rec);
         this.trace('timed_out', rec, this.origin(rec), [], posts, error);
+      } else if (waiting) {
+        if (due(rec, this.c.nudgeMs) && !rec.events.nudge) await this.nudge(rec, []);
+        if (due(rec, this.c.progressMs) && !rec.events.progress && !rec.events.timeout) {
+          const posts: TracePost[] = [];
+          let error: string | null = null;
+          rec.events.progress = 'sending';
+          this.c.store.put(rec);
+          try { rec.events.progress = (await this.say(this.origin(rec), rec.thread_id, stillBuildingLine(rec.build_room?.name ?? this.c.buildRoomName), posts)) ?? 'said'; } catch (e) { error = `post failed: ${(e as Error).message}`; rec.events.progress = 'said'; }
+          this.c.store.put(rec);
+          this.trace('still_building', rec, this.origin(rec), [], posts, error);
+        }
       } else if (rec.status === 'stalled' && rec.failures < (this.c.maxFailures ?? 3)) {
         await this.advance(rec);
       }

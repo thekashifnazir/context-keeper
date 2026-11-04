@@ -57,6 +57,7 @@ export const HANDOFF_STEPS = [
   'room_failed', 'context_failed', 'handoff_failed', 'announce_failed', 'stalled', 'resumed',
   'build_room_chat', 'progress', 'report_unmatched', 'signoff_requested', 'not_done', 'timed_out',
   'signoff_ignored', 'signoff_unclear', 'signed_off', 'reopened',
+  'nudged', 'still_building', 'signoff_not_theirs',
 ] as const;
 export type HandoffStep = (typeof HANDOFF_STEPS)[number];
 const Handoff = z.object({

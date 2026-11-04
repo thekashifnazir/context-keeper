@@ -39,18 +39,22 @@ export interface IdeaRecord {
   text: string;
   at: string;
   sources: Source[]; // cited context (already through job A's quote gate)
+  /** Job A said `might-be-related` and its reply logged the new part: the record blocks it builds on. */
+  builds_on?: string[];
   status: Status;
   noted_event: string | null; // the owner-desk note
   approved: { by: string; message_id: string; at: string } | null;
   build_room: { id: string; name: string } | null;
   steps: Record<StepName, StepState>;
-  events: Partial<Record<StepName | 'signoff_request' | 'closing' | 'timeout', string | null>>;
+  events: Partial<Record<StepName | 'signoff_request' | 'closing' | 'timeout' | 'nudge' | 'progress', string | null>>;
   failures: number;
   last_error: string | null;
   target_status: string | null;
   handed_at: string | null;
   report: { message_id: string; body: string; links: string[]; outcome: 'done' | 'not_done'; at: string } | null;
   signoff: { by: string; by_name: string; message_id: string; verdict: 'signed_off' | 'reopened'; text: string; at: string } | null;
+  /** Sender ids already told "only <raiser> or <owner> can sign this off" (once per person per idea). */
+  signoff_refused?: string[];
 }
 
 interface FileShape {

@@ -9,7 +9,7 @@ smoke room, so no demo channel gets a test post. About 30 minutes.
 
 | Flag | Default for `npm run agent` | In `npm run eval` | What it does |
 |---|---|---|---|
-| `CK_JOB_E` | on | off unless you set it | Job A's `new` ideas go on the owner desk list; "approve I<n>" hands one to Claude Code in `CK_BUILD_ROOM`; the raiser signs it off in the original thread |
+| `CK_JOB_E` | on | off unless you set it | Job A's `new` ideas (and `might-be-related` ones whose reply logged the new part, labelled "builds on …") go on the owner desk list; "approve I<n>" hands one to Claude Code in `CK_BUILD_ROOM`; the raiser signs it off in the original thread |
 | `CK_AUDIO_BRIEF` | on (needs `ELEVENLABS_API_KEY`) | off unless you set it | Job C's ~60 s audio clip, posted under the text brief in the same thread |
 | `CK_TALK_LINK` | on (needs `ELEVENLABS_API_KEY` and `agent_id` in `state/voice-ids.json`) | off unless you set it | The brief's last line becomes a per-person "talk it through" link; after the call, its summary posts in the same thread |
 
@@ -21,9 +21,26 @@ Where each hook sits in `main.ts`:
 - every message event goes to job E first (`handoff.onMessage`): an "approve I<n>" in the owner desk,
   anything in a build room, and the raiser's or your sign-off reply. Anything else falls through to
   jobs A–D. Another agent's post (any `@switch-agent-` sender) never reaches job A.
-- after each job A decision, each `new` idea is noted for you (`noteNewIdeas`, once per idea).
+- after each job A decision, each `new` idea is noted for you (`noteNewIdeas`, once per idea). So is a
+  `might-be-related` one when job A itself chose that verdict, its cited record passed the quote gate,
+  and its reply told the raiser the new part is logged ("…that part would be new. I've logged it.").
+  Job A's tool output has no "partly new" field, so this reads the reply (`replyLogsIt` in
+  `src/agent/handoff/text.ts`): only a first-person "I've logged / recorded it" or "it's logged" counts.
+  The desk note then reads "New idea I2 from Rowan in #… (4 Nov), builds on product.md §4:", and the
+  hand-off says it builds on what's there before the usual "Cited context from the record:".
 - after the rooms are joined, once per process: `handoff.resume()`. Every 60 s: `handoff.tick()`
-  (timeouts) and, while a talk link is open, a check for a finished call.
+  (the nudge, the "still being built" line, timeouts) and, while a talk link is open, a check for a
+  finished call.
+- while Claude Code works on a hand-off (each at most once per attempt; "approve I<n> again" resets them):
+  - `CK_HANDOFF_NUDGE_MIN` (default 2): no report yet → one desk note for you, "I1: no result from
+    Claude Code yet. It may be waiting for your OK: open its thread under the hand-off in
+    #ck-smoke-build-<MMDD> and click Allow once." A Claude Code post in the build room containing
+    "Permission needed" sends the same note at once instead. A card is never taken as the report.
+  - `CK_HANDOFF_PROGRESS_MIN` (default 5): no report yet → one line in the raiser's thread, "Still
+    being built: Claude Code is working on it in #ck-smoke-build-<MMDD>. I'll post the result here."
+    Never after the report or the timeout line.
+  - `CK_HANDOFF_TIMEOUT_MIN` (default 30): the timeout line, as before. `0` turns the nudge or the
+    progress line off.
 - a brief: the talk agent's prompt is refreshed from the room's record, the text brief posts (with the
   link as its last line), then job A goes on as usual while the clip is made and posted. The brief's
   `ck.trace/1` line carries both posts. A dry-run room (not in `CK_POST_ROOMS`) gets neither the clip
@@ -78,13 +95,13 @@ second message, so its thread is only about the idea.
 | # | Who, where | Do | Expect |
 |---|---|---|---|
 | 1 | **Rowan**, `#ck-smoke-e-<MMDD>` | Post "Morning all, back today." | In its thread: "Welcome back, Rowan. Here's what changed while you were away:", a few bullets, and a last line "Want to talk it through? … https://elevenlabs.io/app/talk-to?…". Within about a minute, an audio clip `catch-up-rowan.mp3` in the same thread. Leave it for §3. |
-| 2 | **Rowan**, same room, a new top-level message, a minute after step 1 | Post a new idea, e.g. "What if the overdue reminder emails had a pay-now link?" | Context Keeper replies in its thread that it's recorded (job A `new`). |
-| 3 | **You**, owner desk | Read "New idea I1 from Rowan in #ck-smoke-e-<MMDD> (<date>): … Reply "approve I1" to hand it to Claude Code." Type `approve I1` | Desk: "Handing I1 (Rowan's idea) to Claude Code in #ck-smoke-build-<MMDD>." |
+| 2 | **Rowan**, same room, a new top-level message, a minute after step 1 | Post a new idea, e.g. "What if the overdue reminder emails had a pay-now link?" | Context Keeper replies in its thread that it's recorded (job A `new`). If job A finds it related (live on 4 Nov it said reminders exist, "that part would be new. I've logged it."), it still goes on your list, labelled. |
+| 3 | **You**, owner desk | Read "New idea I1 from Rowan in #ck-smoke-e-<MMDD> (<date>): … Reply "approve I1" to hand it to Claude Code." (for a related one: "… (<date>), builds on product.md §4: …"). Type `approve I1` | Desk: "Handing I1 (Rowan's idea) to Claude Code in #ck-smoke-build-<MMDD>." |
 | 4 | Slack sidebar | A new channel `#ck-smoke-build-<MMDD>` appears with you in it (Rowan too, if Switch could add him) | Top-level post: "Approved idea I1, raised by Rowan …", the idea quoted, the cited context. Then "@claude-code Hand-off I1 from Context Keeper, approved by Kash. …". Rowan's idea thread: "Approved by Kash: Claude Code is building this in #ck-smoke-build-<MMDD>. I'll post the result here for Rowan to sign off." |
 | 5 | **Restart check** | Before clicking anything: Ctrl-C the agent, start it again with the same command | **No second "@claude-code Hand-off I1"** in the build room. (A `resumed` trace line appears only if a step was mid-send when it stopped.) |
-| 6 | **You**, build room, Claude Code's thread | Claude Code shows permission cards. Click **Allow once** each time (about 3; never "Allow for this session") | Claude Code posts "Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/N" (top-level). |
+| 6 | **You**, build room, Claude Code's thread | Claude Code shows permission cards. Click **Allow once** each time (about 3; never "Allow for this session") | Desk, as soon as the first card shows (or 2 min after the hand-off, whichever comes first), once: "I1: no result from Claude Code yet. It may be waiting for your OK: open its thread under the hand-off in #ck-smoke-build-<MMDD> and click Allow once." If it takes over 5 min, Rowan's thread gets one "Still being built: Claude Code is working on it in #ck-smoke-build-<MMDD>. I'll post the result here." Then Claude Code posts "Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/N" (top-level). |
 | 7 | Rowan's idea thread | — | "Claude Code has done this: <issue link>. Rowan, you raised it, so it's yours to sign off: reply here with "looks right", or "not quite" and what's missing." |
-| 8 | **Sam**, same thread | Reply `looks right` | No sign-off (only the raiser or you count). Job A sees it as ordinary chat. |
+| 8 | **Sam**, same thread | Reply `looks right`, then `looks right` again | No sign-off (only the raiser or you count). One reply in the thread: "Thanks, Sam. Only Rowan, who raised it, or Kash can sign this off." The second try gets nothing (once per person per idea). Neither goes to job A. Anything else Sam says there (not a sign-off) is ordinary chat for job A, as before. |
 | 9 | **Rowan**, same thread | Reply `looks right` | "Signed off by Rowan. Closed." Desk: "I1 signed off by Rowan." |
 
 Optional extras, once the main run passes: a second idea where you click **Decline** on the card
@@ -123,7 +140,9 @@ node -e 'for (const l of require("fs").readFileSync("state/trace.jsonl","utf8").
 
 Expected for I1, in order: `noted`, `approved`, `build_room_created`, `context_posted`, `handed_off`
 (target status `live`), `announced`, `resumed` (only if a step was mid-send at the restart),
-`progress` (any heard), `signoff_requested`, `signoff_ignored` (Sam), `signed_off`. Exactly **one**
+`nudged` (once: a card seen, or 2 min with no report), `progress` (any heard), `still_building` (only if
+it took over 5 min), `signoff_requested`, `signoff_not_theirs` (Sam's first `looks right`),
+`signoff_ignored` (his second), `signed_off`. Exactly **one**
 `handed_off` line. People chatting in the build room show as `build_room_chat`.
 
 The brief and the call summary:

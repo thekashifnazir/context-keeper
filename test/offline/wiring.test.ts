@@ -14,12 +14,13 @@ import { featuresFromEnv, FEATURE_FLAGS } from '../../src/agent/features.ts';
 import { HandleMemo, isAgentSender, noteNewIdeas, toHandoffMsg } from '../../src/agent/handoff/dispatch.ts';
 import { handoffFromEnv } from '../../src/agent/handoff/wire.ts';
 import { runBrief } from '../../src/agent/jobs/brief.ts';
+import { decide } from '../../src/agent/pipeline.ts';
 import { handoffStep, readTrace, type TraceLine } from '../../src/shared/trace.ts';
 import { resetAudio } from '../../src/voice/audio-brief.ts';
 import type { Eleven, ElevenResponse } from '../../src/voice/eleven.ts';
 import { VoiceLive } from '../../src/voice/live.ts';
 import type { MediaUpload, SwitchMedia } from '../../src/voice/post-audio.ts';
-import { FakeClaude, message, reviewerMessage } from '../fake-claude.ts';
+import { FakeClaude, item, message, reviewerMessage, verdictMessage } from '../fake-claude.ts';
 import { briefMessage, ctx, FakePoster, HAIKU, msg, OPUS, room, setup } from './jobs-fixture.ts';
 
 // ---- the live op schemas (input_schema.properties / required, from GET /agents/{id}/ops) ----------
@@ -73,7 +74,7 @@ class FakeSwitchOps {
 let dir: string;
 let traceFile: string;
 const traces = (): TraceLine[] => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8')) : []);
-const ENV_KEYS = ['CK_BUILD_ROOM', 'CK_HANDOFF_TIMEOUT_MIN', 'CK_POST_ROOMS', 'CK_JOB_E', 'CK_AUDIO_BRIEF', 'CK_TALK_LINK', 'CK_FAULT', 'ELEVENLABS_AUDIO', 'CK_TALK_ROOM_LABEL'];
+const ENV_KEYS = ['CK_BUILD_ROOM', 'CK_HANDOFF_TIMEOUT_MIN', 'CK_HANDOFF_NUDGE_MIN', 'CK_HANDOFF_PROGRESS_MIN', 'CK_POST_ROOMS', 'CK_JOB_E', 'CK_AUDIO_BRIEF', 'CK_TALK_LINK', 'CK_FAULT', 'ELEVENLABS_AUDIO', 'CK_TALK_ROOM_LABEL'];
 const savedEnv: Record<string, string | undefined> = {};
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'ck-wiring-'));
@@ -156,8 +157,11 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     expect(ask.args.body).toMatch(/issues\/7/);
     expect(ask.args.thread_id).toBe('$idea');
 
-    // 6. Sam can't sign it off (his reply goes on to job A); Rowan can.
-    expect(await l.event(PILOT.id, { message_id: '$s1', sender: SAM, sender_name: 'sam_demo', body: 'looks right', thread_id: '$idea' }, 'Sam')).toBe('jobs A-D');
+    // 6. Sam can't sign it off: he's told who can, once, in the thread (job E's); his other chat goes on to job A. Rowan can.
+    expect(await l.event(PILOT.id, { message_id: '$s0', sender: SAM, sender_name: 'sam_demo', body: 'nice work', thread_id: '$idea' }, 'Sam')).toBe('jobs A-D');
+    expect(await l.event(PILOT.id, { message_id: '$s1', sender: SAM, sender_name: 'sam_demo', body: 'looks right', thread_id: '$idea' }, 'Sam')).toBe('job E');
+    const told = sw.named('post_message').filter((c) => c.room === PILOT.id).at(-1)!;
+    expect(told.args).toEqual({ thread_id: '$idea', body: 'Thanks, Sam. Only Rowan, who raised it, or Kash can sign this off.' });
     expect(await l.event(PILOT.id, { message_id: '$r1', sender: ROWAN, sender_name: 'rowan_demo', body: 'looks right', thread_id: '$idea' }, 'Rowan')).toBe('job E');
     expect(l.chain.store.byRef('I1')!.status).toBe('signed_off');
 
@@ -165,7 +169,7 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     expect(await l.event(PILOT.id, { message_id: '$x', sender: CC, sender_name: 'claude-code', body: 'What if we added a dark mode?' }, 'claude-code')).toBe('skipped (agent)');
 
     const ts = traces().filter((x) => x.handoff);
-    expect(ts.map((x) => handoffStep(x))).toEqual(['noted', 'approved', 'build_room_created', 'context_posted', 'handed_off', 'announced', 'signoff_requested', 'build_room_chat', 'signoff_ignored', 'signed_off']);
+    expect(ts.map((x) => handoffStep(x))).toEqual(['noted', 'approved', 'build_room_created', 'context_posted', 'handed_off', 'announced', 'signoff_requested', 'build_room_chat', 'signoff_ignored', 'signoff_not_theirs', 'signed_off']);
     expect(ts.find((x) => x.handoff!.step === 'handed_off')!.handoff).toMatchObject({ ref: 'I1', status: 'handed_off', target_status: 'live', build_room: { id: build.room_id, name: 'ck-smoke-build-1105' } });
     for (const x of ts) for (const it of x.items) expect(it.job).toBe('E');
   });
@@ -197,6 +201,22 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     expect(after.chain.store.byRef('I1')!.status).toBe('handed_off');
   });
 
+  it('CK_HANDOFF_NUDGE_MIN / CK_HANDOFF_PROGRESS_MIN: the owner nudge and the "still being built" line, once each, from tick()', async () => {
+    process.env.CK_BUILD_ROOM = 'ck-smoke-build-1105';
+    process.env.CK_HANDOFF_NUDGE_MIN = '0.00001';
+    process.env.CK_HANDOFF_PROGRESS_MIN = '0.00002';
+    const sw = new FakeSwitchOps();
+    const l = listener(sw);
+    await l.chain.noteIdea(toHandoffMsg(PILOT.id, PILOT.name, { message_id: '$i', sender: ROWAN, sender_name: 'rowan_demo', body: 'An idea' }, 'Rowan', '2026-11-05T09:00:00Z'));
+    await l.event(DESK.id, { message_id: '$d', sender: OWNER, sender_name: 'owner_demo', body: 'approve I1' }, 'Kash');
+    await new Promise((r) => setTimeout(r, 10));
+    await l.chain.tick();
+    await l.chain.tick();
+    expect(l.ownerPosts.filter((b) => b.startsWith('I1: no result from Claude Code yet.'))).toEqual(['I1: no result from Claude Code yet. It may be waiting for your OK: open its thread under the hand-off in #ck-smoke-build-1105 and click Allow once.']);
+    const still = sw.named('post_message').filter((c) => c.room === PILOT.id && String(c.args.body).startsWith('Still being built'));
+    expect(still.map((c) => c.args)).toEqual([{ thread_id: '$i', body: "Still being built: Claude Code is working on it in #ck-smoke-build-1105. I'll post the result here." }]);
+  });
+
   it('a restart (a second chain on the same state file) resumes without a second hand-off', async () => {
     process.env.CK_BUILD_ROOM = 'ck-smoke-build-1105';
     const sw = new FakeSwitchOps();
@@ -207,6 +227,60 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     await b.chain.resume();
     await b.event(DESK.id, { message_id: '$d', sender: OWNER, sender_name: 'owner_demo', body: 'approve I1' }, 'Kash'); // the same event replayed after the restart
     expect(sw.named('send_targeted_message')).toHaveLength(1);
+  });
+});
+
+// ---- job A → job E: which ideas reach the owner's list ------------------------------------------------
+
+describe('job A → job E: a related idea whose reply logged the new part is noted too (Kash, 4 Nov)', () => {
+  const idea = msg('m-oh', 'What if pilot support had a weekly office hour?', ROWAN, 'Rowan');
+  /** Job A decides one message with a cited might-be-related (or other) verdict; run() then calls noteNewIdeas. */
+  async function decideAndNote(over: Record<string, unknown>, cite = [{ blockId: 'pilot-plan.md §3.1' }], extraCalls: { model: string; respond: any }[] = []) {
+    process.env.CK_BUILD_ROOM = 'ck-smoke-build-1105';
+    const t = setup('ck-wiring-a2e-'); // fresh agent state each time (a processed message is never decided again)
+    const sw = new FakeSwitchOps();
+    const l = listener(sw);
+    const claude = new FakeClaude([{ model: OPUS, respond: verdictMessage(OPUS, ctx, [item('m-oh', over)], cite) }, ...extraCalls]);
+    const poster = new FakePoster();
+    const r = await decide(t.deps(claude, poster), PILOT.id, PILOT.name, ctx, [idea]);
+    claude.done();
+    const refs = await noteNewIdeas(l.chain, PILOT.id, PILOT.name, [idea], [r], l.handles);
+    return { sw, l, r, refs, poster };
+  }
+
+  it('might-be-related + "that part would be new. I\'ve logged it." → on the desk list, "builds on" the cited ref; the hand-off carries the quote', async () => {
+    const { l, refs, poster, sw } = await decideAndNote({ verdict: 'might-be-related', reply: 'Priya runs onboarding calls and pilot support. A weekly office hour isn\'t in the record, so that part would be new. I\'ve logged it.' });
+    expect(poster.pub()[0].body).toContain("I've logged it.");
+    expect(refs).toEqual(['I1']);
+    expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov), builds on pilot-plan.md §3:');
+    expect(l.chain.store.byRef('I1')!.builds_on).toEqual(['pilot-plan.md §3']);
+    await l.event(DESK.id, { message_id: '$d', sender: OWNER, sender_name: 'owner_demo', body: 'approve I1' }, 'Kash');
+    const body = String(sw.named('send_targeted_message')[0].args.body);
+    expect(body).toContain('It builds on what the record already has (pilot-plan.md §3)');
+    expect(body).toContain('Cited context from the record:\n- pilot-plan.md §3:\n> Priya: onboarding calls and pilot support.');
+  });
+
+  it('might-be-related that only says what exists (nothing logged) stays off the list', async () => {
+    const { refs, l } = await decideAndNote({ verdict: 'might-be-related', reply: 'Priya runs onboarding calls and pilot support. Nothing in the record says whether there are office hours, so that part is still open.' });
+    expect(refs).toEqual([]);
+    expect(l.ownerPosts).toEqual([]);
+  });
+
+  it("a covered verdict the reviewer drops to might-be-related isn't job A's own call: not noted, even if its reply said logged", async () => {
+    const { refs, r } = await decideAndNote(
+      { verdict: 'covered', reply: "I've logged it." },
+      [{ blockId: 'pilot-plan.md §3.1' }],
+      [{ model: HAIKU, respond: reviewerMessage(HAIKU, [{ id: 'm-oh', supports: false, issue: 'different thing' }]) }],
+    );
+    expect(r.trace!.items[0].verdict).toBe('might-be-related');
+    expect(refs).toEqual([]);
+  });
+
+  it('a new idea is noted as before, with no "builds on"', async () => {
+    const { refs, l } = await decideAndNote({ verdict: 'new', reply: "Thanks, Rowan: I've logged it as a new idea." }, []);
+    expect(refs).toEqual(['I1']);
+    expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov):');
+    expect(l.chain.store.byRef('I1')!.builds_on).toBeUndefined();
   });
 });
 
