@@ -18,6 +18,10 @@
 // Owner desk (state/owner.json, or CK_OWNER_SENDER / CK_OWNER_DESK_ROOM): its messages never go to
 // job A; the owner's text reply there confirms a decision (B) or rules on a clash (D). A room_join
 // (Switch sends it just before the person's first message) marks them for a catch-up brief (C).
+// Stream: a heartbeat_lapsed or closed eviction is logged and the runtime reconnects from its position;
+// only a takeover or rejected credentials stop it (exit 3). CK_STREAM_WATCHDOG_SEC (default 120, 0 = off):
+// no event, ping or heartbeat for that long → a fresh stream from the saved position; three dead
+// restarts in a row → exit 4, for the supervisor to restart (src/agent/stream-watchdog.ts).
 // Optional parts, each on by default here and off in the eval runner (src/agent/features.ts):
 //   CK_JOB_E        job E: idea → "approve I<n>" in the owner desk → Claude Code in CK_BUILD_ROOM → the
 //                   raiser signs it off in the original thread (src/agent/handoff/, docs/handoff-live-test.md)
@@ -26,6 +30,7 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { SwitchEventStream, type AgentBridgeEvent, type MessagePayload } from '../../vendor/switch-agent-runtime/src/index.ts';
+import { EVICTION_CREDENTIALS_REJECTED, EVICTION_TAKEN_OVER } from '../../vendor/switch-agent-runtime/src/event-stream.ts';
 import type { RoomJoinPayload } from '../../vendor/switch-agent-runtime/src/types.ts';
 import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
@@ -43,6 +48,7 @@ import { systemPrompt } from './prompt.ts';
 import { isDocNotice, RoomMemory } from './memory.ts';
 import type { RoomRecord } from './room.ts';
 import { AgentState, atomicWriteJson } from './state.ts';
+import { DEFAULT_MAX_RESTARTS, StreamWatchdog, watchdogMsFromEnv, type StreamHandle } from './stream-watchdog.ts';
 import { realEleven } from '../voice/eleven.ts';
 import { VoiceLive } from '../voice/live.ts';
 import { readTalkIdeas } from '../voice/talk-ideas.ts';
@@ -327,43 +333,87 @@ async function joinEventsOn(roomId: string, name: string) {
 
 let resumed = false;
 const saved = readJson<Record<string, number> | null>(posFile, null);
-const stream = new SwitchEventStream({
-  creds: { agentId, apiEndpoint: endpoint, token },
-  connectionId,
-  scope: 'all',
-  filter: 'all',
-  rooms: readJson<string[]>(roomsFile, []), // declared at open, so catch-up covers them
-  ...(saved ? { startPosition: saved } : {}),
-  onEvent: (ev) => onEvent(ev).catch((e) => console.error('handler failed:', e.message)),
-  onRooms: () => {},
-  onConnected: () => {
-    console.log('connected');
-    joinRooms()
-      .then(() => {
-        // Once per process, after the rooms are joined: re-queue what a restart caught inside the quiet
-        // gap (already-decided ids are skipped by the pipeline), then finish a hand-off a restart
-        // interrupted (a step caught mid-send is never re-sent). Not on a reconnect.
-        if (resumed) return;
-        resumed = true;
-        const queued = carried;
-        carried = [];
-        for (const q of queued) for (const i of q.inputs) enqueue(q.room, i);
-        if (queued.length) console.log(`re-queued ${queued.reduce((n, q) => n + q.inputs.length, 0)} message(s) from before the restart`);
-        return handoff?.resume();
-      })
-      .catch((e) => console.error('joining rooms failed:', e.message));
-  },
-  onDisconnected: ({ error }) => console.warn('disconnected:', error),
-  onGap: (g) => {
-    console.warn('gap: re-reading room history with read_context', g);
-    for (const r of memory.roomIds()) void memory.rereadHistory(r).then((n) => n && console.log(`memory: ${roomNames.get(r)}: ${n} missed message(s) added from read_context`));
-  },
-  onEvicted: (e) => { console.error('evicted:', e); process.exit(3); },
-  log: { debug: () => {}, warn: (m: string) => console.warn(m), error: (m: string) => console.error(m) },
-  signal: new AbortController().signal,
+// Logs leave before the process does: a bare process.exit() right after console.error can cut the line
+// off on a pipe (the eval's agent.log, journald).
+const exitSoon = (code: number, why: string) => { stopped = true; console.error(why); setTimeout(() => process.exit(code), 500); };
+// The rooms the server says this connection covers, so a fresh stream declares them at open.
+let serverRooms: string[] = [];
+let stream: SwitchEventStream | null = null;
+const watchdogMs = watchdogMsFromEnv(process.env.CK_STREAM_WATCHDOG_SEC);
+// One stream at a time; the watchdog replaces a quiet one with a fresh one from where the old one had
+// read to (its in-memory position, else the saved file). Callbacks from a replaced stream are ignored.
+function openStream(): StreamHandle {
+  const ac = new AbortController();
+  const prev = stream?.position;
+  const startPosition = prev && Object.keys(prev).length ? prev : saved;
+  const rooms = [...new Set([...readJson<string[]>(roomsFile, []), ...serverRooms])];
+  const s: SwitchEventStream = new SwitchEventStream({
+    creds: { agentId, apiEndpoint: endpoint, token },
+    connectionId,
+    scope: 'all',
+    filter: 'all',
+    rooms, // declared at open, so catch-up covers them
+    ...(startPosition ? { startPosition } : {}),
+    onAlive: () => { if (stream === s) watchdog?.alive(); },
+    onEvent: async (ev) => { if (stream === s) await onEvent(ev).catch((e) => console.error('handler failed:', e.message)); },
+    onRooms: (r) => { if (stream === s && r.length) serverRooms = r; },
+    onConnected: () => {
+      if (stream !== s) return;
+      watchdog?.alive();
+      console.log('connected');
+      joinRooms()
+        .then(() => {
+          // Once per process, after the rooms are joined: re-queue what a restart caught inside the quiet
+          // gap (already-decided ids are skipped by the pipeline), then finish a hand-off a restart
+          // interrupted (a step caught mid-send is never re-sent). Not on a reconnect.
+          if (resumed) return;
+          resumed = true;
+          const queued = carried;
+          carried = [];
+          for (const q of queued) for (const i of q.inputs) enqueue(q.room, i);
+          if (queued.length) console.log(`re-queued ${queued.reduce((n, q) => n + q.inputs.length, 0)} message(s) from before the restart`);
+          return handoff?.resume();
+        })
+        .catch((e) => console.error('joining rooms failed:', e.message));
+    },
+    // Every ending the runtime reconnects from (it waits, then reopens from its position).
+    onDisconnected: ({ error }) => { if (stream === s) console.warn(`disconnected: ${error}; reconnecting`); },
+    onGap: (g) => {
+      if (stream !== s) return;
+      console.warn('gap: re-reading room history with read_context', g);
+      for (const r of memory.roomIds()) void memory.rereadHistory(r).then((n) => n && console.log(`memory: ${roomNames.get(r)}: ${n} missed message(s) added from read_context`));
+    },
+    // heartbeat_lapsed (no pong for 6 s: a stalled event loop, a paused process, a sleeping machine) and
+    // closed are recoverable: Switch closes the socket and the runtime reopens and resumes. Only a
+    // takeover (another process holds this connection id) and rejected credentials are final, and the
+    // runtime has already stopped for those. This used to exit on every eviction, a lapse included.
+    onEvicted: (e) => {
+      if (stream !== s) return;
+      if (e.code === EVICTION_TAKEN_OVER || e.code === EVICTION_CREDENTIALS_REJECTED) { exitSoon(3, `evicted (${e.code}): ${e.reason}; stopping`); return; }
+      console.warn(`evicted (${e.code}${e.roomId ? `, room ${roomNames.get(e.roomId) ?? e.roomId}` : ''}): ${e.reason}; the stream reconnects and resumes`);
+    },
+    log: {
+      debug: () => {},
+      warn: (m: string, meta?: Record<string, unknown>) => { if (stream === s) console.warn(meta ? `${m} ${JSON.stringify(meta)}` : m); },
+      error: (m: string, meta?: Record<string, unknown>) => { if (stream === s) console.error(meta ? `${m} ${JSON.stringify(meta)}` : m); },
+    },
+    signal: ac.signal,
+  });
+  stream = s;
+  s.start();
+  return { stop: () => ac.abort() };
+}
+const watchdog: StreamWatchdog | null = watchdogMs === null ? null : new StreamWatchdog({
+  staleMs: watchdogMs, maxRestarts: DEFAULT_MAX_RESTARTS, now: Date.now, open: openStream,
+  log: (l) => console.warn(l),
+  giveUp: () => { save(); exitSoon(4, 'exiting (code 4) so the supervisor restarts the agent'); },
 });
-stream.start();
+if (watchdog && watchdogMs !== null) {
+  watchdog.start();
+  setInterval(() => { if (!stopped) watchdog.check(); }, Math.min(15_000, Math.max(1000, watchdogMs / 4)));
+  console.log(`stream watchdog on: a fresh stream after ${watchdogMs / 1000} s with no event, ping or heartbeat`);
+} else openStream();
 let last = '';
-const save = () => { const p = JSON.stringify(stream.position); if (p !== last && p !== '{}') { atomicWriteJson(posFile, stream.position); last = p; } };
+function save() { if (!stream) return; const pos = stream.position; const p = JSON.stringify(pos); if (p !== last && p !== '{}') { atomicWriteJson(posFile, pos); last = p; } }
 setInterval(save, 1000);
 for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => { save(); process.exit(0); });
