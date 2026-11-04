@@ -22,6 +22,9 @@ export interface PendingItem {
    *  (already logged in the thread) and the desk is asked only for the missing owner, due date or
    *  reopen-if. Absent in files written before 3 Nov: read as 'confirm'. */
   stage?: 'confirm' | 'assign';
+  /** Job D items: 'clash' (a restriction against a decision) or 'reopen' (new information meeting a
+   *  decision's "Reopen if", D4-2). Absent = 'clash'. Both are ruled on the same way. */
+  route?: 'clash' | 'reopen';
   status: 'open' | 'confirmed' | 'dropped';
   room_id: string;
   room_name: string;

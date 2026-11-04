@@ -112,7 +112,7 @@ export async function callVerdict(claude: Claude, cfg: ModelConfig, system: stri
 export interface Review { id: string; supports: boolean; issue: string }
 
 /** One call for the whole decision (a burst's items are reviewed together), so a message costs at most 2 calls. */
-export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { id: string; claim: string; quotes: string[] }[]): Promise<{ reviews: Map<string, Review>; usage: Usage }> {
+export async function callReviewer(claude: Claude, cfg: ModelConfig, checks: { id: string; claim: string; quotes: string[]; new_message?: { from: string; at: string; text: string } }[]): Promise<{ reviews: Map<string, Review>; usage: Usage }> {
   const params = {
     model: cfg.reviewerModel,
     max_tokens: 2000,

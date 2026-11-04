@@ -20,6 +20,8 @@ export interface BlockInfo {
   at: string | null; // ISO date or datetime, null if undated
   author: string | null; // archive messages, and decision rows whose source message is known
   kind: 'message' | 'row' | 'bullet' | 'para';
+  /** Decision rows: the table's column names, in order (the raw row alone doesn't say which cell is "Rejected"). */
+  columns?: string[];
 }
 
 export interface RoomContext {
@@ -63,6 +65,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
     const dateTag = `doc ${date ?? 'UNDATED'}`;
     const parts = doc.text.split(/^(?=## )/m);
     let columns: string | null = null;
+    let header: string[] | null = null;
     for (const part of parts) {
       const head = part.match(/^## (§\d+)\s*(.*)$/m);
       const sec = head ? head[1] : null;
@@ -73,8 +76,8 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
       let bullet = 0;
       let para: string[] = [];
       const add = (blockId: string, tag: string, body: string, kind: BlockInfo['kind'], display: string, at: string | null, author: string | null = null) => {
-        const header = `[${blockId} · ${title} · ${tag}] `;
-        infos.push({ blockId, ref, headerLen: header.length, text: header + body, body, display: trimDisplay(display), at, author, kind });
+        const head = `[${blockId} · ${title} · ${tag}] `;
+        infos.push({ blockId, ref, headerLen: head.length, text: head + body, body, display: trimDisplay(display), at, author, kind, ...(kind === 'row' && header ? { columns: header } : {}) });
       };
       const flush = () => {
         if (para.length) add(ref, dateTag, para.join(' ').trim(), 'para', para.join(' ').trim(), date);
@@ -92,6 +95,7 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
             add(`${ref} ${c[0]}`, `${src ?? 'doc'} · ${at ?? 'UNDATED'}`, line.trim(), 'row', `${c[2]}: ${c[3]}`, at, src ? (msgAuthor.get(src) ?? null) : null);
           } else if (!/^\|[\s|:-]+\|$/.test(line.trim())) {
             columns = `Decision table columns: ${c.join(' | ')}`;
+            header = c;
           }
           continue;
         }
@@ -142,4 +146,19 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
   if (docCount > 0 && docCount < documents.length) documents[docCount - 1].cache_control = { type: 'ephemeral' };
   if (documents.length) documents[documents.length - 1].cache_control = { type: 'ephemeral' };
   return { roomName: room.name, documents, table, sourceText };
+}
+
+/** A decision row's cells by column name ("Reopen if" → its text), or null for any other block. */
+export function rowFields(b: BlockInfo): Record<string, string> | null {
+  if (b.kind !== 'row' || !b.columns) return null;
+  const c = cells(b.body);
+  return Object.fromEntries(b.columns.map((name, i) => [name, c[i] ?? '']));
+}
+
+/** What the reviewer reads for a cited block: its text, plus, for a decision row, the same cells
+ *  labelled with their column names (only the record's own words, rearranged). */
+export function reviewText(b: BlockInfo, cited: string = b.text): string {
+  const f = rowFields(b);
+  if (!f) return cited;
+  return `${cited}\nThe same row by column: ${Object.entries(f).map(([k, v]) => `${k}: ${v}`).join(' · ')}`;
 }
