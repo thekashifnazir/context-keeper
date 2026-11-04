@@ -4,6 +4,8 @@
 
 Your team chat's memory: it answers with the source, catches you up, and turns new ideas into work.
 
+**Built around Slack.** The [Discord channel](#try-it) is an extremely simplified demo you can try yourself; the full version (voice, audio briefs, Claude Code builds, sign-offs) runs in Slack.
+
 Demo video (under 3 min): [NEED demo video URL] · Blog post: [NEED blog URL] · Track 01: Best Business Workflow · Built for Flip the Switch, 3–7 Nov 2026 (UK)
 
 <!-- drafted by Claude from the build log; Kash to check -->
@@ -60,6 +62,9 @@ The trust rule: it never says "already covered" without a quote that code has ch
 
 <!-- Kash's direction (4 Nov): Slack is the full product; the Discord channel is a simplified demo. Wording drafted by Claude; Kash to check. -->
 **Context Keeper is built around Slack.** That's where the full version runs for the team in the demo video: cited answers, catch-up briefs with a voice call, ideas approved by the owner and built by Claude Code in a new build channel, stage updates, and the person who asked signing it off.
+
+> [!IMPORTANT]
+> **The Discord channel is an extremely simplified demo.** Voice catch-ups, audio briefs, ideas built by Claude Code, stage updates and sign-offs all run in **Slack**, the full version shown in the demo video. If something isn't in the Discord demo, that's because it's switched off there, not because Context Keeper can't do it.
 
 **The Discord channel is a simplified version, so you can try it yourself.** It's the same agent on the same Switch server, with the same Ledgerly record, but only the answering part is switched on:
 
