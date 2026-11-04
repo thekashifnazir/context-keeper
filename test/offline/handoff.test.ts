@@ -10,7 +10,7 @@ import { HandoffChain, type ChainConfig, type HandoffMsg } from '../../src/agent
 import { HandoffStore, type StepName } from '../../src/agent/handoff/store.ts';
 import type { CreateRoomSpec, HandoffSwitch, RoomRef } from '../../src/agent/handoff/switch.ts';
 import { handleFromSender } from '../../src/agent/handoff/wire.ts';
-import { asksPermission, isBareAnswer, parseApproval, parseSignoff, quoteBlock, readReport, replyLogsIt, stripMentions } from '../../src/agent/handoff/text.ts';
+import { asksPermission, isBareAnswer, isClearSignoff, parseApproval, parseSignoff, quoteBlock, readReport, replyLogsIt, stripMentions } from '../../src/agent/handoff/text.ts';
 import { handoffStep, readTrace, type TraceLine } from '../../src/shared/trace.ts';
 
 const OWNER = '@switch-slack-b1-owner_demo:localhost';
@@ -482,6 +482,13 @@ describe('job E: restarts', () => {
     expect(sw.created).toHaveLength(1);
     expect(sw.posts.filter((p) => p.room === buildRoom().id)).toHaveLength(1);
     expect(e.store.byRef('I1')!.status).toBe('handed_off');
+  });
+});
+
+describe('job E: who gets the "only X can sign this off" reply', () => {
+  it('clear sign-off attempts only; "Great idea!" and "No worries" stay chat', () => {
+    for (const b of ['looks right', 'Looks good to me', 'LGTM', 'not quite, missing X', 'ship it', 'signed off']) expect(isClearSignoff(b)).toBe(true);
+    for (const b of ['Great idea!', 'No worries', 'yes please', 'perfect timing', 'needs coffee', 'nope, wrong thread']) expect(isClearSignoff(b)).toBe(false);
   });
 });
 

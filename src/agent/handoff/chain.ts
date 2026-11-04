@@ -31,7 +31,7 @@ import type { HandoffSwitch } from './switch.ts';
 import { freshSteps, ideaKey, STEPS, type HandoffStore, type IdeaRecord, type Source, type Status, type StepName } from './store.ts';
 import {
   announceLine, asksPermission, buildRoomBrief, handoffMessage, isBareAnswer, isProgress, looksFinal, notDoneLine, notTheirsLine, nudgeLine,
-  ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, signedOffLine, signoffRequest, stillBuildingLine, stripMentions, timeoutLine,
+  isClearSignoff, ownerIdeaNote, parseApproval, parseSignoff, readReport, refIn, reopenedLine, signedOffLine, signoffRequest, stillBuildingLine, stripMentions, timeoutLine,
 } from './text.ts';
 
 export interface HandoffMsg {
@@ -415,7 +415,7 @@ export class HandoffChain {
     const isOwner = !!this.c.ownerSender && msg.sender === this.c.ownerSender;
     const p = parseSignoff(msg.body);
     if (!isRaiser && !isOwner) {
-      if (!p) {
+      if (!p || !isClearSignoff(msg.body)) {
         this.trace('signoff_ignored', rec, room, [msg], [], `not the raiser or the owner (${msg.sender_name})`);
         return false; // ordinary chat for job A
       }

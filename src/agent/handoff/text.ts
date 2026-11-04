@@ -107,6 +107,11 @@ export function parseApproval(body: string): { ref: string | null; again: boolea
 const POSITIVE = /^\s*(looks (right|good|great|fine)|lgtm|signed? off|sign(ed)? it off|that'?s (right|it|great|perfect)|perfect|great|yes\b|yep|spot on|ship it|all good|approved?)/i;
 const NEGATIVE = /^\s*(not quite|not right|no\b|nope|wrong|needs? |missing|reopen|that'?s not)/i;
 /** The raiser's text reply to a sign-off request. Text only: agents never see reactions. */
+/** A clear sign-off attempt, for people who can't sign off: "Great idea!" or "No worries" in the thread
+ *  stays ordinary chat; only these get the "only Rowan can sign this off" reply. */
+const CLEAR_SIGNOFF = /^\s*(looks (right|good)\b|lgtm\b|signed? (it )?off\b|ship it\b|approved?\b|not quite\b|not right\b|reopen\b)/i;
+export const isClearSignoff = (body: string) => CLEAR_SIGNOFF.test(body);
+
 export function parseSignoff(body: string): { verdict: 'signed_off' | 'reopened'; reason: string } | null {
   if (NEGATIVE.test(body)) return { verdict: 'reopened', reason: body.replace(/^\s*(not quite|not right|no|nope|wrong|reopen)\b[\s,:;.!-]*/i, '').trim() };
   if (POSITIVE.test(body)) return { verdict: 'signed_off', reason: '' };
