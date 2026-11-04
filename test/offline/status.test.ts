@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { buildStatus, ideaStage, postLabel, RateLimiter, scrub, sourceOf, StatusPage, type StatusSource } from '../../src/agent/status.ts';
+import { buildStatus, ideaStage, postLabel, RateLimiter, scrub, sourceOf, stageStep, StatusPage, TRACK, type StatusSource } from '../../src/agent/status.ts';
 import type { TraceLine } from '../../src/shared/trace.ts';
 import { startToolServer, whatsNew } from '../../src/voice/talk-tool.ts';
 
@@ -173,6 +173,23 @@ describe('helpers', () => {
     expect(ideaStage({ status: 'awaiting_signoff' })).toBe('Done · waiting for sign-off');
     expect(ideaStage({ status: 'some_new_status' as any })).toBe('some new status');
   });
+  it('stageStep puts every ideaStage on the tracker, coloured by what it means', () => {
+    const at = (status: string, stage?: string) => stageStep(ideaStage({ status, stage } as any));
+    expect(TRACK).toEqual(['Noted', 'Approved', 'Building', 'Waiting for Kash', 'Done', 'Signed off']);
+    expect(at('noted')).toEqual({ at: 0, tone: 'wait' });
+    expect(at('approved')).toEqual({ at: 1, tone: 'go' });
+    expect(at('stalled')).toEqual({ at: 1, tone: 'wait' });
+    expect(at('not_permitted')).toEqual({ at: 1, tone: 'bad' });
+    expect(at('handed_off')).toEqual({ at: 2, tone: 'go' });
+    expect(at('handed_off', 'building')).toEqual({ at: 2, tone: 'go' });
+    expect(at('handed_off', 'blocked')).toEqual({ at: 3, tone: 'wait' });
+    expect(at('timed_out')).toEqual({ at: 2, tone: 'wait' });
+    expect(at('not_done')).toEqual({ at: 2, tone: 'bad' });
+    expect(at('awaiting_signoff')).toEqual({ at: 4, tone: 'ok' });
+    expect(at('signed_off')).toEqual({ at: 5, tone: 'ok' });
+    expect(at('reopened')).toEqual({ at: 0, tone: 'wait' });
+    expect(at('some_new_status')).toEqual({ at: -1, tone: 'go' });
+  });
   it('the rate limiter allows 30 a minute per key, then resets', () => {
     let t = 0;
     const r = new RateLimiter(30, () => t);
@@ -205,6 +222,17 @@ describe('served by the tool server, over real HTTP on 127.0.0.1', () => {
       expect(html).not.toMatch(/<script/i);
       for (const s of ['Ledgerly: ledgerly-pilot', 'Riverside Events: try-context-keeper', 'Slack', 'Discord', 'I2', 'Claude Code · waiting for an OK', 'ledgerly-demo/issues/12', '📌 In the record', 'Ledgerly pilot plan › Decisions (Kash, 6 Oct)', '$1.23', '$6.00 daily cap', 'Switch Trust', 'withdrawn by the owner', 'prefers-color-scheme:dark']) expect(html).toContain(s);
     }
+  });
+  it('the page: tagline, the current stage marked per idea, Discord and GitHub links, small and self-contained', async () => {
+    const html = await (await get('/status', '203.0.113.8')).text();
+    expect(html).toContain('From “didn’t we decide this?” to “it’s built”, right in your team chat.');
+    // I2 waits for an OK (step 4, amber), I1 is signed off (the whole track done), I3 is noted
+    const tracks = [...html.matchAll(/<ol class="track ([^"]+)"[^>]*>(.*?)<\/ol>/g)].map((m) => [m[1], m[2].match(/class="now" aria-current="step"><span>([^<]+)/)?.[1]]);
+    expect(tracks).toEqual([['t-wait', 'Waiting for Kash'], ['t-ok all', 'Signed off'], ['t-wait', 'Noted']]);
+    expect(html).toContain('href="https://discord.gg/ygPnp7bj5"');
+    expect(html).toContain('href="https://github.com/thekashifnazir/context-keeper"');
+    expect(html).not.toMatch(/<link|@import|url\(|https?:\/\/[^"]*\.(css|js|woff2?)/i);
+    expect(Buffer.byteLength(html)).toBeLessThan(60_000);
   });
   it('never shows desk content, private notes, ids, handles or emails, in the HTML or the JSON', async () => {
     const html = await (await get('/status')).text();
