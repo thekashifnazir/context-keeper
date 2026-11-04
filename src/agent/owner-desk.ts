@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { writeTrace, type TraceItem, type TraceLine, type TracePost } from '../shared/trace.ts';
 import type { RoomContext } from './blocks.ts';
+import { noteDecision } from './decision-log.ts';
 import { assignNote, confirmNote, loggedLine, readPlain, updateLine } from './jobs/decision.ts';
 import { clashNote, neutralClashLine, personalReply } from './jobs/restriction.ts';
 import { callOwnerReply, type OwnerReading, type Usage } from './model.ts';
@@ -121,6 +122,14 @@ function findItem(deps: Deps, input: Input): { item: PendingItem | null; ambiguo
   return { item: null, ambiguous: open };
 }
 
+/** A job B item the owner has now settled: write it to the room's Decision log (a no-op when it
+ *  already says this). */
+async function logSettled(deps: Deps, item: PendingItem, ti: TraceItem, events: string[]) {
+  if (item.kind !== 'B' || !ti.decision_record) return;
+  const note = await noteDecision(deps, { roomId: item.room_id, roomName: item.room_name, record: ti.decision_record, why: item.details.why ?? '', sourceMessageId: item.message_id, raisedBy: item.raised_by });
+  if (note) events.push(note);
+}
+
 const quiet = (id: string, job: TraceItem['job'] = 'none'): TraceItem => ({ message_id: id, job, verdict: null, restriction: null, clashes_with: null, sources: [], decision_record: null, brief_for: null });
 
 /** One owner-desk message. Returns the trace line, or null when it isn't ours to act on. */
@@ -186,6 +195,7 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
       const d = item.details;
       ti.decision_record = { summary: d.summary || item.text, decided_by: owner, action_owner: orNull(d.action_owner), due: orNull(d.date), reopen_if: orNull(d.reopen_if), date: day(item.created_at) };
       store(deps).resolve(item.n, 'confirmed', { by: input.sender, message_id: input.message_id, summary: d.summary || item.text, owner: d.action_owner ?? '', date: d.date, reopen_if: d.reopen_if ?? '', line: '' });
+      await logSettled(deps, item, ti, events);
       return write('silence', [ti], `owner_desk: #${item.n} left as it is (the work stays ${d.action_owner ? 'without a date' : 'unassigned'}); nothing posted`);
     }
     store(deps).resolve(item.n, 'dropped', { by: input.sender, message_id: input.message_id, summary: '', owner: '', date: '', line: '' });
@@ -209,6 +219,7 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
       const fresh = { owner: actionOwner && actionOwner !== d.action_owner ? actionOwner : '', date: date && date !== d.date ? date : '', reopenIf: reopenIf && reopenIf !== d.reopen_if ? reopenIf : '' };
       if (!fresh.owner && !fresh.date && !fresh.reopenIf) {
         store(deps).resolve(item.n, 'confirmed', resolution);
+        await logSettled(deps, item, ti, events);
         return write('silence', [ti], `owner_desk: #${item.n} nothing new to add; nothing posted`);
       }
       line = updateLine({ summary, ...fresh, confirmedBy: owner });
@@ -223,6 +234,9 @@ export async function handleOwnerDesk(deps: Deps, deskRoomId: string, deskRoomNa
   }
   const sent = await sendPublic(deps, item.room_id, item.room_name, item.thread_id, line, events);
   posts.push(...sent.posts);
-  if (sent.posts.some((p) => p.route === 'public_thread')) store(deps).resolve(item.n, 'confirmed', resolution);
+  if (sent.posts.some((p) => p.route === 'public_thread')) {
+    store(deps).resolve(item.n, 'confirmed', resolution);
+    await logSettled(deps, item, ti, events);
+  }
   return write(sent.posts.some((p) => p.route !== 'owner_private') ? 'reply' : posts.length ? 'owner_note' : 'silence', [ti], sent.error);
 }

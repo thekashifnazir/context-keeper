@@ -20,7 +20,8 @@ export const decisionId = (b: BlockInfo): string => b.blockId.split(' ').at(-1) 
 export function reopenIf(b: BlockInfo): string {
   const f = rowFields(b);
   const key = f ? Object.keys(f).find((k) => /^reopen if$/i.test(k.trim())) : undefined;
-  return key ? f![key].replace(/\*\*|__|`/g, '').trim() : '';
+  const v = key ? f![key].replace(/\*\*|__|`/g, '').trim() : '';
+  return v === '—' ? '' : v; // the Decision log writes "—" for "not said"
 }
 
 /** The only public line for a reopen request (the decision's quote is added below it by code). */

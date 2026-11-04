@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { writeTrace, type TraceItem, type TraceLine, type TracePost } from '../shared/trace.ts';
 import type { RoomContext } from './blocks.ts';
+import { noteDecision, type LoggedDecision } from './decision-log.ts';
 import { callVerdict, errorKind, type Claude, type ModelConfig, type Usage } from './model.ts';
 import { planJobs } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
@@ -37,6 +38,9 @@ export interface Deps {
   ownerName?: string; // display name, default "Kash"
   /** Open owner items (B confirms, D clashes); in-memory when not given. */
   pending?: PendingStore;
+  /** Job B: a decision was logged; the live agent writes it to the room's Decision log document in
+   *  Switch (src/agent/memory.ts). Returns a note for the trace. */
+  onDecisionLogged?: (d: LoggedDecision) => Promise<string>;
 }
 
 export interface Outcome { trace: TraceLine | null; retry: boolean; fatal: boolean }
@@ -134,6 +138,13 @@ export async function decide(deps: Deps, roomId: string, roomName: string, ctx: 
       const m = inputs.find((x) => x.message_id === it.message_id)!;
       deps.state.addIdea(roomId, { message_id: m.message_id, by: m.sender_name, text: m.body, at: m.received_at });
     }
+  }
+  // Job B: a logged decision (the owner stated it) goes into the room's Decision log document.
+  for (const it of items) {
+    if (it.job !== 'B' || !it.decision_record?.decided_by) continue;
+    const m = inputs.find((x) => x.message_id === it.message_id)!;
+    const note = await noteDecision(deps, { roomId, roomName, record: it.decision_record, why: it.details?.why ?? '', sourceMessageId: m.message_id, raisedBy: m.sender_name });
+    if (note) notes.push(note);
   }
   deps.state.markProcessed(roomId, inputs.map((m) => m.message_id));
   const events = [...notes, ...pub.events];
