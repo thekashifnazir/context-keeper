@@ -67,7 +67,7 @@ Ubuntu 24.04 already has git, python3, curl and openssl, which `scripts/server-u
 
 ```bash
 git clone https://github.com/thekashifnazir/context-keeper ~/ck && cd ~/ck
-cp .env.example .env                       # then set ANTHROPIC_API_KEY= in .env
+cp .env.example .env                       # then fill in the existing ANTHROPIC_API_KEY= line
 npm ci
 npm test
 scripts/server-up.sh --with-mattermost
@@ -89,8 +89,8 @@ The test Mattermost runs natively here (amd64), with no emulation, unlike on App
 
 Differences from the Mac:
 
-- run-it.md copies passwords with `pbcopy`. On the VM, print to your own terminal instead, or
-  read them on the Mac from a copy you keep there.
+- `pbcopy` is Mac-only. run-it.md prints the Mattermost password, so on the VM read it from your
+  own terminal, or keep a copy on the Mac.
 - Mattermost and Console are on the VM's `127.0.0.1`. Reach them with [§3](#3-reach-it-from-your-mac).
 
 Then set a restart policy on the containers (step 11 in 1B) and run the agent as a service:
