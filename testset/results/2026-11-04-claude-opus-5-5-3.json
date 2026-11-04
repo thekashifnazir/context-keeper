@@ -1,0 +1,379 @@
+{
+  "schema": "ck.score/1",
+  "meta": {
+    "run_id": "r20261104-0057-2ee9",
+    "set": "main",
+    "mode": "fast",
+    "model": "claude-opus-5-5",
+    "burst_gap_s": 20,
+    "started_at": "2026-11-04T00:58:20.887Z",
+    "versions": {
+      "harness_sha": "1ae171e47de99422725d7eb33ce809ab6ec63b76",
+      "agent_sha": "1ae171e47de99422725d7eb33ce809ab6ec63b76",
+      "switch": "ok",
+      "mattermost": "11.9.0.28847360617.3d8e5f88322445fb33a3027980d313ad883806027aea10ad5b5195dcac59973e.false"
+    },
+    "incidents": [
+      "2026-11-04T01:00:43.062Z read posts 1o3b1oqcxbgot869xdxxdss97h: Mattermost slow but alive; retried"
+    ],
+    "cases_sha256": "7c3af0e411b1f074706f6bc3b713b1295fba00352c903271f69d3d795b27ad04",
+    "content_sha256": "dc89f491139a200e11ff5765ef5bba1aac4bb4c6d751628a707cb7306f3aca5b",
+    "prices_as_of": "2026-10-06"
+  },
+  "summary": {
+    "set": "main",
+    "overall": {
+      "passed": 2,
+      "total": 2
+    },
+    "job_a": {
+      "passed": 1,
+      "total": 1
+    },
+    "job_d": {
+      "passed": 0,
+      "total": 0
+    },
+    "job_b": {
+      "passed": 1,
+      "total": 1
+    },
+    "quiet": {
+      "passed": 0,
+      "total": 0
+    },
+    "bursts": {},
+    "confident_wrong": 0,
+    "diagnostics": {
+      "covered_on_other": 0,
+      "citations_verified": {
+        "verified": 2,
+        "cited": 7
+      },
+      "quotes_verified": {
+        "verified": 6,
+        "cited": 7
+      },
+      "briefs_seen": {},
+      "trace_missing": 0,
+      "trace_mismatch": 0,
+      "unattributed": 0,
+      "switch_doc_notices": {
+        "before_t0": 6,
+        "during_run": 1
+      },
+      "latency_s": {
+        "p50": 30.2,
+        "p95": 51,
+        "n": 2
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "T05",
+      "room": "ledgerly-pilot",
+      "author": "Rowan",
+      "burst": null,
+      "window": "ledgerly-pilot:T05",
+      "expected": {
+        "job": "A",
+        "verdict": "covered",
+        "sources": [
+          "pilot-plan.md §2",
+          "led-011"
+        ],
+        "must_mention": [
+          "weekday"
+        ]
+      },
+      "item": {
+        "message_id": "sw_57ddb2d501b6771fc917d6437bc7c2c2",
+        "job": "A",
+        "verdict": "covered",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |"
+          },
+          {
+            "ref": "led-011",
+            "quote": "Decision D1: onboarding calls Tue to Thu, weekdays only. Partner finance staff are weekday only, and we can't staff support at weekends. Confirmed."
+          }
+        ],
+        "decision_record": null,
+        "brief_for": null
+      },
+      "decision_id": "e4025986-b026-4d40-bfe5-7efc3b495258",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job A"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict covered"
+        },
+        "P3": {
+          "status": "pass",
+          "reason": "pilot-plan.md §2: resolves, quote verified, shown in the reply"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        },
+        {
+          "ref": "led-011",
+          "expected": true,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": true,
+          "verified": true
+        }
+      ],
+      "case_post_id": "g1f6k1czipbz5xj8sddm3xfc9c",
+      "public_post_ids": [
+        "5hy7n7og4jr98ync9wnat3sfrc"
+      ],
+      "owner_post_ids": [],
+      "public_text": [
+        "Good thought, Rowan. Under D1, onboarding calls are on weekdays, Tue to Thu. Kash confirmed this on 6 Oct because partner finance staff work weekdays only and we can't staff support at weekends. Reopen if: a partner can't make any Tue–Thu slot.\n> Onboarding calls on **weekdays, Tue to Thu**: Partner finance staff work weekdays only; support is staffed on weekdays\n— Kash, 6 Oct (pilot-plan.md §2 D1)\nAlso: led-011"
+      ],
+      "owner_text": [],
+      "latency_s": 51,
+      "also_expect": null
+    },
+    {
+      "id": "T14",
+      "room": "ledgerly-pilot",
+      "author": "Kash",
+      "burst": null,
+      "window": "ledgerly-pilot:T14",
+      "expected": {
+        "job": "B",
+        "verdict": "decision",
+        "sources": [],
+        "routing": "owner_private_allowed"
+      },
+      "item": {
+        "message_id": "sw_32b522108d9e443d3d9bd780ae8bb00e",
+        "job": "B",
+        "verdict": "decision",
+        "restriction": null,
+        "clashes_with": null,
+        "sources": [
+          {
+            "ref": "sw_32b522108d9e443d3d9bd780ae8bb00e",
+            "quote": "Ok, Fieldnote goes first for onboarding, Tue 24th."
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "A two-week pilot from **Tue 24 Nov to Fri 4 Dec 2026**."
+          },
+          {
+            "ref": "pilot-plan.md §1",
+            "quote": "**Three partner agencies:** Fieldnote Studio, Harbour & Pine and Northbank Creative. All three signed their pilot letters by 30 Oct."
+          },
+          {
+            "ref": "pilot-plan.md §2",
+            "quote": "| D1 | confirmed | Onboarding calls on **weekdays, Tue to Thu** | Partner finance staff work weekdays only; support is staffed on weekdays | Weekends (no support cover); Mondays (month-end close at two partners) | Owners who'd prefer a weekend have to fit a weekday slot | A partner **can't make any Tue–Thu slot** | `led-011` |"
+          },
+          {
+            "ref": "pilot-plan.md §3",
+            "quote": "Priya: onboarding calls and pilot support."
+          }
+        ],
+        "decision_record": {
+          "summary": "Fieldnote goes first for onboarding, on Tue 24 Nov 2026.",
+          "decided_by": "Kash",
+          "action_owner": null,
+          "due": "2026-11-24",
+          "reopen_if": null,
+          "date": "2026-11-04"
+        },
+        "brief_for": null
+      },
+      "decision_id": "ded1e9f9-bef1-47a5-a833-bbf5fef2f4c7",
+      "decision_kind": "reply",
+      "rules": {
+        "P1": {
+          "status": "pass",
+          "reason": "job B"
+        },
+        "P2": {
+          "status": "pass",
+          "reason": "verdict decision"
+        },
+        "P3": {
+          "status": "n/a",
+          "reason": "no citation rule for decision"
+        },
+        "P4": {
+          "status": "pass",
+          "reason": "one thread reply plus an allowed owner note"
+        },
+        "P5": {
+          "status": "pass",
+          "reason": "trace posts[] match 2 visible post(s)"
+        }
+      },
+      "pass": true,
+      "flags": {
+        "trace_missing": false,
+        "trace_mismatch": false,
+        "confident_wrong": false,
+        "covered_on_other": false,
+        "thread_ok": true
+      },
+      "citations": [
+        {
+          "ref": "sw_32b522108d9e443d3d9bd780ae8bb00e",
+          "expected": false,
+          "resolves": false,
+          "quote_verified": false,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §1",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §2",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        },
+        {
+          "ref": "pilot-plan.md §3",
+          "expected": false,
+          "resolves": true,
+          "quote_verified": true,
+          "shown": false,
+          "verified": false
+        }
+      ],
+      "case_post_id": "4oyxecgqip8hdxu8yzjqfn8fna",
+      "public_post_ids": [
+        "dgwbkm955fr4jdprehakw3fuza"
+      ],
+      "owner_post_ids": [
+        "3ms1u3dkx3dxzf8afiskg6nzrc"
+      ],
+      "public_text": [
+        "Logged as decided: Fieldnote goes first for onboarding, on Tue 24 Nov 2026. (Kash's call.)"
+      ],
+      "owner_text": [
+        "#1 · Decision logged in ck-eval-r20261104-0057-2ee9-ledgerly; it has no owner yet\nLogged: Fieldnote goes first for onboarding, on Tue 24 Nov 2026.\nSource: you, sw_32b522108d9e443d3d9bd780ae8bb00e: \"Ok, Fieldnote goes first for onboarding, Tue 24th.\"\n1. Suggested owner: Priya (pilot-plan.md §3.2: Priya: onboarding calls and pilot support.). Reply \"confirm\" to take it.\nDate: Tue 24 Nov\nReopen if: not said. What would make this worth revisiting? Reply \"reopen if ...\".\nReply in this thread (or start with #1): \"confirm\", \"owner Sam\", a date, a reopen-if, or \"leave it\". The decision itself is already logged; until you answer, the work stays unassigned."
+      ],
+      "latency_s": 30.2,
+      "also_expect": null
+    }
+  ],
+  "bursts": [],
+  "briefs": [],
+  "unattributed": [],
+  "pre_replay_posts": [
+    {
+      "post_id": "i3ibkxpqdpf4mcwuupfziuckxc",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "message": "Hey there! Tag @context-keeper-eval if you need me."
+    },
+    {
+      "post_id": "6song1nf9prybebc65rdsu8rme",
+      "channel_id": "nss5yf9ksjgrmnk6snwhch78oo",
+      "message": "Hey! I'm on standby — @context-keeper-eval to get started."
+    }
+  ],
+  "switch_doc_notices": [
+    {
+      "post_id": "faj9oj6nfbfaudrt9rjo6a76tr",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753890749,
+      "message": "📄 created room document “Ledgerly pilot plan”."
+    },
+    {
+      "post_id": "zaqgbgajijncmmcnc8ef9aokbw",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753890776,
+      "message": "📄 created room document “Ledgerly: product overview”."
+    },
+    {
+      "post_id": "cuokea66wfbbxjyjtc7e3pgeyw",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753890792,
+      "message": "📄 created room document “Ledgerly: customer research summary”."
+    },
+    {
+      "post_id": "r9jw3bji4brcu85oy5keke5g1h",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753890807,
+      "message": "📄 created room document “Ledgerly roadmap”."
+    },
+    {
+      "post_id": "a8i7fpferfr8idx79ju93kniye",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753890825,
+      "message": "📄 created room document “Ledgerly: pilot readiness status”."
+    },
+    {
+      "post_id": "zya3gnunb7fpudp6gn68gw1jby",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753890844,
+      "message": "📄 created room document “Channel archive”."
+    },
+    {
+      "post_id": "fmfwwpfzpprijjiunt87m9udph",
+      "channel_id": "1o3b1oqcxbgot869xdxxdss97h",
+      "create_at": 1793753957180,
+      "message": "📄 created room document “Decision log”."
+    }
+  ],
+  "usage": {
+    "calls": 5,
+    "input_tokens": 3324,
+    "cache_read_tokens": 13565,
+    "cache_write_tokens": 26872,
+    "output_tokens": 4352,
+    "est_cost_usd": 0.2374
+  }
+}
