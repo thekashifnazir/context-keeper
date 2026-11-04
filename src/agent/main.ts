@@ -29,6 +29,11 @@
 //                   raiser signs it off in the original thread (src/agent/handoff/, docs/handoff-live-test.md)
 //   CK_AUDIO_BRIEF  job C's audio clip under the text brief; CK_TALK_LINK its "talk it through" link and
 //                   the call summary afterwards (src/voice/live.ts; need ELEVENLABS_API_KEY)
+// Public demo rooms and spend (both off when unset; docs/demo-channel.md):
+//   CK_DEMO_ROOMS          rooms open to the public: jobs A–D only, per-person and per-room hourly limits
+//                          (src/agent/demo.ts); listened to and posted in without CK_LISTEN/POST_ROOMS
+//   CK_DAILY_SPEND_CAP_USD estimated model spend per UTC day (src/agent/spend.ts, state/spend.json):
+//                          one owner note at 80%, at 100% no more model calls until 00:00 UTC
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { SwitchEventStream, type AgentBridgeEvent, type MessagePayload } from '../../vendor/switch-agent-runtime/src/index.ts';
@@ -38,6 +43,8 @@ import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
 import { briefTrigger, runBrief, type BriefOpts } from './jobs/brief.ts';
 import { featuresFromEnv } from './features.ts';
+import { demoConfigFromEnv, DemoLimiter, gateMessage, matchesRoom, roomFeatures } from './demo.ts';
+import { meteredClaude, spendMeterFromEnv, spendNote } from './spend.ts';
 import { gapConfigFromEnv, quietGapMs } from './burst.ts';
 import { HandleMemo, heardAfterJobA, isAgentSender, noteNewIdeas, toHandoffMsg } from './handoff/dispatch.ts';
 import { handoffFromEnv } from './handoff/wire.ts';
@@ -95,7 +102,11 @@ async function op(roomId: string | null, name: string, args: Record<string, unkn
 }
 
 const roomNames = new Map<string, string>();
-const allowed = (roomId: string) => postPrefixes.some((p) => (roomNames.get(roomId) ?? '').startsWith(p));
+const demo = demoConfigFromEnv();
+const isDemo = (roomId: string) => !!demo && roomId !== owner.owner_desk_room && matchesRoom(roomNames.get(roomId) ?? '', demo.prefixes);
+const limiter = demo ? new DemoLimiter(demo, `${SD}/demo-limits.json`) : null;
+// A demo room is opted in by CK_DEMO_ROOMS itself, so it posts without a CK_POST_ROOMS entry.
+const allowed = (roomId: string) => postPrefixes.some((p) => (roomNames.get(roomId) ?? '').startsWith(p)) || isDemo(roomId);
 const ourEvents = new Set<string>();
 const eventIdOf = (r: any): string | null => r?.result?.message_id ?? r?.result?.event_id ?? r?.message_id ?? r?.event_id ?? null;
 
@@ -121,8 +132,17 @@ const poster: Poster = {
 
 const selfSenders = new Set((process.env.CK_SELF_SENDERS ?? '').split(',').map((s) => s.trim()).filter(Boolean));
 let stopped = false;
+// The spend meter wraps the one client every model call goes through (pipeline, brief, owner desk,
+// sign-off, voice scripts and summaries). Only when a cap or a demo room is set; otherwise unchanged.
+const spendMeter = spendMeterFromEnv(SD);
+const meter = spendMeter.cap !== null || demo ? spendMeter : null;
+const claude = meter ? meteredClaude(realClaude(), meter, (c, m) => {
+  const note = spendNote(c, m);
+  console.warn(`spend: ${note}`);
+  poster.owner(note).catch((e) => console.error('spend note failed:', (e as Error).message));
+}) : realClaude();
 const deps: Deps = {
-  claude: realClaude(), cfg: modelConfigFromEnv(), system: systemPrompt('.'), poster,
+  claude, cfg: modelConfigFromEnv(), system: systemPrompt('.'), poster,
   state: new AgentState(`${SD}/agent-state.json`), selfSenders,
   ownerSender: owner.owner_sender ?? null, ownerName: process.env.CK_OWNER_NAME || 'Kash', pending: new PendingStore(`${SD}/pending.json`),
   onFatal: (why) => { stopped = true; console.error('fatal, stopping:', why); setTimeout(() => process.exit(2), 2000); },
@@ -137,7 +157,7 @@ const rememberRoom = (r: { id: string; name: string }) => {
 // Job E: the same op(), guards and owner desk as everything else. CK_BUILD_ROOM must match CK_POST_ROOMS to be created.
 const handoff = features.jobE ? handoffFromEnv({
   op, selfSenders,
-  canPost: allowed,
+  canPost: (roomId) => allowed(roomId) && !isDemo(roomId), // no job E in a public demo room
   canCreate: (name) => postPrefixes.some((p) => name.startsWith(p)),
   onRoom: rememberRoom,
   owner: (body) => poster.owner(body),
@@ -204,6 +224,8 @@ if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().c
 // finished a call" lands soon after hanging up. No network otherwise.
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.quickTick().catch((e) => console.error('voice quick tick:', e.message)); }, 10_000).unref();
 console.log(`features: job E ${handoff ? 'on' : 'off'}, audio brief ${voice && features.audioBrief ? 'on' : 'off'}, talk link ${voice?.talkAgentId() ? 'on' : 'off'}`);
+if (demo) console.log(`demo rooms: ${demo.prefixes.join(', ')} (jobs A–D only; ${demo.perPersonHour} replies and ${demo.triesPerPersonHour} decisions per person per hour, ${demo.perRoomHour} replies per room per hour)`);
+if (meter) console.log(`spend today: $${meter.spent().toFixed(2)}${meter.cap !== null ? ` of a $${meter.cap.toFixed(2)} daily cap${meter.capped() ? ' (capped: model calls paused until 00:00 UTC)' : ''}` : ' (no cap)'}`);
 
 // The record per room, from Switch (loaded on the room's first message, refreshed before each decision).
 const selfNames = new Set<string>();
@@ -244,7 +266,7 @@ function enqueue(roomId: string, input: Input, gate: Promise<void> | null = null
   entry.timer = setTimeout(() => { buffers.delete(key); saveBuffers(); void run(roomId, entry.inputs, entry.gates, key, entry.first); }, wait);
   buffers.set(key, entry);
   saveBuffers();
-  if (prefetchOn && process.env.CK_PAUSE !== '1' && !stopped) prefetch(key, roomId, [...entry.inputs]);
+  if (prefetchOn && process.env.CK_PAUSE !== '1' && !stopped && !meter?.capped()) prefetch(key, roomId, [...entry.inputs]);
 }
 
 /** Starts the burst's verdict call now (see above). A newer prefetch for the same person replaces it;
@@ -273,6 +295,10 @@ async function run(roomId: string, inputs: Input[], gates: Promise<void>[] = [],
   const gapEnd = Date.now();
   const pre = key ? prefetches.get(key) : undefined;
   if (key && pre) prefetches.delete(key);
+  // Capped while the burst waited out its gap: it goes unanswered (the room was told when it was capped).
+  if (meter?.capped()) { console.log(`spend cap: burst in ${roomNames.get(roomId) ?? roomId} not decided`); return; }
+  const demoRoom = isDemo(roomId);
+  if (demoRoom && limiter && inputs[0]) limiter.noteTry(roomId, inputs[0].sender);
   const rec = await recordFor(roomId);
   if (!rec) { console.log(`no record for room ${roomNames.get(roomId) ?? roomId}: it has no room documents in Switch; skipping (seed it with npm run seed)`); return; }
   try {
@@ -288,8 +314,9 @@ async function run(roomId: string, inputs: Input[], gates: Promise<void>[] = [],
     // One line per decision for measuring a reply's time: the gap, whether the early verdict was used and
     // when it was ready, and the rest (gate, reviewer, posting) after the gap.
     const calls = results.flatMap((r) => r.usages).map((u) => `${u.model.replace(/^claude-/, '')} ${(u.ms / 1000).toFixed(1)} s`).join(' + ');
+    if (demoRoom && limiter && results.some((r) => r.trace?.posts.some((p) => p.route !== 'owner_private'))) limiter.noteReply(roomId, inputs[0].sender);
     console.log(`timing ${roomNames.get(roomId) ?? roomId}: burst ${inputs.length}, gap ${((gapEnd - first) / 1000).toFixed(1)} s from first message, prefetch ${!pre ? 'none' : !got ? 'stale (burst changed)' : fresh ? `used (verdict ready ${got.at ? ((got.at - pre.started) / 1000).toFixed(1) : '?'} s after start, ${got.at && got.at > gapEnd ? `${((got.at - gapEnd) / 1000).toFixed(1)} s after the gap` : 'before the gap ended'})` : 'stale (record changed)'}, after gap to done ${((done - gapEnd) / 1000).toFixed(1)} s (decide ${((done - t1) / 1000).toFixed(1)} s${gates.length ? `, brief wait ${((t1 - gapEnd) / 1000).toFixed(1)} s` : ''}), model ${calls || '-'}`);
-    if (handoff) {
+    if (handoff && !demoRoom) {
       try {
         const refs = await noteNewIdeas(handoff, roomId, roomNames.get(roomId) ?? roomId, inputs, results, handles);
         if (refs.length) console.log(`job E: noted ${refs.join(', ')} for the owner`);
@@ -322,7 +349,7 @@ async function onEvent(ev: AgentBridgeEvent) {
   const input: Input = { message_id: m.message_id, sender: m.sender, sender_name: who, body: m.body, received_at: at, thread_id: m.thread_id ?? null };
   // Job E first: "approve I<n>" in the owner desk, anything in a build room (Claude Code's report), and
   // the raiser's sign-off in the original thread. Everything else falls through to jobs A to D.
-  if (handoff && !stopped) {
+  if (handoff && !stopped && !isDemo(ev.room_id)) {
     handles.set(m.message_id, m.sender_name);
     try {
       if (await handoff.onMessage(toHandoffMsg(ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, m, who, at))) {
@@ -345,6 +372,16 @@ async function onEvent(ev: AgentBridgeEvent) {
   const live = { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null };
   // Another agent's post (Claude Code's, say) is room context, never a proposal (PR11).
   if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { memory.addLive(ev.room_id, live); return; }
+  // The daily spend cap (everywhere), then a public demo room's limits: one line at most, then silence.
+  // The message still joins the room's record.
+  const demoRoom = isDemo(ev.room_id);
+  const g = gateMessage({ roomId: ev.room_id, demo: demoRoom, sender: m.sender, handle: m.sender_name ?? null, owner: owner.owner_sender ?? null, meter, limiter });
+  if (!g.go) {
+    memory.addLive(ev.room_id, live);
+    console.log(`${g.why}: ${who} in ${roomNames.get(ev.room_id) ?? ev.room_id}${g.say ? ' (told once)' : ' (silent)'}`);
+    if (g.say) await poster.thread(ev.room_id, m.thread_id ?? m.message_id, g.say).catch((e) => console.error(`${g.why} line failed:`, (e as Error).message));
+    return;
+  }
   // A person: remember their display name → chat handle, so a call summary can tag them.
   if (m.sender_name && who) heard.set(m.sender_name, [{ name: who, handle: m.sender_name }, ...(firstOf(who) !== who ? [{ name: firstOf(who), handle: m.sender_name }] : [])]);
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
@@ -361,7 +398,10 @@ async function onEvent(ev: AgentBridgeEvent) {
     let textDone!: () => void;
     gate = new Promise<void>((r) => { textDone = r; });
     const opts: BriefOpts = {};
-    const v = voice && allowed(ev.room_id) ? voice : null; // a dry-run room gets no clip and no link (nothing paid for)
+    // A dry-run room gets no clip and no link (nothing paid for); nor does a public demo room.
+    const rf = roomFeatures(features, demoRoom);
+    const v = voice && allowed(ev.room_id) && (rf.audioBrief || rf.talkLink) ? voice : null;
+    if (demoRoom) opts.closing = ''; // no "talk it through" line where there is no voice
     void (async () => {
       try {
         const talk = v ? await v.talkClosing(rec, roomName, who, ev.room_id) : null;
@@ -373,6 +413,7 @@ async function onEvent(ev: AgentBridgeEvent) {
       } catch (e) { console.error('voice prep failed:', (e as Error).message); }
       try {
         const t = await runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts);
+        if (demoRoom && limiter && t.kind === 'brief') limiter.noteReply(ev.room_id, null);
         console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`);
       } catch (e) { console.error('brief crashed:', (e as Error).message); } finally { textDone(); }
     })();
@@ -384,7 +425,7 @@ async function joinRooms() {
   const me = unwrap(await op(null, 'get_my_context', {}).catch(() => null));
   if (me?.you?.name) selfNames.add(me.you.name);
   const rooms = ((await op(null, 'list_rooms', {})) as { result: { room_id: string; name: string; archived: boolean }[] }).result;
-  const live = rooms.filter((x) => !x.archived && (!listenPrefixes || listenPrefixes.some((p) => x.name.startsWith(p))));
+  const live = rooms.filter((x) => !x.archived && (!listenPrefixes || listenPrefixes.some((p) => x.name.startsWith(p)) || (!!demo && matchesRoom(x.name, demo.prefixes))));
   atomicWriteJson(roomsFile, live.map((r) => r.room_id));
   for (const r of live) {
     roomNames.set(r.room_id, r.name);

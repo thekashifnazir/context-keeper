@@ -172,7 +172,8 @@ async function failQuiet(
   const note = fatal
     ? `Context Keeper stopped: the model key was rejected or credit ran out (${error}). Nothing was posted.`
     : `Couldn't check this one: message ${inputs[0].message_id} from ${inputs[0].sender_name} in ${roomName}. I'll retry once in a minute.`;
-  if (notify || fatal) {
+  // The daily spend cap: the owner already had one note when it was reached; nothing per message.
+  if ((notify || fatal) && kind !== 'paused') {
     try {
       const id = await deps.poster.owner(note);
       if (deps.poster.ownerRoom) posts.push({ route: 'owner_private', room_id: deps.poster.ownerRoom.id, room_name: deps.poster.ownerRoom.name, thread_id: null, event_id: id, body: note });
