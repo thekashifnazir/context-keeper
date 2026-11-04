@@ -1,0 +1,56 @@
+{
+  "schema": "ck.robustness/1",
+  "run_id": "r20261104-1916-b591",
+  "model": "claude-opus-5-5",
+  "reviewer_model": "claude-opus-5-5",
+  "started_at": "2026-11-04T19:16:04.823Z",
+  "ended_at": "2026-11-04T19:19:02.771Z",
+  "results": [
+    {
+      "id": "R7a",
+      "title": "Caps → per-person demo limit",
+      "how": "the room is a demo room (CK_DEMO_ROOMS), CK_DEMO_PER_PERSON_HOUR=3; one person posts 5 eligible cases one at a time",
+      "pass_when": "the first 3 replied messages are answered; the next gets the limit line once; later ones get silence; each gated message is still seen",
+      "adapted": "CK_CAPS (3 posts per room, a batched owner-desk note for the rest) no longer exists. The current design caps per person in public demo rooms (src/agent/demo.ts): one limit line, then silence, no owner note; so this checks that instead.",
+      "status": "pass",
+      "evidence": [
+        "ok: L1: decided (reply A/covered), 1 reply post(s)",
+        "ok: L2: decided (reply A/parked), 1 reply post(s)",
+        "ok: L3: decided (reply A/covered), 1 reply post(s)",
+        "ok: L4: 0 decision line(s); thread \"You've hit the demo limit for now — try again in a bit.\" (want the limit line once)",
+        "ok: L5: 0 decision line(s); thread silent (want silence)",
+        "ok: 2 message(s) arrived over the limit",
+        "ok: agent log: 1 \"told once\" and 1 \"silent\" demo_limit line(s): every gated message was seen and kept in the room's record, none dropped unseen"
+      ]
+    },
+    {
+      "id": "R7b",
+      "title": "Caps → daily spend cap",
+      "how": "the room is a demo room; CK_DAILY_SPEND_CAP_USD=0.001 (below one model call's cost); 3 messages from one person, the 2nd and 3rd after the cap note",
+      "pass_when": "the owner desk gets the 80% note and the cap note once each; no model call is sent after the cap (the meter shows only the call that crossed it); the room gets the paused line once; later messages get silence. The first message's own call was sent before the cap, so its answer may post (spend.ts refuses only further calls); that is reported, not scored",
+      "adapted": "CK_CAPS no longer exists; the spend cap (src/agent/spend.ts) is the current global limit, so this checks it alongside R7a.",
+      "status": "pass",
+      "evidence": [
+        "ok: owner desk: 1 \"Spend at 80%\" and 1 \"Daily spend cap reached\" note(s)",
+        "ok: the agent's meter: 1 answered model call(s) under the cap (want 1: the call that crossed it)",
+        "ok: Q2, Q3 posted after the cap note; 0 of them reached the model",
+        "ok: Q2: \"The demo has paused for today — back tomorrow.\" (want the paused line once)",
+        "ok: Q3: 0 public post(s)",
+        "Q1 (its call crossed the cap): not decided, 0 public post(s)"
+      ]
+    }
+  ],
+  "cost": {
+    "trace_usd": 0.1118,
+    "trace_calls": 6,
+    "metered_usd": 0.1513,
+    "metered_calls": 7,
+    "note": "Metered = the agent's own spend meter (every answered model call, priced by src/agent/model.ts); the trace figure misses calls that never reached a trace line (killed mid-flight, replaced prefetches, the cap-crossing call)."
+  },
+  "incidents": [],
+  "versions": {
+    "sha": "bdd9ac2ab91480723dab27bfd37184054ae7d881",
+    "switch": "ok",
+    "mattermost": "11.9.0.28847360617.c473b66b835687963ea56067351ebc1fa6ee1bcfeab088033350f370a34020a5.false"
+  }
+}

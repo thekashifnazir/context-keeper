@@ -130,3 +130,7 @@ the eval (`npm run eval`), one run at a time, failures included; nobody edits th
 | Robustness R7b Caps → daily spend cap, r20261104-1906-01f3 | fail | `npm run eval -- --robustness` | a6c7820 | 2026-11-04T19:14:41.095Z |
 | Robustness R8 Missed while down, r20261104-1906-01f3 | pass | `npm run eval -- --robustness` | a6c7820 | 2026-11-04T19:14:41.095Z |
 | Robustness model spend in USD (est., metered), r20261104-1906-01f3 | 0.4620 | `npm run eval -- --robustness` | a6c7820 | 2026-11-04T19:14:41.095Z |
+| Robustness checks passed, r20261104-1916-b591 (testset/results/2026-11-04-robustness-claude-opus-5-5-2.json) | 2/2 | `npm run eval -- --robustness R7` | bdd9ac2 | 2026-11-04T19:19:02.861Z |
+| Robustness R7a Caps → per-person demo limit, r20261104-1916-b591 | pass | `npm run eval -- --robustness R7` | bdd9ac2 | 2026-11-04T19:19:02.861Z |
+| Robustness R7b Caps → daily spend cap, r20261104-1916-b591 | pass | `npm run eval -- --robustness R7` | bdd9ac2 | 2026-11-04T19:19:02.861Z |
+| Robustness model spend in USD (est., metered), r20261104-1916-b591 | 0.1513 | `npm run eval -- --robustness R7` | bdd9ac2 | 2026-11-04T19:19:02.861Z |
