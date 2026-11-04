@@ -370,7 +370,10 @@ function agentCommand(): string {
 function startAgent(runDir: string, traceFile: string, gapS: number, model: string | null, extra: Record<string, string>): ChildProcess {
   const cmd = agentCommand();
   const out = join(runDir, 'agent.log');
-  const child = spawn(cmd, { cwd: ROOT, shell: true, detached: true, env: { ...process.env, ...extra, CK_TRACE_FILE: traceFile, CK_CAPS: 'off', CK_BURST_GAP_S: String(gapS), ...(model ? { CK_MODEL: model } : {}) } });
+  // The agent's optional parts (src/agent/features.ts: job E, the audio brief, the talk link) are on by
+  // default for the demo; a scored run keeps them off unless this eval's own env sets them.
+  const features = Object.fromEntries(['CK_JOB_E', 'CK_AUDIO_BRIEF', 'CK_TALK_LINK'].map((k) => [k, process.env[k] || '0']));
+  const child = spawn(cmd, { cwd: ROOT, shell: true, detached: true, env: { ...process.env, ...features, ...extra, CK_TRACE_FILE: traceFile, CK_CAPS: 'off', CK_BURST_GAP_S: String(gapS), ...(model ? { CK_MODEL: model } : {}) } });
   child.stdout?.on('data', (d) => appendFileSync(out, d));
   child.stderr?.on('data', (d) => appendFileSync(out, d));
   return child;

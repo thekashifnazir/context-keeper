@@ -14,13 +14,21 @@
 // Owner desk (state/owner.json, or CK_OWNER_SENDER / CK_OWNER_DESK_ROOM): its messages never go to
 // job A; the owner's text reply there confirms a decision (B) or rules on a clash (D). A room_join
 // (Switch sends it just before the person's first message) marks them for a catch-up brief (C).
+// Optional parts, each on by default here and off in the eval runner (src/agent/features.ts):
+//   CK_JOB_E        job E: idea → "approve I<n>" in the owner desk → Claude Code in CK_BUILD_ROOM → the
+//                   raiser signs it off in the original thread (src/agent/handoff/, docs/handoff-live-test.md)
+//   CK_AUDIO_BRIEF  job C's audio clip under the text brief; CK_TALK_LINK its "talk it through" link and
+//                   the call summary afterwards (src/voice/live.ts; need ELEVENLABS_API_KEY)
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { SwitchEventStream, type AgentBridgeEvent, type MessagePayload } from '../../vendor/switch-agent-runtime/src/index.ts';
 import type { RoomJoinPayload } from '../../vendor/switch-agent-runtime/src/types.ts';
 import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
-import { briefTrigger, runBrief } from './jobs/brief.ts';
+import { briefTrigger, runBrief, type BriefOpts } from './jobs/brief.ts';
+import { featuresFromEnv } from './features.ts';
+import { HandleMemo, isAgentSender, noteNewIdeas, toHandoffMsg } from './handoff/dispatch.ts';
+import { handoffFromEnv } from './handoff/wire.ts';
 import { handleOwnerDesk } from './owner-desk.ts';
 import { PendingStore } from './pending.ts';
 import { loadEnv } from './env.ts';
@@ -30,6 +38,9 @@ import type { Poster } from './post.ts';
 import { systemPrompt } from './prompt.ts';
 import { loadDemoRoom, type RoomRecord } from './room.ts';
 import { AgentState, atomicWriteJson } from './state.ts';
+import { realEleven } from '../voice/eleven.ts';
+import { VoiceLive } from '../voice/live.ts';
+import { realSwitchMedia } from '../voice/post-audio.ts';
 
 loadEnv();
 const need = (k: string) => process.env[k] || (console.error(`missing ${k}`), process.exit(1));
@@ -45,7 +56,7 @@ const connectionId = readJson<{ id?: string }>(idFile, {}).id ?? randomUUID();
 atomicWriteJson(idFile, { id: connectionId });
 const posFile = `${SD}/agent-position.json`;
 const roomsFile = `${SD}/agent-rooms.json`;
-const ownerFile = readJson<{ owner_desk_room?: string; owner_sender?: string }>(`${SD}/owner.json`, {});
+const ownerFile = readJson<{ owner_desk_room?: string; owner_sender?: string; owner_handle?: string }>(`${SD}/owner.json`, {});
 const owner = { owner_desk_room: process.env.CK_OWNER_DESK_ROOM || ownerFile.owner_desk_room, owner_sender: process.env.CK_OWNER_SENDER || ownerFile.owner_sender };
 const prefixes = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean);
 const postPrefixes = prefixes(process.env.CK_POST_ROOMS ?? 'ck-smoke-,ck-eval-');
@@ -100,6 +111,44 @@ const deps: Deps = {
   onFatal: (why) => { stopped = true; console.error('fatal, stopping:', why); setTimeout(() => process.exit(2), 2000); },
 };
 
+const features = featuresFromEnv();
+const rememberRoom = (r: { id: string; name: string }) => {
+  roomNames.set(r.id, r.name);
+  atomicWriteJson(roomsFile, [...new Set([...readJson<string[]>(roomsFile, []), r.id])]); // declared at open after a restart
+  op(r.id, 'connect_to_room', { room_id: r.id }).then(() => console.log(`listening in ${r.name}${allowed(r.id) ? ' (posting on)' : ' (dry-run)'}`), (e) => console.error(`connect to ${r.name} failed:`, e.message));
+};
+// Job E: the same op(), guards and owner desk as everything else. CK_BUILD_ROOM must match CK_POST_ROOMS to be created.
+const handoff = features.jobE ? handoffFromEnv({
+  op, selfSenders,
+  canPost: allowed,
+  canCreate: (name) => postPrefixes.some((p) => name.startsWith(p)),
+  onRoom: rememberRoom,
+  owner: (body) => poster.owner(body),
+  ownerSender: owner.owner_sender ?? null,
+  ownerUsername: process.env.CK_OWNER_HANDLE || ownerFile.owner_handle || null,
+  ownerDeskRoom: owner.owner_desk_room ?? null,
+  file: `${SD}/handoff.json`,
+}) : null;
+const handles = new HandleMemo();
+if (handoff) setInterval(() => { if (!stopped) handoff.tick().catch((e) => console.error('job E tick:', e.message)); }, 60_000).unref();
+
+// Job C's voice half: the audio clip and the "talk it through" link. No key → text only.
+let eleven = null;
+if (features.audioBrief || features.talkLink) {
+  try { eleven = realEleven(); } catch (e) { console.warn(`voice off: ${(e as Error).message}`); }
+}
+const voice = eleven ? new VoiceLive({
+  claude: deps.claude, el: eleven, poster, state: deps.state, audio: features.audioBrief, talk: features.talkLink,
+  media: (roomId) => {
+    if (!sessions.has(roomId)) sessions.set(roomId, randomUUID());
+    return realSwitchMedia({ endpoint, agentId, token, connectionId, sessionId: sessions.get(roomId)! });
+  },
+  callsFile: `${SD}/voice-calls.json`,
+  log: (s) => console.log(s),
+}) : null;
+if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().catch((e) => console.error('voice tick:', e.message)); }, 60_000).unref();
+console.log(`features: job E ${handoff ? 'on' : 'off'}, audio brief ${voice && features.audioBrief ? 'on' : 'off'}, talk link ${voice?.talkAgentId() ? 'on' : 'off'}`);
+
 // The record per room: demo content plus live messages as they arrive.
 const records = new Map<string, RoomRecord>();
 function recordFor(roomId: string): RoomRecord | null {
@@ -137,6 +186,12 @@ async function run(roomId: string, inputs: Input[]) {
     const ctx = buildRoomContext(rec);
     const results = await decideWithRetry(deps, roomId, roomNames.get(roomId) ?? roomId, ctx, inputs);
     for (const r of results) if (r.trace) console.log(`decision ${r.trace.decision_id}: ${r.trace.kind} ${r.trace.items.map((i) => `${i.message_id}=${i.job}/${i.verdict ?? '-'}`).join(' ')}${r.trace.error ? ` (${r.trace.error})` : ''}`);
+    if (handoff) {
+      try {
+        const refs = await noteNewIdeas(handoff, roomId, roomNames.get(roomId) ?? roomId, inputs, results, handles);
+        if (refs.length) console.log(`job E: noted ${refs.join(', ')} for the owner`);
+      } catch (e) { console.error('job E note failed:', (e as Error).message); }
+    }
   } catch (e) {
     // A crash becomes a note, never a dead loop.
     console.error('decision crashed:', (e as Error).message);
@@ -157,6 +212,14 @@ async function onEvent(ev: AgentBridgeEvent) {
   const who = await displayName(m.sender, m.sender_name);
   const at = new Date(m.timestamp).toISOString();
   const input: Input = { message_id: m.message_id, sender: m.sender, sender_name: who, body: m.body, received_at: at, thread_id: m.thread_id ?? null };
+  // Job E first: "approve I<n>" in the owner desk, anything in a build room (Claude Code's report), and
+  // the raiser's sign-off in the original thread. Everything else falls through to jobs A to D.
+  if (handoff && !stopped) {
+    handles.set(m.message_id, m.sender_name);
+    try {
+      if (await handoff.onMessage(toHandoffMsg(ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, m, who, at))) return;
+    } catch (e) { console.error('job E handler crashed:', (e as Error).message); }
+  }
   if (ev.room_id === owner.owner_desk_room) {
     if (stopped) return;
     try {
@@ -166,15 +229,32 @@ async function onEvent(ev: AgentBridgeEvent) {
     return;
   }
   const rec = recordFor(ev.room_id);
-  if (m.sender_kind && m.sender_kind !== 'user') { rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null }); return; }
+  // Another agent's post (Claude Code's, say) is room context, never a proposal (PR11).
+  if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null }); return; }
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
   const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
   rec?.messages.push({ id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
   if (trig && rec) {
+    const roomName = roomNames.get(ev.room_id) ?? ev.room_id;
+    // The text brief goes first and job A waits for it; the audio clip follows in the background, and
+    // the brief's trace line (written once the clip is done) carries both posts.
+    let textDone!: () => void;
+    const textPosted = new Promise<void>((r) => { textDone = r; });
+    const opts: BriefOpts = {};
+    const v = voice && allowed(ev.room_id) ? voice : null; // a dry-run room gets no clip and no link (nothing paid for)
     try {
-      const t = await runBrief(deps, ev.room_id, roomNames.get(ev.room_id) ?? ev.room_id, buildRoomContext(rec), input, trig);
-      console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.error ? ` (${t.error})` : ''}`);
-    } catch (e) { console.error('brief crashed:', (e as Error).message); }
+      const talk = v ? await v.talkClosing(rec, roomName, who) : null;
+      if (talk) opts.closing = talk.closing;
+      if (v) opts.after = async ({ threadId, briefText }) => {
+        textDone();
+        return v.afterBrief({ roomId: ev.room_id, roomName, threadId, messageId: m.message_id, person: who, since: trig.since, briefText, talk: talk?.talk ?? null });
+      };
+    } catch (e) { console.error('voice prep failed:', (e as Error).message); }
+    runBrief(deps, ev.room_id, roomName, buildRoomContext(rec), input, trig, opts)
+      .then((t) => console.log(`brief ${t.decision_id} for ${who} (${trig.kind}): ${t.kind}${t.posts.length > 1 ? ` + ${t.posts.length - 1} voice post(s)` : ''}${t.error ? ` (${t.error})` : ''}`))
+      .catch((e) => console.error('brief crashed:', (e as Error).message))
+      .finally(() => textDone());
+    await textPosted;
   }
   enqueue(ev.room_id, input);
 }
@@ -190,6 +270,7 @@ async function joinRooms() {
   }
 }
 
+let resumed = false;
 const saved = readJson<Record<string, number> | null>(posFile, null);
 const stream = new SwitchEventStream({
   creds: { agentId, apiEndpoint: endpoint, token },
@@ -200,7 +281,18 @@ const stream = new SwitchEventStream({
   ...(saved ? { startPosition: saved } : {}),
   onEvent: (ev) => onEvent(ev).catch((e) => console.error('handler failed:', e.message)),
   onRooms: () => {},
-  onConnected: () => { console.log('connected'); joinRooms().catch((e) => console.error('joining rooms failed:', e.message)); },
+  onConnected: () => {
+    console.log('connected');
+    joinRooms()
+      .then(() => {
+        // Once per process, after the rooms are joined: finish a hand-off a restart interrupted (a step
+        // caught mid-send is never re-sent). Not on a reconnect: a step in flight in this process isn't torn.
+        if (!handoff || resumed) return;
+        resumed = true;
+        return handoff.resume();
+      })
+      .catch((e) => console.error('joining rooms failed:', e.message));
+  },
   onDisconnected: ({ error }) => console.warn('disconnected:', error),
   onGap: (g) => console.warn('gap (re-read the room with read_context):', g),
   onEvicted: (e) => { console.error('evicted:', e); process.exit(3); },

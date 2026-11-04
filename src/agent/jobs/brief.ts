@@ -7,7 +7,7 @@
 // every line must carry a quote that is verbatim in the record and that the reviewer accepts.
 // Once per person per room; never for the owner. A model error means no brief and no retry storm.
 import { randomUUID } from 'node:crypto';
-import { writeTrace, type TraceLine } from '../../shared/trace.ts';
+import { writeTrace, type TraceLine, type TracePost } from '../../shared/trace.ts';
 import type { RoomContext } from '../blocks.ts';
 import { callBrief, type Usage } from '../model.ts';
 import type { Deps, Input } from '../pipeline.ts';
@@ -42,7 +42,14 @@ export function briefTrigger(deps: Pick<Deps, 'state' | 'ownerSender' | 'selfSen
 
 export const TALK_IT_THROUGH = 'Want to talk it through? A short voice catch-up will be offered here soon.';
 
-export async function runBrief(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, input: Input, trigger: BriefTrigger): Promise<TraceLine> {
+/** Optional extras from the live listener (src/voice/live.ts): a closing line with the talk link, and a
+ *  step run once the text brief has posted (the audio clip), whose posts go on this brief's trace line. */
+export interface BriefOpts {
+  closing?: string;
+  after?: (posted: { threadId: string; briefText: string }) => Promise<{ posts: TracePost[]; events: string[]; usage: Usage[] }>;
+}
+
+export async function runBrief(deps: Deps, roomId: string, roomName: string, ctx: RoomContext, input: Input, trigger: BriefTrigger, opts: BriefOpts = {}): Promise<TraceLine> {
   const usages: Usage[] = [];
   const threadId = input.thread_id ?? input.message_id;
   const name = firstName(input.sender_name);
@@ -54,11 +61,21 @@ export async function runBrief(deps: Deps, roomId: string, roomName: string, ctx
     const { lines, usage } = await callBrief(deps.claude, deps.cfg, deps.system, ctx, { name: input.sender_name, kind: trigger.kind, since: trigger.since, first_message: input.body });
     usages.push(usage);
     const opening = trigger.kind === 'returner' ? `Welcome back, ${name}. Here's what changed while you were away:` : `Welcome, ${name}. A quick catch-up on where things stand:`;
-    const r = await postBrief(deps, ctx, { roomId, roomName, threadId, opening, closing: TALK_IT_THROUGH, lines });
+    const r = await postBrief(deps, ctx, { roomId, roomName, threadId, opening, closing: opts.closing ?? TALK_IT_THROUGH, lines });
     if (r.usage) usages.push(r.usage);
     posts = r.posts;
     sources = r.sources;
-    error = [r.error, ...r.events].filter(Boolean).join('; ') || null;
+    const extra: string[] = [];
+    const text = posts.find((p) => p.route !== 'owner_private');
+    if (text && opts.after) {
+      try {
+        const x = await opts.after({ threadId, briefText: text.body });
+        posts = [...posts, ...x.posts];
+        usages.push(...x.usage);
+        extra.push(...x.events);
+      } catch (e) { extra.push(`after_brief_failed: ${(e as Error).message}`); }
+    }
+    error = [r.error, ...r.events, ...extra].filter(Boolean).join('; ') || null;
   } catch (e) {
     error = `brief_model_error: ${(e as Error).message}`;
   }
