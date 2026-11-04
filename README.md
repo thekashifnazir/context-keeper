@@ -4,7 +4,7 @@
 
 Your team chat's memory: it answers with the source, catches you up, and turns new ideas into work.
 
-**Built around Slack.** The [Discord channel](#try-it) is an extremely simplified demo you can try yourself; the full version (voice, audio briefs, Claude Code builds, sign-offs) runs in Slack.
+**Built around Slack.** The [Discord channel](#try-it) is a simplified demo you can try yourself (answers and voice); the full version (Claude Code builds, stage updates, sign-offs) runs in Slack.
 
 Demo video (under 3 min): [NEED demo video URL] · Blog post: [NEED blog URL] · Track 01: Best Business Workflow · Built for Flip the Switch, 3–7 Nov 2026 (UK)
 
@@ -64,18 +64,18 @@ The trust rule: it never says "already covered" without a quote that code has ch
 **Context Keeper is built around Slack.** That's where the full version runs for the team in the demo video: cited answers, catch-up briefs with a voice call, ideas approved by the owner and built by Claude Code in a new build channel, stage updates, and the person who asked signing it off.
 
 > [!IMPORTANT]
-> **The Discord channel is an extremely simplified demo.** Voice catch-ups, audio briefs, ideas built by Claude Code, stage updates and sign-offs all run in **Slack**, the full version shown in the demo video. If something isn't in the Discord demo, that's because it's switched off there, not because Context Keeper can't do it.
+> **The Discord channel is a simplified demo.** It has cited answers and voice (an audio brief and a "talk it through" call, under a daily cap). Ideas built by Claude Code, stage updates and sign-offs run in **Slack**, the full version shown in the demo video. If something isn't in the Discord demo, that's because it's switched off there, not because Context Keeper can't do it.
 
-**The Discord channel is a simplified version, so you can try it yourself.** It's the same agent on the same Switch server, with the same Ledgerly record, but only the answering part is switched on:
+**The Discord channel is a simplified version, so you can try it yourself.** It's the same agent on the same Switch server, with the same Ledgerly record, but Claude Code builds are switched off:
 
 | | Slack (full version) | Discord demo |
 |---|---|---|
 | Cited answers, staying quiet on chatter | ✅ | ✅ |
-| Catch-up briefs | ✅ text, audio clip and a voice call | ✅ text only |
+| Catch-up briefs | ✅ text, audio clip and a voice call | ✅ text + audio |
 | Decisions logged, clashes flagged to the owner | ✅ | ✅ |
-| New ideas → owner approval → Claude Code builds → sign-off | ✅ | ❌ off |
-| Voice "talk it through" | ✅ | ❌ off |
-| Limits | none for the team | 6 replies per person per hour, daily spend cap |
+| New ideas → owner approval → Claude Code builds → sign-off | ✅ | ❌ off (shown in the video; it needs the owner's approval clicks) |
+| Voice "talk it through" | ✅ | ✅ audio brief + voice call (daily cap) |
+| Limits | none for the team | 6 replies per person per hour, one voice brief per person per day, daily spend cap |
 
 - Discord demo: https://discord.gg/ygPnp7bj5 (set up by [docs/demo-channel.md](docs/demo-channel.md))
 - **Want the full version?** It wires into your own Slack workspace through Switch's Slack bridge: see [How the channels are set up](#how-the-channels-are-set-up) and [Run it](#run-it).
@@ -391,7 +391,7 @@ Repo map: [src/agent/](src/agent/) the agent · [src/voice/](src/voice/) voice �
 | People decide | The owner confirms decisions, rules on clashes and approves ideas; only the raiser or the owner can sign work off |
 | Claude Code's reach | Auto mode off, each step needs "Allow once", one throwaway demo repo only, its own build room (never the team's chat). Context Keeper never replies to Claude Code in the build room, so two agents can't loop |
 | Where it can post | Only rooms on its post list (`CK_POST_ROOMS`); elsewhere it's a dry run. `CK_PAUSE=1` keeps it reading but never posting |
-| Public demo room | Jobs A to D only (no builds, no voice); 6 replies and 20 decisions per person per hour, 40 replies per room per hour |
+| Public demo room | Jobs A to D only (no builds); voice only with `CK_DEMO_VOICE=1`, at most 15 clips + links a day and one voice brief per person; 6 replies and 20 decisions per person per hour, 40 replies per room per hour |
 | Spend cap | `CK_DAILY_SPEND_CAP_USD` counts every model call: a note to the owner at 80%, no model calls at 100% until midnight UTC |
 | Secrets and restarts | No keys in git; on the VM only SSH is open. Each hand-off step is sent at most once, so a restart can't open a duplicate issue |
 

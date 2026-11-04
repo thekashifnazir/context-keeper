@@ -14,7 +14,9 @@ Allow about 20 minutes. Discord steps are in the Discord app; Switch and agent s
 |---|---|
 | Job A (cited answers), B (decisions, sent to your owner desk to confirm), C (catch-up brief on someone's first message), D (clash checks) | on, unchanged; chit-chat still gets no reply |
 | Job E (idea → Claude Code build) | **off** in that room, whatever `CK_JOB_E` says |
-| Voice (audio clip, "talk it through" link) | **off** in that room, whatever `CK_AUDIO_BRIEF` / `CK_TALK_LINK` say; no ElevenLabs spend |
+| Voice (audio clip, "talk it through" link) | **off** unless `CK_DEMO_VOICE=1`; then it follows `CK_AUDIO_BRIEF` / `CK_TALK_LINK`, capped (below) |
+| Voice caps (with `CK_DEMO_VOICE=1`) | at most 15 audio clips + talk links a UTC day across all demo rooms (`CK_DEMO_VOICE_PER_DAY`; a brief with both counts 2), and one voice brief per person a day |
+| Over a voice cap | the text brief still posts, ending "Voice catch-ups have hit today's demo limit — back tomorrow." instead of the link |
 | Replies per person | at most 6 an hour (`CK_DEMO_PER_PERSON_HOUR`) |
 | Decisions per person, silent ones included | at most 20 an hour (`CK_DEMO_TRIES_PER_PERSON_HOUR`); each one is a model call |
 | Replies in the room | at most 40 an hour, catch-up briefs included (`CK_DEMO_PER_ROOM_HOUR`) |
@@ -22,7 +24,7 @@ Allow about 20 minutes. Discord steps are in the Discord app; Switch and agent s
 | Daily spend cap reached (`CK_DAILY_SPEND_CAP_USD`) | one line per room, "The demo has paused for today — back tomorrow.", then silence until 00:00 UTC |
 
 The owner (your Switch sender id from `state/owner.json`) and anyone in `CK_DEMO_EXEMPT` are never
-limited. The spend cap counts **every** model call, Slack rooms included: at the cap Slack goes
+limited (for voice: no one-a-day limit, but their clips and links still count towards the day's total). The spend cap counts **every** model call, Slack rooms included: at the cap Slack goes
 quiet as well, and the owner desk gets one note (plus one at 80%). Counts and spend are saved in
 `state/demo-limits.json` and `state/spend.json`, so a restart doesn't reset them.
 
@@ -110,7 +112,26 @@ Environment=CK_DAILY_SPEND_CAP_USD=6
 Environment=CK_DEMO_EXEMPT=<your Discord handle>
 # optional, defaults shown
 Environment=CK_DEMO_PER_PERSON_HOUR=6
+# voice in the demo room (audio brief + talk link), capped per UTC day; leave out for text only
+Environment=CK_DEMO_VOICE=1
+Environment=CK_DEMO_VOICE_PER_DAY=15
 ```
+
+Voice counts sit in `state/demo-limits.json` next to the hourly limits (`voice: { day, total,
+people }`), so a restart doesn't reset them. A slot is taken when the brief is prepared, before any
+ElevenLabs call, so a failed clip or a brief re-run after a restart still counts (it never
+under-counts). The talk link carries the demo room's id (`var_room_id`), so the `whats_new` live tool
+answers about the demo room, and the short `/talk/<id>` link works there as in Slack.
+
+**One talk agent for every room.** There is a single ElevenLabs talk agent, and each brief's talk
+link refreshes its prompt from that brief's room (then the minute tick keeps it on the newest open
+link's room). So a demo-room brief **does** overwrite the prompt a Slack person's link would get: a
+Slack caller who starts their call after a judge's brief hears the demo room's snapshot. A call
+already in progress keeps the prompt it started with, and `whats_new` still reads the caller's own
+room from their link. Both rooms carry the same Ledgerly record, so what the agent says is
+equivalent; the difference is only room-specific chat (the room's label in the greeting, messages
+posted in one room and not the other) until `whats_new` is called. Accepted for the demo rather
+than one agent per room.
 
 The demo room doesn't need adding to `CK_POST_ROOMS` or `CK_LISTEN_ROOMS`: `CK_DEMO_ROOMS` opts it
 in. Keep `CK_POST_OWNER=1`, or the 80% and cap notes only reach the log. Then:

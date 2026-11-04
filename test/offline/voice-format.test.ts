@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { briefOpening, runBrief, TALK_IT_THROUGH } from '../../src/agent/jobs/brief.ts';
+import { VOICE_CAP_LINE } from '../../src/agent/demo.ts';
 import type { Eleven, ElevenResponse } from '../../src/voice/eleven.ts';
 import { VoiceLive, talkLine, TALK_LABEL } from '../../src/voice/live.ts';
 import { SPOKEN_SYSTEM, spokenClean } from '../../src/voice/script.ts';
@@ -110,6 +111,20 @@ describe('the brief: a short, named talk link and a scannable layout (Kash: "sho
     // what Slack gets through Switch: bold, and a link that shows its label
     expect(slackRender(lines[0])).toBe("👋 *Welcome back, Rowan* · here's what changed while you were away");
     expect(slackRender(lines.at(-1)!)).toBe(`🎧 *Talk it through* · <${BASE}/talk/${id}|${TALK_LABEL}> (up to 10 min). I'll post a summary here after.`);
+  });
+
+  it('a demo room: its short link resolves to a talk URL naming the demo room (whats_new reads that room); over the demo voice cap the brief ends with the cap line', async () => {
+    const s = voice();
+    const t = (await s.v.talkClosing(room, 'Guild: try-context-keeper', 'Rowan', 'demo-room'))!;
+    const target = new URL(s.v.talkTarget(t.talk.shortId!)!);
+    expect(target.searchParams.get('var_room_id')).toBe('demo-room');
+    const capped = voice({ claude: briefClaude() });
+    const input = msg('r1', 'Morning all, back today', '@switch-discord-x-rowan:localhost', 'Rowan', { received_at: capped.now().toISOString() });
+    await runBrief(capped.deps, 'demo-room', 'Guild: try-context-keeper', ctx, input, { kind: 'returner', since: '2026-10-07T09:00:00+01:00' }, { closing: VOICE_CAP_LINE });
+    const lines = capped.poster.pub()[0].body.split('\n');
+    expect(lines.at(-1)).toBe(VOICE_CAP_LINE);
+    expect(lines.join('\n')).not.toContain('Talk it through');
+    expect(capped.poster.pub()).toHaveLength(1); // the text brief only: no clip
   });
 
   it('a joiner gets the same layout; ids are random per link', async () => {

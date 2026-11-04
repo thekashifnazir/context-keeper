@@ -3,8 +3,12 @@
 // A prefix matches the room's full Switch name ("Guild: try-context-keeper") or the channel part after
 // the last ": " ("try-context-keeper"). In a demo room:
 //   - jobs A to D run as anywhere else, answers cite the seeded record, quiet-on-chatter rules unchanged;
-//   - job E (Claude Code hand-off) and voice (audio clip, talk link) are off whatever the global flags
-//     say, so nobody there can start a build or spend ElevenLabs credit;
+//   - job E (Claude Code hand-off) is off whatever the global flags say, so nobody there can start a
+//     build. Voice (audio clip, talk link) is off too unless CK_DEMO_VOICE=1; then it follows the
+//     global flags, capped: CK_DEMO_VOICE_PER_DAY (default 15) audio clips + talk links per UTC day
+//     across all demo rooms (a brief with both counts 2), and one voice brief per person per day (the
+//     owner and CK_DEMO_EXEMPT count towards the day's total only). Over a cap the text brief still
+//     posts, with VOICE_CAP_LINE instead of the talk link;
 //   - per-person limits: at most CK_DEMO_PER_PERSON_HOUR replies (default 6) and
 //     CK_DEMO_TRIES_PER_PERSON_HOUR decisions, silent ones included (default 20, each costs a model
 //     call), per person per rolling hour; at most CK_DEMO_PER_ROOM_HOUR replies per room (default 40,
@@ -21,9 +25,10 @@ import { atomicWriteJson } from './state.ts';
 
 export const LIMIT_LINE = "You've hit the demo limit for now — try again in a bit.";
 export const PAUSED_LINE = 'The demo has paused for today — back tomorrow.';
+export const VOICE_CAP_LINE = "Voice catch-ups have hit today's demo limit — back tomorrow.";
 const HOUR = 3_600_000;
 
-export interface DemoConfig { prefixes: string[]; perPersonHour: number; triesPerPersonHour: number; perRoomHour: number; exempt: Set<string> }
+export interface DemoConfig { prefixes: string[]; perPersonHour: number; triesPerPersonHour: number; perRoomHour: number; exempt: Set<string>; voice?: boolean; voicePerDay?: number }
 
 const list = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 const int = (v: string | undefined, d: number) => { const n = Number(v); return v && Number.isFinite(n) && n >= 0 ? Math.floor(n) : d; };
@@ -38,6 +43,8 @@ export function demoConfigFromEnv(env: NodeJS.ProcessEnv = process.env): DemoCon
     triesPerPersonHour: int(env.CK_DEMO_TRIES_PER_PERSON_HOUR, 20),
     perRoomHour: int(env.CK_DEMO_PER_ROOM_HOUR, 40),
     exempt: new Set(list(env.CK_DEMO_EXEMPT)),
+    voice: env.CK_DEMO_VOICE === '1',
+    voicePerDay: int(env.CK_DEMO_VOICE_PER_DAY, 15),
   };
 }
 
@@ -48,12 +55,33 @@ export function matchesRoom(name: string, prefixes: string[]): boolean {
   return prefixes.some((p) => name.startsWith(p) || channel.startsWith(p));
 }
 
-/** What a room may use: in a demo room, job E and voice are off regardless of the global flags. */
-export function roomFeatures(f: Features, demo: boolean): Features {
-  return demo ? { jobE: false, audioBrief: false, talkLink: false } : f;
+/** What a room may use: in a demo room, job E is off regardless of the global flags, and voice is
+ *  too unless `voice` (CK_DEMO_VOICE=1), when it follows the global flags (the daily caps are
+ *  DemoLimiter.takeVoice's). */
+export function roomFeatures(f: Features, demo: boolean, voice = false): Features {
+  if (!demo) return f;
+  return { jobE: false, audioBrief: voice && f.audioBrief, talkLink: voice && f.talkLink };
 }
 
-interface LimitsFile { tries: Record<string, number[]>; replies: Record<string, number[]>; room: Record<string, number[]>; notified: Record<string, number> }
+/** A brief's voice in a room, given what the room may use (roomFeatures) and whether a talk agent
+ *  exists. `voice`: run the clip / link at all. `closing`: the brief's closing line to force ('' = no
+ *  talk line, VOICE_CAP_LINE over a demo cap), or undefined to keep the usual one. Outside a demo room
+ *  it only says whether any voice part is on. Takes the demo voice cap (takeVoice) when it says yes. */
+export function briefVoice(o: {
+  demo: boolean; rf: Features; talkAgent: boolean; limiter: DemoLimiter | null;
+  sender: string; handle?: string | null; owner?: string | null;
+}): { voice: boolean; closing?: string; capped?: true } {
+  const on = o.rf.audioBrief || o.rf.talkLink;
+  if (!o.demo) return { voice: on };
+  if (!on) return { voice: false, closing: '' }; // no "talk it through" line where there is no voice
+  const units = (o.rf.audioBrief ? 1 : 0) + (o.rf.talkLink && o.talkAgent ? 1 : 0);
+  if (o.limiter && !o.limiter.takeVoice(o.sender, units, o.handle ?? null, o.owner ?? null)) return { voice: false, closing: VOICE_CAP_LINE, capped: true };
+  return { voice: true, closing: '' }; // the talk link, when it's made, replaces this
+}
+
+/** Voice spend in demo rooms for one UTC day: clips + links in total, and voice briefs per person. */
+interface VoiceDay { day: string; total: number; people: Record<string, number> }
+interface LimitsFile { tries: Record<string, number[]>; replies: Record<string, number[]>; room: Record<string, number[]>; notified: Record<string, number>; voice?: VoiceDay }
 
 export type LimitCheck = 'ok' | 'notify' | 'silent';
 
@@ -92,6 +120,30 @@ export class DemoLimiter {
     this.save();
     return 'notify';
   }
+
+  private voiceDay(): VoiceDay {
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    if (this.d.voice?.day !== day) this.d.voice = { day, total: 0, people: {} };
+    return this.d.voice;
+  }
+
+  /** May this person's brief carry voice? `units`: the clips + links it would use (1 or 2). True:
+   *  counted and saved now (before any ElevenLabs call, so a crash never under-counts). False: over
+   *  the day's total (CK_DEMO_VOICE_PER_DAY) or this person already had a voice brief today. */
+  takeVoice(sender: string, units: number, handle: string | null = null, owner: string | null = null): boolean {
+    if (units <= 0) return true;
+    const v = this.voiceDay();
+    const cap = this.cfg.voicePerDay ?? 15;
+    const exempt = this.exempt(sender, handle, owner);
+    if (v.total + units > cap || (!exempt && (v.people[sender] ?? 0) >= 1)) { this.save(); return false; }
+    v.total += units;
+    if (!exempt) v.people[sender] = (v.people[sender] ?? 0) + 1;
+    this.save();
+    return true;
+  }
+
+  /** Clips + links used today across the demo rooms. */
+  voiceUsedToday(): number { return this.voiceDay().total; }
 
   /** A decision ran for this person (a model call, whether or not it replied). */
   noteTry(roomId: string, sender: string) { this.push(this.d.tries, `${roomId}|${sender}`); this.save(); }

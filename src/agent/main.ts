@@ -34,6 +34,8 @@
 // Public demo rooms and spend (both off when unset; docs/demo-channel.md):
 //   CK_DEMO_ROOMS          rooms open to the public: jobs A–D only, per-person and per-room hourly limits
 //                          (src/agent/demo.ts); listened to and posted in without CK_LISTEN/POST_ROOMS
+//   CK_DEMO_VOICE=1        voice (audio clip, talk link) in demo rooms too, capped per UTC day:
+//   CK_DEMO_VOICE_PER_DAY  clips + links across demo rooms (default 15), one voice brief per person
 //   CK_DAILY_SPEND_CAP_USD estimated model spend per UTC day (src/agent/spend.ts, state/spend.json):
 //                          one owner note at 80%, at 100% no more model calls until 00:00 UTC
 import { randomUUID } from 'node:crypto';
@@ -45,7 +47,7 @@ import { displayName } from '../names.ts';
 import { buildRoomContext } from './blocks.ts';
 import { briefTrigger, resumableBriefs, runBrief, type BriefOpts, type BriefTrigger } from './jobs/brief.ts';
 import { featuresFromEnv } from './features.ts';
-import { demoConfigFromEnv, DemoLimiter, gateMessage, matchesRoom, roomFeatures } from './demo.ts';
+import { briefVoice, demoConfigFromEnv, DemoLimiter, gateMessage, matchesRoom, roomFeatures } from './demo.ts';
 import { meteredClaude, spendMeterFromEnv, spendNote } from './spend.ts';
 import { StatusPage } from './status.ts';
 import { gapConfigFromEnv, quietGapMs } from './burst.ts';
@@ -244,7 +246,7 @@ if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().c
 // finished a call" lands soon after hanging up. No network otherwise.
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.quickTick().catch((e) => console.error('voice quick tick:', e.message)); }, 10_000).unref();
 console.log(`features: job E ${handoff ? 'on' : 'off'}, audio brief ${voice && features.audioBrief ? 'on' : 'off'}, talk link ${voice?.talkAgentId() ? 'on' : 'off'}`);
-if (demo) console.log(`demo rooms: ${demo.prefixes.join(', ')} (jobs A–D only; ${demo.perPersonHour} replies and ${demo.triesPerPersonHour} decisions per person per hour, ${demo.perRoomHour} replies per room per hour)`);
+if (demo) console.log(`demo rooms: ${demo.prefixes.join(', ')} (jobs A–D${demo.voice ? ` + voice, ${demo.voicePerDay} clips/links a day` : ''} only; ${demo.perPersonHour} replies and ${demo.triesPerPersonHour} decisions per person per hour, ${demo.perRoomHour} replies per room per hour)`);
 if (meter) console.log(`spend today: $${meter.spent().toFixed(2)}${meter.cap !== null ? ` of a $${meter.cap.toFixed(2)} daily cap${meter.capped() ? ' (capped: model calls paused until 00:00 UTC)' : ''}` : ' (no cap)'}`);
 
 // The record per room, from Switch (loaded on the room's first message, refreshed before each decision).
@@ -365,10 +367,13 @@ function startBrief(roomId: string, rec: RoomRecord, input: Input, trig: BriefTr
   let textDone!: () => void;
   const gate = new Promise<void>((r) => { textDone = r; });
   const opts: BriefOpts = {};
-  // A dry-run room gets no clip and no link (nothing paid for); nor does a public demo room.
-  const rf = roomFeatures(features, demoRoom);
-  const v = voice && allowed(roomId) && (rf.audioBrief || rf.talkLink) ? voice : null;
-  if (demoRoom) opts.closing = ''; // no "talk it through" line where there is no voice
+  // A dry-run room gets no clip and no link (nothing paid for); nor does a public demo room, unless
+  // CK_DEMO_VOICE=1 and the day's demo voice caps (demo.ts takeVoice) have room for this person.
+  const rf = roomFeatures(features, demoRoom, !!demo?.voice);
+  const bv = voice && allowed(roomId) ? briefVoice({ demo: demoRoom, rf, talkAgent: !!voice.talkAgentId(), limiter, sender: input.sender, handle, owner: owner.owner_sender ?? null }) : { voice: false, ...(demoRoom ? { closing: '' } : {}) };
+  const v = bv.voice ? voice : null;
+  if (bv.closing !== undefined) opts.closing = bv.closing;
+  if ('capped' in bv && bv.capped) console.log(`demo voice cap: no voice for ${who} in ${roomName} (${limiter?.voiceUsedToday()} of ${demo?.voicePerDay} used today)`);
   void (async () => {
     try {
       const talk = v ? await v.talkClosing(rec, roomName, who, roomId) : null;
