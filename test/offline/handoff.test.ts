@@ -10,7 +10,7 @@ import { HandoffStore, type StepName } from '../../src/agent/handoff/store.ts';
 import type { CreateRoomSpec, HandoffSwitch, RoomRef } from '../../src/agent/handoff/switch.ts';
 import { handleFromSender } from '../../src/agent/handoff/wire.ts';
 import { isBareAnswer, parseApproval, parseSignoff, quoteBlock, readReport, stripMentions } from '../../src/agent/handoff/text.ts';
-import { readTrace, type TraceLine } from '../../src/shared/trace.ts';
+import { handoffStep, readTrace, type TraceLine } from '../../src/shared/trace.ts';
 
 const OWNER = '@switch-slack-b1-owner_demo:localhost';
 const ROWAN = '@switch-slack-b1-rowan_demo:localhost';
@@ -83,7 +83,7 @@ function chain(extra: Partial<ChainConfig> = {}): HandoffChain {
   });
 }
 const traces = (): TraceLine[] => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8')) : []);
-const steps = () => traces().map((t) => t.decision_id.split(':')[1]);
+const steps = () => traces().map((t) => handoffStep(t));
 const buildRoom = () => sw.rooms.get('ledgerly-build')!;
 
 const idea: HandoffMsg = {
@@ -158,10 +158,12 @@ describe('job E: the full chain', () => {
 
     // every step traced as ck.trace/1, in order
     expect(steps()).toEqual(['noted', 'approved', 'build_room_created', 'context_posted', 'handed_off', 'announced', 'progress', 'signoff_requested', 'signoff_ignored', 'signed_off']);
-    const signed = traces().find((t) => t.decision_id.startsWith('E:signed_off:'))!;
+    const signed = traces().find((t) => handoffStep(t) === 'signed_off')!;
     expect(signed.inputs[0].sender).toBe('Rowan');
-    expect(signed.items[0].message_id).toBe('m-idea');
-    expect(traces().find((t) => t.decision_id.startsWith('E:signoff_ignored:'))!.kind).toBe('silence');
+    expect(signed.items[0]).toMatchObject({ message_id: 'm-idea', job: 'E' });
+    expect(signed.handoff).toMatchObject({ step: 'signed_off', ref: 'I1', key: 'E:room-pilot:m-idea', attempt: 1, status: 'signed_off', build_room: { name: 'ledgerly-build' }, target_status: 'live' });
+    expect(signed.decision_id).not.toMatch(/^E:/); // the step lives in handoff.step now, not the id
+    expect(traces().find((t) => handoffStep(t) === 'signoff_ignored')!.kind).toBe('silence');
 
     // code rules: no @-mention of the agent we reply to, nothing bare in the build room, nothing said back to Claude Code
     for (const p of sw.posts) expect(p.body).not.toMatch(/@claude-code/i);
@@ -332,7 +334,7 @@ describe('job E: restarts', () => {
     await e.noteIdea(idea, sources);
     await e.onMessage(desk('approve I1'));
     expect(e.store.byRef('I1')!.status).toBe('stalled');
-    expect(traces().find((t) => t.decision_id.startsWith('E:stalled:'))!.error).toContain('503');
+    expect(traces().find((t) => handoffStep(t) === 'stalled')!.error).toContain('503');
     await e.tick();
     expect(sw.targeted).toHaveLength(1);
     expect(sw.created).toHaveLength(1);

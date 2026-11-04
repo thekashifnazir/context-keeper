@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalise, quoteVerified } from '../../src/shared/quote.ts';
-import { readTrace, TraceLine } from '../../src/shared/trace.ts';
+import { handoffStep, readTrace, TraceLine } from '../../src/shared/trace.ts';
 
 describe('quote rule', () => {
   it('normalises case, markup, quotes and spacing', () => {
@@ -26,5 +26,20 @@ describe('trace', () => {
   it('reads lines back and skips a torn last line', () => {
     const text = JSON.stringify(line) + '\n' + JSON.stringify(line).slice(0, 20);
     expect(readTrace(text)).toHaveLength(1);
+  });
+  it('job E: a line with a handoff object parses; an old line without one still does, and both give their step', () => {
+    const e: TraceLine = {
+      ...line, decision_id: 'uuid-1', kind: 'owner_note',
+      items: [{ ...line.items[0], job: 'E' }],
+      handoff: { step: 'noted', ref: 'I1', key: 'E:r:m1', attempt: 1, status: 'noted', build_room: null, target_status: null },
+    };
+    const old = { ...line, decision_id: 'E:handed_off:I1:ab12cd34' }; // written before 5 Nov: job 'none', step in the id
+    const [a, b, c] = readTrace([e, old, line].map((l) => JSON.stringify(l)).join('\n'));
+    expect(handoffStep(a)).toBe('noted');
+    expect(a.items[0].job).toBe('E');
+    expect(handoffStep(b)).toBe('handed_off');
+    expect(b.handoff).toBeUndefined();
+    expect(handoffStep(c)).toBeNull();
+    expect(() => TraceLine.parse({ ...e, handoff: { ...e.handoff!, step: 'made_up' } })).toThrow();
   });
 });

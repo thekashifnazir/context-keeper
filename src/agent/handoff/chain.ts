@@ -13,13 +13,14 @@
 //   orig thread  the raiser's (or owner's) text reply: "looks right" → signed_off, "not quite, …"
 //                → reopened. Anyone else's reply is ignored (and traced).
 //   tick()       no report within CK_HANDOFF_TIMEOUT_MIN → said in the original thread
+// Each step writes one ck.trace/1 line with job 'E' items and a `handoff` object (step, ref, status).
 //
 // Code rules: one hand-off per idea (idempotency key in state/; "approve I3 again" only after it
 // failed, timed out or was reopened); each step at most once across restarts (store.ts); never
 // @-mention an agent we reply to; never a bare yes/no in the build room (the approval cards live
 // there); nothing posted in reply to Claude Code at all (no loop); every step writes ck.trace/1.
 import { randomUUID } from 'node:crypto';
-import { writeTrace, type TraceItem, type TraceLine, type TracePost } from '../../shared/trace.ts';
+import { writeTrace, type HandoffStep, type TraceItem, type TraceLine, type TracePost } from '../../shared/trace.ts';
 import { looksInjected } from '../pipeline.ts';
 import type { HandoffSwitch } from './switch.ts';
 import { freshSteps, ideaKey, STEPS, type HandoffStore, type IdeaRecord, type Source, type Status, type StepName } from './store.ts';
@@ -75,13 +76,12 @@ export class HandoffChain {
   isBuildRoom(roomId: string) { return this.c.store.isBuildRoom(roomId); }
 
   // ---- trace ---------------------------------------------------------------------------------------
-  private trace(step: string, rec: IdeaRecord | null, room: { id: string; name: string }, inputs: HandoffMsg[], posts: TracePost[], error: string | null = null): TraceLine {
-    const item = (r: IdeaRecord): TraceItem => ({ message_id: r.message_id, job: 'none', verdict: null, restriction: null, clashes_with: null, sources: r.sources, decision_record: null, brief_for: null });
+  private trace(step: HandoffStep, rec: IdeaRecord | null, room: { id: string; name: string }, inputs: HandoffMsg[], posts: TracePost[], error: string | null = null): TraceLine {
+    const item = (r: IdeaRecord): TraceItem => ({ message_id: r.message_id, job: 'E', verdict: null, restriction: null, clashes_with: null, sources: r.sources, decision_record: null, brief_for: null });
     const line: TraceLine = {
       schema: 'ck.trace/1',
       ts: this.now().toISOString(),
-      // ck.trace/1 has no job E fields yet (requested from foundation): the step rides in the id.
-      decision_id: `E:${step}:${rec?.ref ?? '-'}:${randomUUID().slice(0, 8)}`,
+      decision_id: randomUUID(),
       room_id: room.id,
       room_name: room.name,
       kind: posts.some((p) => p.route !== 'owner_private') ? 'reply' : posts.length ? 'owner_note' : 'silence',
@@ -92,6 +92,10 @@ export class HandoffChain {
       posts,
       model: null,
       error,
+      handoff: {
+        step, ref: rec?.ref ?? null, key: rec?.key ?? null, attempt: rec?.attempt ?? null, status: rec?.status ?? null,
+        build_room: rec?.build_room ?? null, target_status: rec?.target_status ?? null,
+      },
     };
     writeTrace(line, this.c.traceFile);
     return line;
@@ -217,7 +221,7 @@ export class HandoffChain {
           if (BEST_EFFORT.includes(step)) {
             rec.steps[step] = 'unknown';
             this.c.store.put(rec);
-            this.trace(`${step}_failed`, rec, this.origin(rec), [], [], err);
+            this.trace(`${step}_failed` as HandoffStep, rec, this.origin(rec), [], [], err);
             continue;
           }
           rec.steps[step] = 'pending';
@@ -261,7 +265,7 @@ export class HandoffChain {
       this.c.store.setBuildRoom(name, room);
       rec.build_room = room;
       this.c.store.put(rec);
-      this.trace(`build_room_${how}`, rec, room, [], []);
+      this.trace(how === 'created' ? 'build_room_created' : 'build_room_reused', rec, room, [], []);
       return;
     }
     const build = rec.build_room!;

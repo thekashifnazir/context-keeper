@@ -31,7 +31,7 @@ export function upgradeDecisionRecord(v: unknown): unknown {
 }
 const Item = z.object({
   message_id: z.string(),
-  job: z.enum(['A', 'B', 'D', 'none']),
+  job: z.enum(['A', 'B', 'D', 'E', 'none']),
   verdict: z.enum(VERDICTS).nullable(),
   restriction: z.enum(['personal', 'project', 'not-a-restriction']).nullable(),
   clashes_with: z.string().nullable(),
@@ -47,6 +47,28 @@ const Post = z.object({
   event_id: z.string().nullable(),
   body: z.string(),
 });
+
+// Job E (idea → Claude Code → sign-off): which step of the chain this line records, and the idea's
+// state after it. Lines before 5 Nov carried the step in decision_id ("E:<step>:<ref>:<rand>") and
+// job 'none'; handoffStep() reads both.
+export const HANDOFF_STEPS = [
+  'noted', 'approved', 'approval_ignored', 'approval_unmatched', 'approval_duplicate',
+  'build_room_created', 'build_room_reused', 'context_posted', 'handed_off', 'handoff_refused', 'announced',
+  'room_failed', 'context_failed', 'handoff_failed', 'announce_failed', 'stalled', 'resumed',
+  'build_room_chat', 'progress', 'report_unmatched', 'signoff_requested', 'not_done', 'timed_out',
+  'signoff_ignored', 'signoff_unclear', 'signed_off', 'reopened',
+] as const;
+export type HandoffStep = (typeof HANDOFF_STEPS)[number];
+const Handoff = z.object({
+  step: z.enum(HANDOFF_STEPS),
+  ref: z.string().nullable(), // "I3", or null for a line about no particular idea
+  key: z.string().nullable(), // the idempotency key E:<origin room>:<idea message id>
+  attempt: z.number().nullable(),
+  status: z.string().nullable(), // the idea's status after this step (store.ts Status)
+  build_room: z.object({ id: z.string(), name: z.string() }).nullable(),
+  target_status: z.string().nullable(), // send_targeted_message's target_statuses for Claude Code
+});
+export type TraceHandoff = z.infer<typeof Handoff>;
 
 export const TraceLine = z.object({
   schema: z.literal('ck.trace/1'),
@@ -65,6 +87,8 @@ export const TraceLine = z.object({
     cache_write_tokens: z.number(), output_tokens: z.number(), latency_ms: z.number(),
   }).nullable(),
   error: z.string().nullable(),
+  /** Job E lines only; absent on every other line (and on job E lines written before 5 Nov). */
+  handoff: Handoff.nullable().optional(),
 });
 export type TraceLine = z.infer<typeof TraceLine>;
 export type TraceItem = z.infer<typeof Item>;
@@ -75,6 +99,12 @@ export function writeTrace(line: TraceLine, file = process.env.CK_TRACE_FILE || 
   const ok = TraceLine.parse(line);
   mkdirSync(dirname(file), { recursive: true });
   appendFileSync(file, JSON.stringify(ok) + '\n');
+}
+
+/** The job E step a line records: its handoff object, or the old "E:<step>:…" decision id. */
+export function handoffStep(line: Pick<TraceLine, 'decision_id' | 'handoff'>): string | null {
+  if (line.handoff) return line.handoff.step;
+  return line.decision_id.startsWith('E:') ? line.decision_id.split(':')[1] ?? null : null;
 }
 
 /** Read a trace file, skipping a torn last line (the process may have died mid-write). */
