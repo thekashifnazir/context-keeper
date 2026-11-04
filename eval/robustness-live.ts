@@ -18,7 +18,7 @@ import { LIMIT_LINE, PAUSED_LINE } from '../src/agent/demo.ts';
 import { normalise } from '../src/shared/quote.ts';
 import { readTrace, type TraceLine } from '../src/shared/trace.ts';
 import { type Args, ROOT } from './cli.ts';
-import { loadCases, type Case } from './content.ts';
+import { loadCases, ROOM_DIRS, type Case } from './content.ts';
 import { appendFacts } from './facts.ts';
 import type { MmRawPost } from './mattermost.ts';
 import { incidents, log, L_S, mmRetry, prepare, seedRoom, sleep, startAgent, stopAgent, waitBot, waitChannel, type World } from './replay.ts';
@@ -90,7 +90,7 @@ class Scenario {
     this.rooms.push(r);
     this.channel = await mmRetry(this.w.runDir, env.mmUrl, `find channel ${r.name}`, () => waitChannel(kash.mm, team.id, r));
     for (const u of members) await people.get(u)!.mm.joinChannel(this.channel, people.get(u)!.id).catch(() => undefined);
-    this.desk = seedRoom(this.w.runDir, r.id, 'ledgerly-pilot', this.w.evalAgent);
+    this.desk = seedRoom(this.w.runDir, r.id, ROOM_DIRS['ledgerly-pilot'], this.w.evalAgent);
     if (this.desk) this.rooms.push({ id: this.desk, name: `${r.name}-desk`, external_channel_id: null, bridge_id: r.bridge_id, archived: false });
     this.log(`room ${r.name} (${r.id}) -> channel ${this.channel}; members ${members.join(', ')}; desk ${this.desk ?? 'none'}`);
   }
