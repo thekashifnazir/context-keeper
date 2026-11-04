@@ -1,4 +1,4 @@
-// names: turn the handle Switch gives us (sender_name, e.g. "cosmicboard") into the name people
+// names: turn the handle Switch gives us (sender_name, e.g. "rowan_demo") into the name people
 // see in the chat ("Rowan"). Slack: users.list with the bot token. Discord: a member search in
 // the bot's servers. Results are cached; any failure falls back to the handle, never throws.
 

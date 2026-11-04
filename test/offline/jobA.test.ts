@@ -44,7 +44,7 @@ function deps(claude: FakeClaude, poster = new FakePoster(), extra: Partial<Deps
   return { claude, cfg, system: 'sys', poster, state: new AgentState(join(dir, 'state.json')), selfSenders: new Set([SELF]), traceFile, ...extra };
 }
 const traces = (): TraceLine[] => (existsSync(traceFile) ? readTrace(readFileSync(traceFile, 'utf8')) : []);
-const msg = (id: string, body: string, sender = '@switch-slack-x-cosmicboard:localhost'): Input => ({ message_id: id, sender, sender_name: 'Rowan', body, received_at: '2026-11-04T09:31:00Z' });
+const msg = (id: string, body: string, sender = '@switch-slack-x-rowan_demo:localhost'): Input => ({ message_id: id, sender, sender_name: 'Rowan', body, received_at: '2026-11-04T09:31:00Z' });
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'ck-jobA-'));

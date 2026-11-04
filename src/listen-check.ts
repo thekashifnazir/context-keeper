@@ -67,7 +67,7 @@ async function onEvent(ev: AgentBridgeEvent) {
   if (seen.has(m.message_id)) return; // a resumed stream can redeliver the last message
   seen.add(m.message_id);
   writeFileSync(seenFile, JSON.stringify([...seen].slice(-500)));
-  const who = await displayName(m.sender, m.sender_name); // "Rowan", not the handle "cosmicboard"
+  const who = await displayName(m.sender, m.sender_name); // "Rowan", not the handle "rowan_demo"
   trace({ kind: 'message', room: ev.room_id, id: m.message_id, from: who, handle: m.sender_name, sender: m.sender,
           sender_kind: m.sender_kind ?? null, addressed: m.addressed, thread: m.thread_id ?? null, body: m.body });
   console.log(`[message] ${who} (${m.sender_kind ?? 'person'}, addressed=${m.addressed}): ${m.body}`);
