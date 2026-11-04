@@ -62,6 +62,7 @@ The trust rule: it never says "already covered" without a quote that code has ch
 - A public Discord channel, bridged into the same Switch server as the team's Slack and seeded with the Ledgerly record, is set up by [docs/demo-channel.md](docs/demo-channel.md). Invite link: https://discord.gg/ygPnp7bj5
 - There it answers, logs decisions and flags clashes, citing the record; Claude Code builds and voice are off in that channel.
 - Each person gets up to 6 replies an hour, and model spend stops at a daily cap (`CK_DAILY_SPEND_CAP_USD`).
+- Live status: https://ck.kashifnazir.com/status shows the running agent's rooms, today's replies and silences, where each idea is, its latest public answers and today's spend against the cap (read-only, no owner-desk content; `CK_STATUS_PAGE`, [docs/deploy-cloud.md](docs/deploy-cloud.md)).
 
 <!-- drafted by Claude from the build log; Kash to check -->
 Things to ask there, as if you were on the Ledgerly team:
@@ -122,6 +123,33 @@ Switch is what lets us share a common layer between the different agents, whiche
 | Switch Trust guardrails | A jailbreak policy on the room's user messages, set to Alert |
 | Addressing policy (admin site) | Lets teammates tag the agent too (reading untagged messages doesn't need it) |
 | Room templates | [templates/](templates/) holds room templates for Console, generated from the same files as the seed (`npm run seed -- --emit-templates`); the seed command is the tested route |
+
+### What breaks without Switch
+
+<!-- drafted by Claude from the code; Kash to check -->
+Context Keeper has no Slack, Discord or Mattermost client of its own for posting, and no database for the team's record: both are Switch. Take a piece away and this is what stops.
+
+```mermaid
+flowchart LR
+  P["People in Slack, Discord, Mattermost"] <-->|bridges| R["Switch rooms<br/>documents, Decision log"]
+  R -->|"event stream: every message, room_join"| CK["Context Keeper"]
+  CK -->|"read_context, room documents"| R
+  CK -->|"post_message, update_room_document"| R
+  CK -->|"create_room, send_targeted_message"| B["Build room"]
+  B --> CC["Claude Code<br/>approval cards"]
+  T["Switch Trust"] -.->|"jailbreak alert"| R
+  G["Gateway admin API"] -.->|"agent key, eval rooms, Trust on"| R
+```
+
+| Switch piece | What Context Keeper does with it | Without it |
+|---|---|---|
+| Rooms and the agent protocol's event stream (`filter=all`, `list_rooms`, `connect_to_room`, a saved stream position) | Hears every message, tagged or not, batches each person's burst and decides; a restart resumes from the saved position ([src/agent/main.ts](src/agent/main.ts), [vendor/switch-agent-runtime/](vendor/switch-agent-runtime/)) | Nothing triggers jobs A to E: the person asking "why don't we…?" never tags an agent, so the agent never hears the question. Messages sent while it was down would be lost instead of answered once |
+| Slack, Discord and Mattermost bridges | Every post is one `post_message` through the room, whichever app the room is on; the Slack and Discord bot tokens are only read to turn handles into display names ([src/agent/main.ts](src/agent/main.ts) `poster`, [src/names.ts](src/names.ts)) | One posting integration per chat app. The Slack team room, the public Discord room ([docs/demo-channel.md](docs/demo-channel.md)) and the Mattermost eval ([eval/](eval/)) would be three separate builds instead of one agent on one server |
+| Room documents (`list_references`, `load_internal_documents`), room history (`read_context`) and the agent-owned "Decision log" (`create_room_document`, `update_room_document`) | The room's record, read before each decision and cited in every answer; job B writes decisions back into the Decision log, which job A then cites ([src/agent/memory.ts](src/agent/memory.ts), [src/agent/decision-log.ts](src/agent/decision-log.ts)) | No record to quote. The quote gate only lets "covered" through with a verbatim quote from a source ([src/agent/post.ts](src/agent/post.ts)), so answers would fall back to silence or "new", and decisions would have nowhere shared to live |
+| `room_join` events (`join_event_listeners`) | Marks a newcomer so their first message gets the job C catch-up ([src/agent/main.ts](src/agent/main.ts), [src/agent/state.ts](src/agent/state.ts), [src/agent/jobs/brief.ts](src/agent/jobs/brief.ts)) | The brief would rest on the record alone: only a first-ever message, or one after `CK_RETURN_GAP_DAYS` of silence, would get one |
+| `create_room` + `send_targeted_message`, and Claude Code's approval cards | Job E opens the build room on the same bridge, sends Claude Code one targeted hand-off with the cited context, and each of Claude Code's steps waits for the owner's "Allow once" ([src/agent/handoff/switch.ts](src/agent/handoff/switch.ts), [docs/handoff-live-test.md](docs/handoff-live-test.md)) | Job E stops at "noted": no build room, no hand-off to Claude Code, and no per-step human approval. A custom agent can't raise approval cards itself (see [Limits](#limits-and-whats-next)) |
+| Switch Trust | A Jailbreak policy on the room's user messages, action Alert, turned on for the server; the flag shows in the channel and the message still reaches the agent ([blog/build-log.md](blog/build-log.md)) | No server-side flag on jailbreak attempts in the channel. The agent's own guards (chat treated as data, the quote gate, the reviewer) still apply |
+| Gateway admin API | `scripts/server-up.sh` mints the agent's registration key (`POST /gateway/api-keys`); the eval creates, populates and archives a fresh set of rooms per run ([eval/switchapi.ts](eval/switchapi.ts)); Trust was switched on with `PUT /gateway/trust-settings`. The seed itself uses the agent's own operations ([seed/switch.ts](seed/switch.ts)) | A custom agent can't register (see [Why we run our own Switch server](#why-we-run-our-own-switch-server)), and the 24-case eval couldn't make fresh rooms for each run |
 
 ### Where this sits on Switch's levels
 

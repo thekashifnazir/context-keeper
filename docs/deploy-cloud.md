@@ -322,7 +322,8 @@ Done on 4 Nov (about 10 minutes, most of it clicks):
    `[voice] live tool on: whats_new → https://ck.<your-domain>` and attaches the tool to the
    ElevenLabs agent.
 6. **Check it from anywhere:** `curl https://ck.<your-domain>/health` → 200; a POST to
-   `/voice/whats_new` without the secret header → 401; any other path → 404.
+   `/voice/whats_new` without the secret header → 401; `/status` → the status page (step 8); any
+   other path → 404.
 7. **Short talk links in the brief:** add `Environment=CK_PUBLIC_BASE_URL=https://ck.<your-domain>`
    too. The brief's "🎧 Talk it through" line then links `https://ck.<your-domain>/talk/<id>`
    instead of the long ElevenLabs URL. The route goes through the same tunnel and the same server
@@ -332,6 +333,21 @@ Done on 4 Nov (about 10 minutes, most of it clicks):
    `[voice] short talk links: https://ck.<your-domain>/talk/<id>` at start. Without the setting (or
    while the tool server isn't up) the brief carries the long link, still behind a "Start a voice
    catch-up" label. `CK_TALK_LINK_STYLE=bare` posts the short URL itself instead of a named link.
+8. **Live status page (on by default):** the same server answers `GET /`, `/status` and
+   `/status.json` with a public, read-only "Context Keeper · live" page
+   ([src/agent/status.ts](../src/agent/status.ts)): when the agent started, the rooms it's in (test
+   rooms and listen-only rooms counted, not named), today's replies, briefs and silences from the
+   trace, job E's ideas and their stage, the last 8 answers posted in public rooms with their source,
+   today's model spend against `CK_DAILY_SPEND_CAP_USD`, and the Switch pieces in use. One static
+   HTML page, no scripts, refreshing every 60 s; built from the agent's own state (no Switch call per
+   request), rebuilt at most every 45 s, and limited to 30 requests a minute per visitor (the IP comes
+   from Cloudflare's `cf-connecting-ip`, trusted only from the local tunnel). It never shows anything
+   from an owner desk, owner-only notes, Trust settings, sender ids, handles, emails or message ids;
+   people's words are clipped and scrubbed. Nothing to add in Cloudflare: the whole host already
+   points at the server. Turn it off with `Environment=CK_STATUS_PAGE=0` (the paths go back to
+   404). It runs only while the tool server does (voice on, a talk agent made). Check:
+   `curl -s https://ck.<your-domain>/status.json | head`. The agent logs
+   `[status] live status page: https://ck.<your-domain>/status` at start.
 
 On a VM reboot both services start by themselves: `cloudflared` (the tunnel) and `ck-agent`. If
 the tunnel is down, the agent detaches the tool and falls back to refreshing the voice agent's
