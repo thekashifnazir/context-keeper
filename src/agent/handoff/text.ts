@@ -29,9 +29,13 @@ export const isBareAnswer = (body: string) => BARE.test(body);
 
 // ---- what we post --------------------------------------------------------------------------------
 
+/** "product.md §4" (or two refs) for an idea that builds on something in the record; null for a new one. */
+export const buildsOnLabel = (rec: IdeaRecord) => (rec.builds_on?.length ? rec.builds_on.slice(0, 2).join(', ') : null);
+
 export function ownerIdeaNote(rec: IdeaRecord, flagged: boolean): string {
+  const on = buildsOnLabel(rec);
   return [
-    `New idea ${rec.ref} from ${rec.sender_name} in #${rec.room_name} (${fmtDay(rec.at)}):`,
+    `New idea ${rec.ref} from ${rec.sender_name} in #${rec.room_name} (${fmtDay(rec.at)})${on ? `, builds on ${on}` : ''}:`,
     quoteBlock(rec.text, 400),
     ...(flagged ? ['Note: it contains text that reads like instructions to an agent. It will go to Claude Code as quoted data only.'] : []),
     `Reply "approve ${rec.ref}" to hand it to Claude Code. Nothing happens until you do.`,
@@ -40,7 +44,11 @@ export function ownerIdeaNote(rec: IdeaRecord, flagged: boolean): string {
 
 function contextLines(rec: IdeaRecord): string[] {
   if (!rec.sources.length) return ['Cited context: none found in the record (it was logged as a new idea).'];
-  return ['Cited context from the record:', ...rec.sources.slice(0, 4).map((s) => `- ${s.ref}:\n${quoteBlock(s.quote, 300)}`)];
+  const on = buildsOnLabel(rec);
+  return [
+    ...(on ? [`It builds on what the record already has (${on}): only the part that isn't there yet is new.`] : []),
+    'Cited context from the record:', ...rec.sources.slice(0, 4).map((s) => `- ${s.ref}:\n${quoteBlock(s.quote, 300)}`),
+  ];
 }
 
 /** Top-level post in the build room, for the people there. */
@@ -77,6 +85,14 @@ export function signoffRequest(rec: IdeaRecord, summary: string, links: string[]
 export const notDoneLine = (rec: IdeaRecord, reason: string) => `Claude Code couldn't finish ${rec.ref}: ${reason.trim().slice(0, 300)}. It stays open.`;
 export const timeoutLine = (rec: IdeaRecord, minutes: number) => `No result from Claude Code on this after ${minutes} min, so it isn't done yet. It stays open; I'll post here if it reports back.`;
 export const signedOffLine = (byName: string) => `Signed off by ${byName}. Closed.`;
+/** Kash, 4 Nov: "rather [than] do nothing, say only X can sign this off", so people know why they got no sign-off. */
+export const notTheirsLine = (byName: string, raiserName: string, ownerName: string, raiserIsOwner: boolean) =>
+  raiserIsOwner ? `Thanks, ${byName}. Only ${ownerName}, who raised it, can sign this off.` : `Thanks, ${byName}. Only ${raiserName}, who raised it, or ${ownerName} can sign this off.`;
+/** Owner desk, while Claude Code may be waiting on an "Allow once" card nobody has seen. */
+export const nudgeLine = (rec: IdeaRecord, buildRoom: string) =>
+  `${rec.ref}: no result from Claude Code yet. It may be waiting for your OK: open its thread under the hand-off in #${buildRoom} and click Allow once.`;
+/** The raiser's thread, once per attempt, while the build is still going. */
+export const stillBuildingLine = (buildRoom: string) => `Still being built: Claude Code is working on it in #${buildRoom}. I'll post the result here.`;
 export const reopenedLine = (byName: string, reason: string) => `Thanks, ${byName}. Reopened${reason ? `: ${reason.trim().slice(0, 200)}` : ''}.`;
 
 // ---- what we read --------------------------------------------------------------------------------
@@ -91,6 +107,11 @@ export function parseApproval(body: string): { ref: string | null; again: boolea
 const POSITIVE = /^\s*(looks (right|good|great|fine)|lgtm|signed? off|sign(ed)? it off|that'?s (right|it|great|perfect)|perfect|great|yes\b|yep|spot on|ship it|all good|approved?)/i;
 const NEGATIVE = /^\s*(not quite|not right|no\b|nope|wrong|needs? |missing|reopen|that'?s not)/i;
 /** The raiser's text reply to a sign-off request. Text only: agents never see reactions. */
+/** A clear sign-off attempt, for people who can't sign off: "Great idea!" or "No worries" in the thread
+ *  stays ordinary chat; only these get the "only Rowan can sign this off" reply. */
+const CLEAR_SIGNOFF = /^\s*(looks (right|good)\b|lgtm\b|signed? (it )?off\b|ship it\b|approved?\b|not quite\b|not right\b|reopen\b)/i;
+export const isClearSignoff = (body: string) => CLEAR_SIGNOFF.test(body);
+
 export function parseSignoff(body: string): { verdict: 'signed_off' | 'reopened'; reason: string } | null {
   if (NEGATIVE.test(body)) return { verdict: 'reopened', reason: body.replace(/^\s*(not quite|not right|no|nope|wrong|reopen)\b[\s,:;.!-]*/i, '').trim() };
   if (POSITIVE.test(body)) return { verdict: 'signed_off', reason: '' };
@@ -114,3 +135,16 @@ export const looksFinal = (body: string) => {
   return /^\s*(not )?done\b/i.test(b) || /https?:\/\/github\.com\//.test(b);
 };
 export const refIn = (body: string) => body.match(/\b(I\d+)\b/)?.[1] ?? null;
+/** Switch's permission card text in Claude Code's thread ("Permission needed … Allow once"). */
+export const asksPermission = (body: string) => /permission needed/i.test(body);
+
+/** A might-be-related reply that tells the raiser the new part is logged ("that part would be new.
+ *  I've logged it."). Job A's tool output has no field for "partly new", so this reads its reply,
+ *  conservatively: only the agent's own first-person "I've logged / recorded it" (or "it's logged")
+ *  counts; "nothing in the record says…, so that part is still open" does not. */
+export const replyLogsIt = (reply: string) => {
+  const r = reply.replace(/[\u2018\u2019]/g, "'");
+  return /\b(?:i'?ve|i have|i'll|i will)\s+(?:also\s+|now\s+)?(?:logged|recorded|log|record)\b/i.test(r)
+    || /\b(?:it'?s|it is|that'?s|this is)\s+(?:now\s+)?(?:logged|recorded)\b/i.test(r)
+    || /\blogged (?:it|this|that)?\s*as (?:a )?new\b/i.test(r);
+};
