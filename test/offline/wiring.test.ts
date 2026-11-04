@@ -144,11 +144,16 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     expect(t).toHaveLength(1);
     expect(Object.keys(t[0].args).sort()).toEqual(['body', 'target_names']);
     expect(t[0].args.target_names).toEqual(['claude-code']);
-    expect(t[0].args.body).toMatch(/^Hand-off I1/);
+    expect(t[0].args.body).toMatch(/^\*\*Hand-off I1\*\*/);
     expect(t[0].args.body).not.toMatch(/@claude-code/);
     expect(t[0].room).toBe(build.room_id);
     const announce = sw.named('post_message').find((c) => c.room === PILOT.id)!;
-    expect(announce.args).toMatchObject({ thread_id: '$idea' });
+    expect(announce.args).toEqual({ thread_id: '$idea', body: "✅ **Approved** by Kash · waiting for Claude Code to start building it in #ck-smoke-build-1105. I'll post each step here for Rowan." });
+
+    // 4b. Claude Code's "On it" (what reached the agent live on 4 Nov) → the raiser sees it start, once.
+    for (const id of ['$on', '$on2']) expect(await l.event(build.room_id, { message_id: id, sender: CC, sender_name: 'claude-code', body: 'On it: I1 (pay-now link). This will be an issue.' }, 'claude-code')).toBe('job E');
+    const building = sw.named('post_message').filter((c) => c.room === PILOT.id && String(c.args.body).startsWith('🔨'));
+    expect(building.map((c) => c.args)).toEqual([{ thread_id: '$idea', body: '🔨 **Building** · Claude Code has started on it in #ck-smoke-build-1105.' }]);
 
     // 5. Claude Code reports in the build room; people chatting there are job E's too (never job A).
     expect(await l.event(build.room_id, { message_id: '$cc1', sender: CC, sender_name: 'claude-code', body: 'Done I1: https://github.com/thekashifnazir/ledgerly-demo/issues/7' }, 'claude-code')).toBe('job E');
@@ -169,7 +174,7 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     expect(await l.event(PILOT.id, { message_id: '$x', sender: CC, sender_name: 'claude-code', body: 'What if we added a dark mode?' }, 'claude-code')).toBe('skipped (agent)');
 
     const ts = traces().filter((x) => x.handoff);
-    expect(ts.map((x) => handoffStep(x))).toEqual(['noted', 'approved', 'build_room_created', 'context_posted', 'handed_off', 'announced', 'signoff_requested', 'build_room_chat', 'signoff_ignored', 'signoff_not_theirs', 'signed_off']);
+    expect(ts.map((x) => handoffStep(x))).toEqual(['noted', 'approved', 'build_room_created', 'context_posted', 'handed_off', 'announced', 'building', 'progress', 'signoff_requested', 'build_room_chat', 'signoff_ignored', 'signoff_not_theirs', 'signed_off']);
     expect(ts.find((x) => x.handoff!.step === 'handed_off')!.handoff).toMatchObject({ ref: 'I1', status: 'handed_off', target_status: 'live', build_room: { id: build.room_id, name: 'ck-smoke-build-1105' } });
     for (const x of ts) for (const it of x.items) expect(it.job).toBe('E');
   });
@@ -201,10 +206,10 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     expect(after.chain.store.byRef('I1')!.status).toBe('handed_off');
   });
 
-  it('CK_HANDOFF_NUDGE_MIN / CK_HANDOFF_PROGRESS_MIN: the owner nudge and the "still being built" line, once each, from tick()', async () => {
+  it('CK_HANDOFF_NUDGE_MIN backstop: one owner nudge from tick(); no timer line for the raiser (CK_HANDOFF_PROGRESS_MIN is gone)', async () => {
     process.env.CK_BUILD_ROOM = 'ck-smoke-build-1105';
     process.env.CK_HANDOFF_NUDGE_MIN = '0.00001';
-    process.env.CK_HANDOFF_PROGRESS_MIN = '0.00002';
+    process.env.CK_HANDOFF_PROGRESS_MIN = '0.00002'; // left in an old .env: ignored
     const sw = new FakeSwitchOps();
     const l = listener(sw);
     await l.chain.noteIdea(toHandoffMsg(PILOT.id, PILOT.name, { message_id: '$i', sender: ROWAN, sender_name: 'rowan_demo', body: 'An idea' }, 'Rowan', '2026-11-05T09:00:00Z'));
@@ -212,9 +217,9 @@ describe('job E wired: the listener path over the live op() adapter', () => {
     await new Promise((r) => setTimeout(r, 10));
     await l.chain.tick();
     await l.chain.tick();
-    expect(l.ownerPosts.filter((b) => b.startsWith('I1: no result from Claude Code yet.'))).toEqual(['I1: no result from Claude Code yet. It may be waiting for your OK: open its thread under the hand-off in #ck-smoke-build-1105 and click Allow once.']);
-    const still = sw.named('post_message').filter((c) => c.room === PILOT.id && String(c.args.body).startsWith('Still being built'));
-    expect(still.map((c) => c.args)).toEqual([{ thread_id: '$i', body: "Still being built: Claude Code is working on it in #ck-smoke-build-1105. I'll post the result here." }]);
+    expect(l.ownerPosts.filter((b) => b.includes('your OK'))).toEqual(['**I1 · May need your OK** · no result from Claude Code after 1 min. If a card is waiting, open its thread under the hand-off in #ck-smoke-build-1105 and click Allow once.']);
+    const thread = sw.named('post_message').filter((c) => c.room === PILOT.id).map((c) => String(c.args.body));
+    expect(thread).toEqual(["✅ **Approved** by Kash · waiting for Claude Code to start building it in #ck-smoke-build-1105. I'll post each step here for Rowan."]);
   });
 
   it('a restart (a second chain on the same state file) resumes without a second hand-off', async () => {
@@ -254,13 +259,14 @@ describe('job A → job E: a related idea with a new part is noted too (Kash, 4 
     expect(r.trace!.items[0].new_part).toBe('a weekly office hour for pilot support');
     expect(poster.pub()[0].body.split('\n')[0]).toBe(`${related} I've logged that part as a new idea: a weekly office hour for pilot support.`);
     expect(refs).toEqual(['I1']);
-    expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov), builds on pilot-plan.md §3: a weekly office hour for pilot support');
+    expect(l.ownerPosts[0].split('\n')[0]).toBe('**I1 · New idea from Rowan** · #ck-smoke-e-1105, 4 Nov');
+    expect(l.ownerPosts[0].split('\n')[2]).toBe('Builds on pilot-plan.md §3. New part: a weekly office hour for pilot support');
     expect(l.chain.store.byRef('I1')!.builds_on).toEqual(['pilot-plan.md §3']);
     expect(l.chain.store.byRef('I1')!.new_part).toBe('a weekly office hour for pilot support');
     await l.event(DESK.id, { message_id: '$d', sender: OWNER, sender_name: 'owner_demo', body: 'approve I1' }, 'Kash');
     const body = String(sw.named('send_targeted_message')[0].args.body);
-    expect(body).toContain('It builds on what the record already has (pilot-plan.md §3). Only this part is new:\n> a weekly office hour for pilot support');
-    expect(body).toContain('Cited context from the record:\n- pilot-plan.md §3:\n> Priya: onboarding calls and pilot support.');
+    expect(body).toContain('**New part** (the record already has pilot-plan.md §3):\n> a weekly office hour for pilot support');
+    expect(body).toContain('**Context from the record:**\npilot-plan.md §3:\n> Priya: onboarding calls and pilot support.');
   });
 
   it('the live pay-now reply (says the part is open, no "logged" wording) is noted once job A names the new part', async () => {
@@ -300,7 +306,8 @@ describe('job A → job E: a related idea with a new part is noted too (Kash, 4 
     const { refs, l, r } = await decideAndNote({ verdict: 'new', reply: "Thanks, Rowan: I've logged it as a new idea.", new_part: 'office hours' }, []);
     expect(r.trace!.items[0].new_part).toBeNull();
     expect(refs).toEqual(['I1']);
-    expect(l.ownerPosts[0].split('\n')[0]).toBe('New idea I1 from Rowan in #ck-smoke-e-1105 (4 Nov):');
+    expect(l.ownerPosts[0].split('\n')[0]).toBe('**I1 · New idea from Rowan** · #ck-smoke-e-1105, 4 Nov');
+    expect(l.ownerPosts[0]).not.toContain('Builds on');
     expect(l.chain.store.byRef('I1')!.builds_on).toBeUndefined();
   });
 

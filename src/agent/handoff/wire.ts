@@ -5,8 +5,8 @@
 //   CK_CLAUDE_CODE_SENDER    its sender id(s), comma-separated (default: any @switch-agent- sender in the build room)
 //   CK_HANDOFF_REPO          what Claude Code works on (default github.com/thekashifnazir/ledgerly-demo)
 //   CK_HANDOFF_TIMEOUT_MIN   minutes before "no result yet" is said in the thread (default 30)
-//   CK_HANDOFF_NUDGE_MIN     minutes before the owner desk is told a card may be waiting (default 2; 0 = off)
-//   CK_HANDOFF_PROGRESS_MIN  minutes before "still being built" is said in the thread (default 5; 0 = off)
+//   CK_HANDOFF_NUDGE_MIN     backstop: minutes with no report before the owner desk is told a card may be
+//                            waiting (default 2; 0 = off). A "Waiting for OK" post from Claude Code tells it at once.
 //   CK_AGENT_NAME            our own agent name (default context-keeper)
 import { HandoffChain } from './chain.ts';
 import { HandoffStore } from './store.ts';
@@ -45,7 +45,6 @@ export function handoffFromEnv(o: WireOpts): HandoffChain {
     repo: env.CK_HANDOFF_REPO || 'github.com/thekashifnazir/ledgerly-demo',
     timeoutMs: Number(env.CK_HANDOFF_TIMEOUT_MIN ?? 30) * 60_000,
     nudgeMs: Number(env.CK_HANDOFF_NUDGE_MIN ?? 2) * 60_000,
-    progressMs: Number(env.CK_HANDOFF_PROGRESS_MIN ?? 5) * 60_000,
     traceFile: o.traceFile,
     log: (s) => console.log(`[job E] ${s}`),
   });

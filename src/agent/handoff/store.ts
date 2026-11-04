@@ -25,6 +25,9 @@ export type Status =
 
 export interface Source { ref: string; quote: string }
 
+export type BuildStage = 'waiting' | 'building' | 'blocked';
+export type StageEvent = 'building' | 'blocked' | 'unblocked';
+
 export interface IdeaRecord {
   ref: string; // short id the owner types: "I3"
   key: string; // idempotency key
@@ -47,7 +50,11 @@ export interface IdeaRecord {
   approved: { by: string; message_id: string; at: string } | null;
   build_room: { id: string; name: string } | null;
   steps: Record<StepName, StepState>;
-  events: Partial<Record<StepName | 'signoff_request' | 'closing' | 'timeout' | 'nudge' | 'progress', string | null>>;
+  /** Event ids of what we posted, per attempt. building / blocked / unblocked are the raiser's stage
+   *  lines (each at most once per attempt; 'sending' before the post, so a restart never repeats one). */
+  events: Partial<Record<StepName | 'signoff_request' | 'closing' | 'timeout' | 'nudge' | 'progress' | StageEvent, string | null>>;
+  /** Where the build is while handed off: waiting to start, building, or blocked on the owner's OK. */
+  stage?: BuildStage;
   failures: number;
   last_error: string | null;
   target_status: string | null;
