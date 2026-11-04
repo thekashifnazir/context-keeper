@@ -11,8 +11,10 @@
 // sets it to its own run's ck-eval-<runid>- rooms, since connect_to_room takes a room from any other
 // session of the agent. CK_STATE_DIR (default state) holds its local files; CK_OWNER_DESK_ROOM
 // overrides state/owner.json's desk (the eval passes the desk the seed made).
-// Room record: until the seed lane's room documents land, the record is demo/<room> (chosen by
-// CK_ROOM_DEMO, or by "ledgerly"/"riverside" in the room name) plus every live message as it arrives.
+// Room record: read from Switch (src/agent/memory.ts): the room's documents (list_references +
+// load_internal_documents, the "Channel archive" among them), the room's history (read_context), then
+// every live message as it arrives. Its own "Decision log" room document is written by job B.
+// Nothing is read from demo/ (that is only the seed's source and the offline tests').
 // Owner desk (state/owner.json, or CK_OWNER_SENDER / CK_OWNER_DESK_ROOM): its messages never go to
 // job A; the owner's text reply there confirms a decision (B) or rules on a clash (D). A room_join
 // (Switch sends it just before the person's first message) marks them for a catch-up brief (C).
@@ -38,8 +40,9 @@ import { modelConfigFromEnv, realClaude } from './model.ts';
 import { decideWithRetry, type Deps, type Input } from './pipeline.ts';
 import type { Poster } from './post.ts';
 import { systemPrompt } from './prompt.ts';
-import { loadDemoRoom, type ArchiveMessage, type RoomRecord } from './room.ts';
-import { AgentState, atomicWriteJson, readJsonl } from './state.ts';
+import { isDocNotice, RoomMemory } from './memory.ts';
+import type { RoomRecord } from './room.ts';
+import { AgentState, atomicWriteJson } from './state.ts';
 import { realEleven } from '../voice/eleven.ts';
 import { VoiceLive } from '../voice/live.ts';
 import { realSwitchMedia } from '../voice/post-audio.ts';
@@ -73,7 +76,7 @@ async function op(roomId: string | null, name: string, args: Record<string, unkn
     if (!sessions.has(roomId)) sessions.set(roomId, randomUUID());
     headers['X-Switch-Session-Id'] = sessions.get(roomId)!;
   }
-  const res = await fetch(`${endpoint}/agents/${agentId}/ops/${name}`, { method: 'POST', headers, body: JSON.stringify(args) });
+  const res = await fetch(`${endpoint}/agents/${agentId}/ops/${name}`, { method: 'POST', headers, body: JSON.stringify(args), signal: AbortSignal.timeout(30_000) });
   const text = await res.text();
   if (!res.ok) throw new Error(`${name}: ${res.status} ${text.slice(0, 200)}`);
   try { return JSON.parse(text); } catch { return text; }
@@ -152,31 +155,16 @@ const voice = eleven ? new VoiceLive({
 if (voice && features.talkLink) setInterval(() => { if (!stopped) voice.tick().catch((e) => console.error('voice tick:', e.message)); }, 60_000).unref();
 console.log(`features: job E ${handoff ? 'on' : 'off'}, audio brief ${voice && features.audioBrief ? 'on' : 'off'}, talk link ${voice?.talkAgentId() ? 'on' : 'off'}`);
 
-// The record per room: demo content plus live messages as they arrive.
-const records = new Map<string, RoomRecord>();
-function recordFor(roomId: string): RoomRecord | null {
-  if (records.has(roomId)) return records.get(roomId)!;
-  const name = roomNames.get(roomId) ?? '';
-  // CK_ROOM_DEMO, else the room's name, else the --demo that `npm run seed` recorded for this room id
-  // (so a seeded room can have any name, e.g. ck-smoke-trial).
-  const seeded = readJson<{ demo?: string }>(`state/seed/${roomId}.json`, {}).demo;
-  const demo = process.env.CK_ROOM_DEMO || (name.includes('riverside') ? 'riverside-build-night' : name.includes('ledgerly') ? 'ledgerly-pilot' : '')
-    || (seeded === 'ledgerly' ? 'ledgerly-pilot' : seeded === 'riverside' ? 'riverside-build-night' : '');
-  if (!demo) return null;
-  const rec = { ...loadDemoRoom('.', demo), name };
-  // Live messages from before a restart (state/live/<room>.jsonl), so the record doesn't lose them.
-  const live = existsSync(liveFile(roomId)) ? readJsonl<ArchiveMessage>(readFileSync(liveFile(roomId), 'utf8')) : [];
-  for (const m of live) if (!rec.messages.some((x) => x.id === m.id)) rec.messages.push(m);
-  records.set(roomId, rec);
-  return rec;
-}
-const liveFile = (roomId: string) => `${SD}/live/${roomId}.jsonl`;
-function remember(roomId: string, rec: RoomRecord | null, m: ArchiveMessage) {
-  if (!rec || rec.messages.some((x) => x.id === m.id)) return;
-  rec.messages.push(m);
-  mkdirSync(`${SD}/live`, { recursive: true });
-  appendFileSync(liveFile(roomId), JSON.stringify(m) + '\n');
-}
+// The record per room, from Switch (loaded on the room's first message, refreshed before each decision).
+const selfNames = new Set<string>();
+const unwrap = (r: any) => (r && typeof r === 'object' && 'result' in r ? r.result : r);
+const memory = new RoomMemory({
+  op: async (roomId, name, args) => unwrap(await op(roomId, name, args)),
+  agentId, selfNames: () => selfNames, selfSenders, displayName,
+  canWrite: (roomId) => allowed(roomId),
+});
+deps.onDecisionLogged = (d) => memory.logDecision(d);
+const recordFor = (roomId: string): Promise<RoomRecord | null> => memory.record(roomId, roomNames.get(roomId) ?? roomId);
 
 // Per-author quiet gap: one decision per person's burst, never per thread.
 // The stream position moves past a message as soon as it's queued, so the queue is saved too
@@ -201,9 +189,10 @@ function enqueue(roomId: string, input: Input) {
 
 async function run(roomId: string, inputs: Input[]) {
   if (stopped) return;
-  const rec = recordFor(roomId);
-  if (!rec) { console.log(`no record for room ${roomNames.get(roomId) ?? roomId}; skipping (seed it with npm run seed, or set CK_ROOM_DEMO)`); return; }
+  const rec = await recordFor(roomId);
+  if (!rec) { console.log(`no record for room ${roomNames.get(roomId) ?? roomId}: it has no room documents in Switch; skipping (seed it with npm run seed)`); return; }
   try {
+    await memory.refresh(roomId);
     const ctx = buildRoomContext(rec);
     const results = await decideWithRetry(deps, roomId, roomNames.get(roomId) ?? roomId, ctx, inputs);
     for (const r of results) if (r.trace) console.log(`decision ${r.trace.decision_id}: ${r.trace.kind} ${r.trace.items.map((i) => `${i.message_id}=${i.job}/${i.verdict ?? '-'}`).join(' ')}${r.trace.error ? ` (${r.trace.error})` : ''}`);
@@ -229,6 +218,8 @@ async function onEvent(ev: AgentBridgeEvent) {
   if (ev.type !== 'message') return;
   const m = ev.payload as MessagePayload;
   if (ourEvents.has(m.message_id)) { selfSenders.add(m.sender); return; } // learn our own sender id from our own post
+  // Switch's "📄 updated room document" notice for our own Decision log write, in our name: not chat.
+  if (isDocNotice(m.body ?? '') && selfNames.has(m.sender_name ?? '')) { selfSenders.add(m.sender); return; }
   if (selfSenders.has(m.sender)) return;
   if (deps.state.isProcessed(ev.room_id, m.message_id)) return; // a resumed stream can redeliver the last message
   const who = await displayName(m.sender, m.sender_name);
@@ -250,12 +241,13 @@ async function onEvent(ev: AgentBridgeEvent) {
     } catch (e) { console.error('owner desk handler crashed:', (e as Error).message); }
     return;
   }
-  const rec = recordFor(ev.room_id);
+  const rec = await recordFor(ev.room_id);
+  const live = { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null };
   // Another agent's post (Claude Code's, say) is room context, never a proposal (PR11).
-  if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { remember(ev.room_id, rec, { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null }); return; }
+  if ((m.sender_kind && m.sender_kind !== 'user') || isAgentSender(m.sender)) { memory.addLive(ev.room_id, live); return; }
   // Job C first: a joiner's or returner's first message gets the brief, then job A answers it.
   const trig = rec && !stopped ? briefTrigger(deps, ev.room_id, rec, input) : null;
-  remember(ev.room_id, rec, { id: m.message_id, at, author: who, text: m.body, thread: m.thread_id ?? null });
+  memory.addLive(ev.room_id, live);
   if (trig && rec) {
     const roomName = roomNames.get(ev.room_id) ?? ev.room_id;
     // The text brief goes first and job A waits for it; the audio clip follows in the background, and
@@ -283,6 +275,8 @@ async function onEvent(ev: AgentBridgeEvent) {
 }
 
 async function joinRooms() {
+  const me = unwrap(await op(null, 'get_my_context', {}).catch(() => null));
+  if (me?.you?.name) selfNames.add(me.you.name);
   const rooms = ((await op(null, 'list_rooms', {})) as { result: { room_id: string; name: string; archived: boolean }[] }).result;
   const live = rooms.filter((x) => !x.archived && (!listenPrefixes || listenPrefixes.some((p) => x.name.startsWith(p))));
   atomicWriteJson(roomsFile, live.map((r) => r.room_id));
@@ -337,7 +331,10 @@ const stream = new SwitchEventStream({
       .catch((e) => console.error('joining rooms failed:', e.message));
   },
   onDisconnected: ({ error }) => console.warn('disconnected:', error),
-  onGap: (g) => console.warn('gap (re-read the room with read_context):', g),
+  onGap: (g) => {
+    console.warn('gap: re-reading room history with read_context', g);
+    for (const r of memory.roomIds()) void memory.rereadHistory(r).then((n) => n && console.log(`memory: ${roomNames.get(r)}: ${n} missed message(s) added from read_context`));
+  },
   onEvicted: (e) => { console.error('evicted:', e); process.exit(3); },
   log: { debug: () => {}, warn: (m: string) => console.warn(m), error: (m: string) => console.error(m) },
   signal: new AbortController().signal,

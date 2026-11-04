@@ -264,3 +264,36 @@ describe('flags', () => {
     expect(() => parseArgs(['--best-of', '3'])).toThrow(/unknown flag/);
   });
 });
+
+describe('the agent writes room documents (its Decision log)', () => {
+  const line = "Logged as decided: Fieldnote goes first for onboarding. Date: Tue 24 Nov. (Kash's call.)";
+  const t14 = (extraPosts: Partial<MmPost>[]) => build({
+    cases: [['T14', 0]],
+    lines: [{ inputs: [inp('T14', 'kash')], items: [item('T14', { job: 'B', verdict: 'decision' })], posts: [tpost(line)], error: 'decision log: L1 added (create_room_document)' }],
+    posts: [{ root_id: 'p-T14', message: line, create_at: T0 + 30000 }, ...extraPosts],
+  });
+  it("Switch's own notice for the write is not counted as an agent reply, and is reported apart", () => {
+    const r = t14([{ id: 'n1', root_id: '', message: '📄 created room document “Decision log”.', create_at: T0 + 30500 }, { id: 'n0', message: '📄 created room document “Channel archive”.', create_at: T0 - 5000 }]);
+    const c = r.cases.find((x) => x.id === 'T14')!;
+    expect(c.rules.P4.status).toBe('pass');
+    expect(c.rules.P5.status).toBe('pass');
+    expect(r.summary.diagnostics.switch_doc_notices).toEqual({ before_t0: 1, during_run: 1 });
+    expect(r.switch_doc_notices.map((p) => p.post_id)).toEqual(['n1', 'n0']);
+  });
+  it('an agent post that only looks like a notice is still a post', () => {
+    const r = t14([{ id: 'x1', root_id: '', message: '📄 created room document “Decision log”. Also, I decided something.', create_at: T0 + 30500 }]);
+    expect(r.cases.find((x) => x.id === 'T14')!.rules.P5.status).toBe('fail');
+  });
+  it('a cited Decision log row resolves only against the log captured from Switch for that run', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { renderLog } = await import('../src/agent/decision-log.ts');
+    const dir = mkdtempSync(join(tmpdir(), 'ck-switch-docs-'));
+    mkdirSync(join(dir, ROOM), { recursive: true });
+    writeFileSync(join(dir, ROOM, 'decision-log.md'), renderLog('x', [{ id: 'L1', decision: 'Fieldnote goes first for onboarding', why: '', decided_by: 'Kash', decided: '2026-11-04', action_owner: '', due: '2026-11-24', reopen_if: '', source: 'sw_1', raised_by: 'Kash' }], new Date(0)));
+    expect(loadRoomContent(ROOT, ROOM).sections.has('decision-log.md §1')).toBe(false);
+    const withLog = loadRoomContent(ROOT, ROOM, join(dir, ROOM));
+    expect(withLog.sections.get('decision-log.md §1')).toContain('| L1 | confirmed | Fieldnote goes first for onboarding |');
+    expect(withLog.sections.get('product.md §2')).toBe(loadRoomContent(ROOT, ROOM).sections.get('product.md §2')); // seeded docs unchanged
+  });
+});

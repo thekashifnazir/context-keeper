@@ -1,0 +1,12 @@
+| Measure | Result |
+| --- | --- |
+| Overall | 2/2 |
+| Job A (already covered?) | 1/1 |
+| Job D (preference or constraint) | n/a |
+| Job B (decision capture) | 1/1 |
+| Stayed quiet | n/a |
+| Bursts answered once | n/a |
+| **Confident wrong** | **0** |
+| Citations verified (quote matches source, shown in the reply) | 2/7 |
+
+Run 2026-11-04 on claude-opus-5-5, fast, 2 cases from the main set. Mattermost restarted 1 time(s) during the run (see incidents in the JSON). Raw results: testset/results/2026-11-04-claude-opus-5-5-memory-smoke.json

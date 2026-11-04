@@ -9,6 +9,8 @@ import type { Capture, MmPost } from './capture.ts';
 import { resolveRef, type Case, type RoomContent } from './content.ts';
 
 export const SCORER_VERSION = 'ck.score/1';
+/** Switch's own notice for a room-document write, exactly as 0.31.0 words it. */
+export const SWITCH_DOC_NOTICE = /^📄 (created|updated|deleted) room document “[^”\n]*”\.$/u;
 /** Verdicts whose case needs a verified citation from expect.sources (P3). reopen and parked-recall
  *  added by Kash's scoring call of 3 Nov: a reopen must cite the decision it reopens, a recall the parked items. */
 export const P3_VERDICTS = new Set(['covered', 'parked', 'contradicts-record', 'might-be-related', 'reopen', 'parked-recall']);
@@ -150,8 +152,12 @@ export function score(input: ScoreInput) {
     channelOf.set(r.channel_id, { room, where: 'public' });
     if (r.owner_desk_channel_id && !channelOf.has(r.owner_desk_channel_id)) channelOf.set(r.owner_desk_channel_id, { room, where: 'owner' });
   }
+  // Switch posts a notice in the agent's name whenever a room document is created or updated (the
+  // seed's documents, and the agent's Decision log when job B logs a decision). The agent never
+  // writes that text, so it isn't a reply; it is counted apart (switch_doc_notices), never hidden.
+  const docNotices = capture.posts.filter((p) => p.user_id === meta.agent.mm_user_id && p.type === '' && SWITCH_DOC_NOTICE.test(p.message.trim()));
   const agentPosts = capture.posts
-    .filter((p) => p.user_id === meta.agent.mm_user_id && p.type === '')
+    .filter((p) => p.user_id === meta.agent.mm_user_id && p.type === '' && !SWITCH_DOC_NOTICE.test(p.message.trim()))
     .sort((a, b) => a.create_at - b.create_at || (a.id < b.id ? -1 : 1));
   const preReplay: MmPost[] = [];
   const visible: Visible[] = [];
@@ -368,6 +374,7 @@ export function score(input: ScoreInput) {
       trace_missing: results.filter((r) => r.flags.trace_missing).length,
       trace_mismatch: results.filter((r) => r.flags.trace_mismatch).length,
       unattributed: unattributed.length,
+      switch_doc_notices: { before_t0: docNotices.filter((p) => p.create_at < meta.t0_ms).length, during_run: docNotices.filter((p) => p.create_at >= meta.t0_ms).length },
       latency_s: { p50: percentile(lat, 50), p95: percentile(lat, 95), n: lat.length },
     },
   };
@@ -385,6 +392,7 @@ export function score(input: ScoreInput) {
     briefs,
     unattributed: unattributed.map((v) => ({ post_id: v.post.id, channel_id: v.post.channel_id, window: v.window, message: v.post.message })),
     pre_replay_posts: preReplay.map((p) => ({ post_id: p.id, channel_id: p.channel_id, message: p.message })),
+    switch_doc_notices: docNotices.map((p) => ({ post_id: p.id, channel_id: p.channel_id, create_at: p.create_at, message: p.message })),
     usage,
   };
 }

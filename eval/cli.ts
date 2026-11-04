@@ -55,8 +55,10 @@ export function rescore(dir: string) {
   const capture = loadCapture(dir);
   const { cases, sha256 } = loadCases(ROOT, capture.meta.set);
   const rooms = Object.keys(capture.meta.rooms);
-  const content = Object.fromEntries(rooms.map((r) => [r, loadRoomContent(ROOT, r)]));
-  return score({ cases, content, capture, set_label: capture.meta.set, cases_sha256: sha256, content_sha256: contentSha256(ROOT, rooms) });
+  // The agent's Decision log as Switch held it at the end of the run (eval/replay.ts captureSwitchDocs).
+  const runDocs = (r: string) => join(dir, 'switch-docs', r);
+  const content = Object.fromEntries(rooms.map((r) => [r, loadRoomContent(ROOT, r, runDocs(r))]));
+  return score({ cases, content, capture, set_label: capture.meta.set, cases_sha256: sha256, content_sha256: contentSha256(ROOT, rooms, runDocs) });
 }
 
 export function writeResult(result: ReturnType<typeof rescore>, jsonPath: string): string {

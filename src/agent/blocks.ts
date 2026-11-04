@@ -8,6 +8,7 @@
 // Code keeps block → {ref, header_len, source text}, so the gate can strip the header and check
 // the rest against the scored source (a doc section from its heading to the next "## ", or a message).
 import type Anthropic from '@anthropic-ai/sdk';
+import { DECISION_LOG_FILE } from './decision-log.ts';
 import type { RoomRecord } from './room.ts';
 
 export interface BlockInfo {
@@ -90,9 +91,16 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
           flush();
           const c = cells(line);
           if (/^[A-Z]\d+$/.test(c[0])) {
-            const src = (line.match(/`((?:led|riv)-\d{3})`/) ?? [])[1] ?? null;
-            const at = src ? (msgAt.get(src) ?? date) : date;
-            add(`${ref} ${c[0]}`, `${src ?? 'doc'} · ${at ?? 'UNDATED'}`, line.trim(), 'row', `${c[2]}: ${c[3]}`, at, src ? (msgAuthor.get(src) ?? null) : null);
+            // The row's source message: a seeded id, or (the Decision log) any message the record holds.
+            const ticks = [...line.matchAll(/`([^`\s]+)`/g)].map((x) => x[1]);
+            const src = ticks.find((x) => /^(?:led|riv)-\d{3}$/.test(x)) ?? ticks.find((x) => msgAt.has(x)) ?? null;
+            const col = (name: string) => (header && header.includes(name) ? (c[header.indexOf(name)] ?? '').trim() : '');
+            const decided = /^\d{4}-\d{2}-\d{2}$/.test(col('Decided')) ? col('Decided') : null;
+            const at = src ? (msgAt.get(src) ?? decided ?? date) : (decided ?? date);
+            const by = col('Decided by');
+            const author = by && by !== '—' ? by : src ? (msgAuthor.get(src) ?? null) : null;
+            const why = (c[3] ?? '').trim();
+            add(`${ref} ${c[0]}`, `${src ?? 'doc'} · ${at ?? 'UNDATED'}`, line.trim(), 'row', why && why !== '—' ? `${c[2]}: ${why}` : c[2], at, author);
           } else if (!/^\|[\s|:-]+\|$/.test(line.trim())) {
             columns = `Decision table columns: ${c.join(' | ')}`;
             header = c;
@@ -142,7 +150,12 @@ export function buildRoomContext(room: RoomRecord): RoomContext {
   // to cache and none read it. The first breakpoint sits after the last room doc, before the
   // archive: tools + system + docs stay byte-identical between calls and are read from cache. The
   // second, after the archive, still covers back-to-back calls on an unchanged record (a retry).
+  // The agent's own Decision log (last among the docs, src/agent/memory.ts) changes when a decision
+  // is logged, so it gets its own breakpoint after the stable docs: a new entry costs one write of
+  // the log, not of every doc before it. At most three breakpoints (the API allows four).
   const docCount = documents.length - (archive.length ? 1 : 0);
+  const logAt = documents.findIndex((d) => d.title === DECISION_LOG_FILE);
+  if (logAt > 0) documents[logAt - 1].cache_control = { type: 'ephemeral' };
   if (docCount > 0 && docCount < documents.length) documents[docCount - 1].cache_control = { type: 'ephemeral' };
   if (documents.length) documents[documents.length - 1].cache_control = { type: 'ephemeral' };
   return { roomName: room.name, documents, table, sourceText };

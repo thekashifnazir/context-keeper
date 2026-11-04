@@ -16,6 +16,7 @@ import { Mattermost, type MmRawPost } from './mattermost.ts';
 import { CAST, nameClashes, passwordFor, usernameOf } from './personas.ts';
 import { assertNoSecrets, knownSecrets } from './secrets.ts';
 import { Gateway, health, readEnvFile, serverEnv, type Room } from './switchapi.ts';
+import { SwitchSession } from '../seed/switch.ts';
 import { loadYaml } from './yaml.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -290,6 +291,8 @@ async function runOnce(args: Args, n: number) {
       for (const p of await mmRetry(runDir, env.mmUrl, `read posts ${ch}`, () => kash.mm.allPosts(ch))) if (!p.delete_at) posts.push({ id: p.id, channel_id: p.channel_id, user_id: p.user_id, root_id: p.root_id ?? '', message: p.message, type: p.type ?? '', create_at: p.create_at });
     }
     stopAgent(agent);
+    // The agent's own room documents (its Decision log) as Switch holds them now, for the scorer.
+    if (evalAgent) await captureSwitchDocs(runDir, env.api, evalAgent, metaRooms).catch((e) => log(runDir, `switch docs: not captured: ${(e as Error).message}`));
 
     // ── Capture, score, write ──
     const meta: CaptureMeta = {
@@ -343,6 +346,35 @@ async function waitBot(mm: Mattermost, agentName: string): Promise<string> {
     await sleep(1000);
   }
   throw new Error(`no Mattermost bot user named ${agentName}`);
+}
+
+/** After the agent has stopped: read each room's documents back from Switch as the agent under test
+ *  (list_references + load_internal_documents, the agent's own route) and save the ones the agent
+ *  wrote during the run (its Decision log) to <run dir>/switch-docs/<room>/decision-log.md, so the
+ *  scorer can check a citation of it against what the room held. index.json lists every document. */
+async function captureSwitchDocs(runDir: string, api: string, agent: EvalAgent, rooms: CaptureMeta['rooms']) {
+  const sw = await SwitchSession.open({ endpoint: api.replace(/\/$/, ''), agentId: agent.id, token: agent.key });
+  const secrets = knownSecrets(ROOT);
+  try {
+    for (const [room, r] of Object.entries(rooms)) {
+      await sw.op('connect_to_room', { room_id: r.room_id, include_general_instructions: false }, r.room_id);
+      const refs = await sw.op<{ documents?: { id: string; name: string; created_by_agent_id?: string }[] }>('list_references', {}, r.room_id);
+      const docs = refs.documents ?? [];
+      const logs = docs.filter((d) => d.created_by_agent_id === agent.id && /^Decision log( \(v\d+\))?$/.test(d.name));
+      const texts = logs.length ? await sw.op<{ id: string; content: string }[]>('load_internal_documents', { ids: logs.map((d) => d.id) }, r.room_id) : [];
+      const dir = join(runDir, 'switch-docs', room);
+      mkdirSync(dir, { recursive: true });
+      const index = JSON.stringify({ room_id: r.room_id, documents: docs.map((d) => ({ name: d.name, id: d.id, created_by_agent: d.created_by_agent_id === agent.id })) }, null, 2) + '\n';
+      assertNoSecrets(index, secrets, `switch-docs/${room}/index.json`);
+      writeFileSync(join(dir, 'index.json'), index);
+      const mine = texts.find((t) => t.id === logs[0]?.id);
+      if (mine) {
+        assertNoSecrets(mine.content, secrets, `switch-docs/${room}/decision-log.md`);
+        writeFileSync(join(dir, 'decision-log.md'), mine.content);
+      }
+      log(runDir, `switch docs ${room}: ${docs.length} documents in Switch${mine ? `; Decision log saved (${mine.content.length} chars)` : '; no Decision log'}`);
+    }
+  } finally { sw.close(); }
 }
 
 /** Seed a fresh room with `npm run seed` (the same command as the README) as the agent under test.
