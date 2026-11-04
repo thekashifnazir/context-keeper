@@ -137,3 +137,6 @@ the eval (`npm run eval`), one run at a time, failures included; nobody edits th
 | Robustness checks passed, r20261104-1959-990f (testset/results/2026-11-04-robustness-claude-opus-5-5-3.json) | 1/1 | `npm run eval -- --robustness R2` | c999895 | 2026-11-04T20:01:21.483Z |
 | Robustness R2 Restart mid-burst, r20261104-1959-990f | pass | `npm run eval -- --robustness R2` | c999895 | 2026-11-04T20:01:21.483Z |
 | Robustness model spend in USD (est., metered), r20261104-1959-990f | 0.3019 | `npm run eval -- --robustness R2` | c999895 | 2026-11-04T20:01:21.483Z |
+| Robustness checks passed, r20261104-2038-faa0 (testset/results/2026-11-04-robustness-claude-opus-5-5-4.json) | 1/1 | `npm run eval -- --robustness R5` | d87c353 | 2026-11-04T20:40:28.479Z |
+| Robustness R5 Retract, r20261104-2038-faa0 | pass | `npm run eval -- --robustness R5` | d87c353 | 2026-11-04T20:40:28.479Z |
+| Robustness model spend in USD (est., metered), r20261104-2038-faa0 | 0.1255 | `npm run eval -- --robustness R5` | d87c353 | 2026-11-04T20:40:28.479Z |

@@ -1,0 +1,38 @@
+{
+  "schema": "ck.robustness/1",
+  "run_id": "r20261104-2038-faa0",
+  "model": "claude-opus-5-5",
+  "reviewer_model": "claude-opus-5-5",
+  "started_at": "2026-11-04T20:38:50.088Z",
+  "ended_at": "2026-11-04T20:40:28.439Z",
+  "results": [
+    {
+      "id": "R5",
+      "title": "Retract",
+      "how": "after T05's reply, the owner (kash) replies \"wrong\" in that thread; then T05's question is posted again as a new message",
+      "pass_when": "a correction appears in that thread; the trace item is retracted; testset/misses.yaml gains an entry; asked again, the withdrawn source(s) aren't cited in public",
+      "adapted": "One check added to the plan's three: asked the same question again, the agent doesn't cite the withdrawn source(s) in public.",
+      "status": "pass",
+      "evidence": [
+        "ok: agent posted 1 line(s) in the thread after \"wrong\": \"↩️ **Withdrawn** · Kash says this was wrong. I won't repeat it.\"",
+        "ok: trace: a retract line (read by words) withdrawing decision 376423d5-6a7f-43dd-98c3-9ec5b151b674 (T05's answer), refs pilot-plan.md §2, led-011",
+        "ok: testset/misses.yaml entries: 0 before, 1 after",
+        "ok: asked again: 1 decision line(s) (silence A/-); the withdrawn source(s) not cited again; 0 post(s) in its thread; trace: \"withdrawn: sw_24c236cb149753dbee227458dd1ea2d0 covered not posted (cites pilot-plan.md §2, led-011, withdrawn by Kash 2…\"",
+        "correction: \"↩️ **Withdrawn** · Kash says this was wrong. I won't repeat it.\"; owner's reason: \"\""
+      ]
+    }
+  ],
+  "cost": {
+    "trace_usd": 0.1255,
+    "trace_calls": 3,
+    "metered_usd": 0.1255,
+    "metered_calls": 3,
+    "note": "Metered = the agent's own spend meter (every answered model call, priced by src/agent/model.ts); the trace figure misses calls that never reached a trace line (killed mid-flight, replaced prefetches, the cap-crossing call)."
+  },
+  "incidents": [],
+  "versions": {
+    "sha": "d87c353b55306946c7b5fbab58e6258ac6ecc635",
+    "switch": "ok",
+    "mattermost": "11.9.0.28847360617.c473b66b835687963ea56067351ebc1fa6ee1bcfeab088033350f370a34020a5.false"
+  }
+}
