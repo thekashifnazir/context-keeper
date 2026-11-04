@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { normalise } from '../shared/quote.ts';
+import type { Input } from './pipeline.ts';
 
 export function atomicWriteJson(file: string, value: unknown): void {
   mkdirSync(dirname(file), { recursive: true });
@@ -29,7 +30,11 @@ export const postKey = (roomId: string, threadId: string | null, body: string) =
 
 export interface Idea { message_id: string; by: string; text: string; at: string }
 
-interface RoomState { processed: string[]; posted: Record<string, string | null>; ideas: Idea[]; briefed?: string[]; joined?: string[] }
+/** Job C: a brief started but whose text hasn't posted yet, with what's needed to run it again after a
+ *  restart (the message, the trigger, the chat handle for the voice clip) and the attempts so far. */
+export interface PendingBrief { input: Input; trigger: { kind: 'joiner' | 'returner'; since: string | null }; handle: string | null; attempts: number }
+
+interface RoomState { processed: string[]; posted: Record<string, string | null>; ideas: Idea[]; briefed?: string[]; joined?: string[]; pending_briefs?: Record<string, PendingBrief> }
 interface StateFile { rooms: Record<string, RoomState> }
 
 export class AgentState {
@@ -66,11 +71,30 @@ export class AgentState {
     if (!r.joined.includes(sender)) { r.joined.push(sender); this.save(); }
   }
   hasJoined(roomId: string, sender: string) { return (this.room(roomId).joined ?? []).includes(sender); }
-  /** Job C: briefed once per person per room. */
+  /** Job C: briefed once per person per room. Marked once the text brief has posted (or the attempt
+   *  ended with nothing to post), which also clears the pending brief. */
   isBriefed(roomId: string, sender: string) { return (this.room(roomId).briefed ?? []).includes(sender); }
   markBriefed(roomId: string, sender: string) {
     const r = this.room(roomId);
     r.briefed ??= [];
-    if (!r.briefed.includes(sender)) { r.briefed.push(sender); this.save(); }
+    const pending = !!r.pending_briefs?.[sender];
+    if (!pending && r.briefed.includes(sender)) return;
+    if (pending) delete r.pending_briefs![sender];
+    if (!r.briefed.includes(sender)) r.briefed.push(sender);
+    this.save();
+  }
+  /** Job C: an attempt starts. Saved before the brief runs, so a restart before its text posts runs it
+   *  again (see pendingBriefs); returns the attempt number. */
+  beginBrief(roomId: string, input: Input, trigger: PendingBrief['trigger'], handle: string | null): number {
+    const r = this.room(roomId);
+    r.pending_briefs ??= {};
+    const p = (r.pending_briefs[input.sender] ??= { input, trigger, handle, attempts: 0 });
+    p.attempts += 1;
+    this.save();
+    return p.attempts;
+  }
+  hasPendingBrief(roomId: string, sender: string) { return !!this.room(roomId).pending_briefs?.[sender]; }
+  pendingBriefs(): { roomId: string; brief: PendingBrief }[] {
+    return Object.entries(this.data.rooms).flatMap(([roomId, r]) => Object.values(r.pending_briefs ?? {}).map((brief) => ({ roomId, brief })));
   }
 }

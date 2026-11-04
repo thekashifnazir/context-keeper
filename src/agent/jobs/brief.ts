@@ -6,6 +6,9 @@
 // Built from the room's record only: the model never sees the owner desk or the pending store, and
 // every line must carry a quote that is verbatim in the record and that the reviewer accepts.
 // Once per person per room; never for the owner. A model error means no brief and no retry storm.
+// A restart before the text brief posts (R2, 4 Nov) doesn't lose it: the caller saves the attempt
+// (AgentState.beginBrief) before it runs, the person is marked briefed only once the text has posted,
+// and the next start runs a pending brief again, at most MAX_BRIEF_ATTEMPTS attempts in all.
 import { randomUUID } from 'node:crypto';
 import { writeTrace, type TraceLine, type TracePost } from '../../shared/trace.ts';
 import type { RoomContext } from '../blocks.ts';
@@ -13,6 +16,7 @@ import { callBrief, type Usage } from '../model.ts';
 import type { Deps, Input } from '../pipeline.ts';
 import { postBrief } from '../post.ts';
 import { toMs, type RoomRecord } from '../room.ts';
+import type { AgentState, PendingBrief } from '../state.ts';
 import { firstName } from './restriction.ts';
 
 const sameName = (a: string) => { const k = a.trim().toLowerCase(); return (b: string) => b.trim().toLowerCase() === k; };
@@ -26,7 +30,7 @@ export interface BriefTrigger { kind: 'joiner' | 'returner'; since: string | nul
 export function briefTrigger(deps: Pick<Deps, 'state' | 'ownerSender' | 'selfSenders'>, roomId: string, record: RoomRecord, input: Input): BriefTrigger | null {
   if (deps.selfSenders.has(input.sender)) return null;
   if (deps.ownerSender && input.sender === deps.ownerSender) return null;
-  if (deps.state.isBriefed(roomId, input.sender)) return null;
+  if (deps.state.isBriefed(roomId, input.sender) || deps.state.hasPendingBrief(roomId, input.sender)) return null;
   const now = toMs(input.received_at);
   // Names compare case-insensitively: a platform handle ("priya", the Mattermost username) must match
   // the record's display name ("Priya"), or every regular poster looks like a first-time joiner.
@@ -38,6 +42,20 @@ export function briefTrigger(deps: Pick<Deps, 'state' | 'ownerSender' | 'selfSen
   if (gapDays >= RETURN_GAP_DAYS()) return { kind: 'returner', since: last.at };
   if (deps.state.hasJoined(roomId, input.sender)) return { kind: 'joiner', since: null };
   return null;
+}
+
+export const MAX_BRIEF_ATTEMPTS = 2;
+
+/** At start-up: the briefs a restart cut off before their text posted. Those with an attempt left are
+ *  returned to run again (before job A answers their message); the rest are given up on (marked
+ *  briefed), so a brief that keeps crashing the process can't loop. */
+export function resumableBriefs(state: AgentState): { roomId: string; brief: PendingBrief }[] {
+  const out: { roomId: string; brief: PendingBrief }[] = [];
+  for (const p of state.pendingBriefs()) {
+    if (p.brief.attempts < MAX_BRIEF_ATTEMPTS) out.push(p);
+    else state.markBriefed(p.roomId, p.brief.input.sender);
+  }
+  return out;
 }
 
 export const TALK_IT_THROUGH = '🎧 **Talk it through** · a short voice catch-up will be offered here soon.';
@@ -62,13 +80,13 @@ export async function runBrief(deps: Deps, roomId: string, roomName: string, ctx
   let error: string | null = null;
   let posts: TraceLine['posts'] = [];
   let sources: { ref: string; quote: string }[] = [];
-  deps.state.markBriefed(roomId, input.sender); // one attempt per person per room: no retry storm
   try {
     const { lines, usage } = await callBrief(deps.claude, deps.cfg, deps.system, ctx, { name: input.sender_name, kind: trigger.kind, since: trigger.since, first_message: input.body });
     usages.push(usage);
     const opening = briefOpening(trigger.kind, name);
     const r = await postBrief(deps, ctx, { roomId, roomName, threadId, opening, closing: opts.closing ?? TALK_IT_THROUGH, lines });
     if (r.usage) usages.push(r.usage);
+    deps.state.markBriefed(roomId, input.sender); // the text is out (or nothing passed): done for this person
     posts = r.posts;
     sources = r.sources;
     const extra: string[] = [];
@@ -84,6 +102,7 @@ export async function runBrief(deps: Deps, roomId: string, roomName: string, ctx
     error = [r.error, ...r.events, ...extra].filter(Boolean).join('; ') || null;
   } catch (e) {
     error = `brief_model_error: ${(e as Error).message}`;
+    deps.state.markBriefed(roomId, input.sender); // an error: no brief and no retry storm
   }
   const line: TraceLine = {
     schema: 'ck.trace/1', ts: new Date().toISOString(), decision_id: randomUUID(), room_id: roomId, room_name: roomName,
