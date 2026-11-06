@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://ck.kashifnazir.com/status"><b>Live status</b></a> ·
   <a href="https://youtu.be/7x0Uy3UgCZQ"><b>3-min demo</b></a> ·
-  <a href="https://kashifnazir.com/blog/building-context-keeper-on-switch/"><b>Blog</b></a>
+  <a href="https://dev.to/kashif_nazir/building-context-keeper-on-switch-48ab"><b>Blog</b></a>
 </p>
 
 https://github.com/user-attachments/assets/69e0a021-4f71-4de7-9153-fa50e1b68211
